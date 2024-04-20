@@ -1,0 +1,211 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  SecretHash:
+    Type: String
+    Description: Secret Hash value for the project
+    Default: "THIS_IS_A_SECRET_HASH"
+Description: >
+  Sample SAM Template for CloudProjectMarker
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 900
+    Tracing: Active
+  Api:
+    TracingEnabled: true
+Resources:
+  TestResultBucket:
+    Type: AWS::S3::Bucket
+
+  WebAppS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
+  WebAppS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebAppS3Bucket
+      PolicyDocument:
+        Id: PolicyForCloudFrontPrivateContent
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${WebAppS3Bucket}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}
+
+  WebAppOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-origin-access-control"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt WebAppS3Bucket.RegionalDomainName
+            Id: !Sub "${WebAppS3Bucket}-web-app-s3-origin"
+            OriginAccessControlId: !GetAtt WebAppOriginAccessControl.Id
+            S3OriginConfig: {}
+        Enabled: "true"
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: !Sub "${WebAppS3Bucket}-web-app-s3-origin"
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # CORS-S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+        PriceClass: PriceClass_All
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  AwsAccountTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "User"
+          AttributeType: "S"
+        - AttributeName: "AwsAccountNumber"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "User"
+          KeyType: "HASH"
+      GlobalSecondaryIndexes:
+        - IndexName: AwsAccountNumberIndex
+          KeySchema:
+          - AttributeName: "AwsAccountNumber"
+            KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+
+  PassedTestTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "User"
+          AttributeType: "S"
+        - AttributeName: "Test"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "User"
+          KeyType: "HASH"
+        - AttributeName: "Test"
+          KeyType: "RANGE"
+
+  FailedTestTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "User"
+          AttributeType: "S"
+        - AttributeName: "TestTime"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "User"
+          KeyType: "HASH"
+        - AttributeName: "TestTime"
+          KeyType: "RANGE"
+
+  NetCodeWebAPIServerless:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      Description: A Cloud Project Grader in a .NET Core WebAPI App with DynamoDB table and S3 bucket.
+      CodeUri: ./src/ServerlessAPI/
+      Handler: ServerlessAPI
+      Runtime: dotnet8
+      MemorySize: 2048
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action: 'bedrock:*'
+            Resource: '*'
+        - S3CrudPolicy:
+            BucketName: !Ref TestResultBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PassedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FailedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable
+      Environment:
+        Variables:
+          TEST_RESULT_Bucket: !Ref TestResultBucket
+          PASSED_TEST_TABLE: !Ref PassedTestTable
+          FAILED_TEST_TABLE: !Ref FailedTestTable
+          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          SECRET_HASH: !Ref SecretHash
+      Events:
+        ProxyResource:
+          Type: HttpApi
+          Properties:
+            PayloadFormatVersion: "2.0"
+            Path: /{proxy+}
+            Method: ANY
+        RootResource:
+          PayloadFormatVersion: "2.0"
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: ANY
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: "true"
+Outputs:
+  WebApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
+  TestResultBucket:
+    Description: Test Result Bucket
+    Value: !Ref TestResultBucket
+  PassedTestTable:
+    Description: Passed Test Table
+    Value: !Ref PassedTestTable
+  FailedTestTable:
+    Description: Failed Test Table
+    Value: !Ref FailedTestTable
+  WebAppDomain:
+    Value: !GetAtt CloudFrontDistribution.DomainName
+  CloudFrontDistributionId:
+    Value: !GetAtt CloudFrontDistribution.Id
+  WebAppS3BucketName:
+    Value: !Ref WebAppS3Bucket
