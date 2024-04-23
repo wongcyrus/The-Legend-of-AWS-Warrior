@@ -11,6 +11,10 @@ public class TestRecord
     public required string Test { get; set; }
     public required int Mark { get; set; }
     public required DateTime Time { get; set; }
+
+    public required string LogUrl { get; set; }
+    public required string JsonResultUrl { get; set; }
+    public required string XmlResultUrl { get; set; }
 }
 
 public class User
@@ -51,7 +55,10 @@ public class DynamoDB
             {
                 Test = c["Test"].S,
                 Mark = int.Parse(c["Marks"].N),
-                Time = DateTime.ParseExact(c["Time"].S, "yyyyMMddHHmmss", CultureInfo.InvariantCulture)
+                Time = DateTime.ParseExact(c["Time"].S, "yyyyMMddHHmmss", CultureInfo.InvariantCulture),
+                LogUrl = c["LogUrl"].S,
+                JsonResultUrl = c["JsonResultUrl"].S,
+                XmlResultUrl = c["XmlResultUrl"].S
             }).OrderBy(c => c.Test)];
         }
         return [];
@@ -209,6 +216,40 @@ public class DynamoDB
         return getItemResponse;
     }
 
+    public async Task<TestRecord?> GetTheLastFailedTest(string email)
+    {
+        var passedTesttable = Environment.GetEnvironmentVariable("FAILED_TEST_TABLE")!;
+        var queryRequest = new QueryRequest
+        {
+            TableName = passedTesttable,
+            KeyConditionExpression = "#dynobase_User = :v_user",
+            ScanIndexForward = false,
+            Limit = 1,
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                { ":v_user", new AttributeValue { S = email } }
+            },
+            ExpressionAttributeNames = new Dictionary<string, string>
+            {
+                { "#dynobase_User", "User" }
+            }
+        };
+        var getItemResponse = await dynamoClient.QueryAsync(queryRequest);
+        if (getItemResponse.Items != null && getItemResponse.Items.Count > 0)
+        {
+            return new TestRecord
+            {
+                Test = getItemResponse.Items[0]["Test"].S,
+                Time = DateTime.ParseExact(getItemResponse.Items[0]["Time"].S, "yyyyMMddHHmmss", CultureInfo.InvariantCulture),
+                LogUrl = getItemResponse.Items[0]["LogUrl"].S,
+                JsonResultUrl = getItemResponse.Items[0]["JsonResultUrl"].S,
+                XmlResultUrl = getItemResponse.Items[0]["XmlResultUrl"].S,
+                Mark = 0
+            };
+        }
+        return null;
+    }
+
     public async void SaveTestResults(string email, NunitTestResult nunitTestResult)
     {
         string now = DateTime.Now.ToString("yyyyMMddHHmmss");
@@ -242,7 +283,10 @@ public class DynamoDB
                         { "User", new AttributeValue { S = email } },
                         { "Test", new AttributeValue { S = test.Key } },
                         { "Marks", new AttributeValue { N = test.Value.ToString() } },
-                        { "Time", new AttributeValue { S = now } }
+                        { "Time", new AttributeValue { S = now } },
+                        { "LogUrl", new AttributeValue { S = nunitTestResult.LogUrl} },
+                        { "JsonResultUrl", new AttributeValue { S = nunitTestResult.JsonResultUrl} },
+                        { "XmlResultUrl", new AttributeValue { S = nunitTestResult.XmlResultUrl} },
                     }
                 };
                 await dynamoClient.PutItemAsync(request);
@@ -257,9 +301,12 @@ public class DynamoDB
                 Item = new Dictionary<string, AttributeValue>
                     {
                         { "User", new AttributeValue { S = email } },
-                        { "TestTime", new AttributeValue { S = test.Key+"@"+now} },
+                        { "TestTime", new AttributeValue { S = now} },
                         { "Test", new AttributeValue { S = test.Key } },
-                        { "Time", new AttributeValue { S = now } }
+                        { "Time", new AttributeValue { S = now } },
+                        { "LogUrl", new AttributeValue { S = nunitTestResult.LogUrl} },
+                        { "JsonResultUrl", new AttributeValue { S = nunitTestResult.JsonResultUrl} },
+                        { "XmlResultUrl", new AttributeValue { S = nunitTestResult.XmlResultUrl} },
                     }
             };
             await dynamoClient.PutItemAsync(request);

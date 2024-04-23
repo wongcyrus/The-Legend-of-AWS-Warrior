@@ -34,7 +34,14 @@ public class AwsAccountController : ControllerBase
             return new JsonResult("Invalid request");
         }
 
-        var awsAccountNumber = await awsAccount.GetAwsAccountNumber(accessKeyId, secretAccessKey, sessionToken);
+        string awsAccountNumber;
+        try
+        {           
+            awsAccountNumber = await awsAccount.GetAwsAccountNumber(accessKeyId, secretAccessKey, sessionToken);
+        } catch (Amazon.SecurityToken.AmazonSecurityTokenServiceException ){
+            return new JsonResult("The AWS credentials is expired");
+        }
+        
         var status = await dynamoDB.RegisterUser(apiKey, awsAccountNumber, accessKeyId, secretAccessKey, sessionToken);
 
         var result = "Your aws account is " + awsAccountNumber + " and " + SplitPascalCase(status.ToString()).ToLower() + ".";

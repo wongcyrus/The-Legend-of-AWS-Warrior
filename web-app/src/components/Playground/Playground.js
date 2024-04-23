@@ -17,6 +17,7 @@ class Playground extends Component {
   componentDidMount() {
     const aws = new Aws();
     const urlWithQueryParams = aws.getApiUrl("game");
+    urlWithQueryParams.searchParams.append("mode", "");
 
     fetch(urlWithQueryParams)
       .then((response) => response.json())
@@ -41,7 +42,7 @@ class Playground extends Component {
     this.setState({ testResult: null });
     // Handle the test button click here
     console.log("Selected Item:", this.state.selectedItem);
-    if (this.state.selectedItem) {
+    if (this.state.selectedItem && this.state.dropdownData) {
       const dropdownDataByName = this.state.dropdownData.find(
         (item) => item.name === this.state.selectedItem
       );
@@ -58,14 +59,16 @@ class Playground extends Component {
         .then((response) => response.json())
         .then((result) => {
           this.setState({ testResult: result });
-          let index = this.state.dropdownData.findIndex(
-            (item) => item.name === this.state.selectedItem
-          );
-          console.log("Index:", index);
-          if (index !== -1) {
-            let newArray = [...this.state.dropdownData];
-            newArray.splice(index, 1);
-            this.setState({ dropdownData: newArray });
+          if (result.isSuccess) {
+            let index = this.state.dropdownData.findIndex(
+              (item) => item.name === this.state.selectedItem
+            );
+            console.log("Index:", index);
+            if (index !== -1) {
+              let newArray = [...this.state.dropdownData];
+              newArray.splice(index, 1);
+              this.setState({ dropdownData: newArray });
+            }
           }
           this.setState({ loading: false });
         })

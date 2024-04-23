@@ -31,6 +31,24 @@ public class MarksController : ControllerBase
             return new JsonResult(Array.Empty<TestRecord>());
         }
         var passedTest = await dynamoDB.GetPassedTests(email);
+
         return new JsonResult(passedTest);
     }
+
+    // GET: api/Marks/theLastFailedTest
+    [HttpGet("theLastFailedTest")]
+    public async Task<JsonResult> GetTheLastFailedTest([FromQuery(Name = "api_key")] string apiKey)
+    {
+        logger.LogInformation("MarksController.Get called");
+        var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
+        // Check if the email is valid
+        var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");
+        if (!isValidEmail)
+        {
+            return new JsonResult(Array.Empty<TestRecord>());
+        }
+        var theLastFailedTest = await dynamoDB.GetTheLastFailedTest(email);
+        return new JsonResult(theLastFailedTest);
+    }
+
 }

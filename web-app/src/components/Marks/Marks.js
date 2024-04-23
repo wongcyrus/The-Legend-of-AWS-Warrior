@@ -7,7 +7,8 @@ class Marks extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      testResult: [],
+      testResults: [],
+      theLastFailedTest: null,
     };
   }
   componentDidMount() {
@@ -19,7 +20,21 @@ class Marks extends Component {
       .then((data) => {
         // Handle the response data here
         console.log(data);
-        this.setState({ testResult: data }); // Save the data in the component's state
+        this.setState({ testResults: data }); // Save the data in the component's state
+      })
+      .catch((error) => {
+        // Handle any errors that occur during the request
+        console.error(error);
+      });
+
+    const urlWithQueryParams2 = aws.getApiUrl("marks/theLastFailedTest");
+
+    fetch(urlWithQueryParams2)
+      .then((response) => response.json())
+      .then((data) => {
+        // Handle the response data here
+        console.log(data);
+        this.setState({ theLastFailedTest: data }); // Save the data in the component's state
       })
       .catch((error) => {
         // Handle any errors that occur during the request
@@ -33,13 +48,27 @@ class Marks extends Component {
   };
 
   render() {
-    const { testResult } = this.state;
+    const { testResults, theLastFailedTest } = this.state;
     return (
       <div>
         <h2>Your Marks</h2>
         <Button variant="outline-primary" onClick={this.handleButtonClick}>
           Play "The Legend of AWS Warrior" Now!
         </Button>
+        {theLastFailedTest && (
+          <>
+            <h3>The Last Failed Test</h3>
+            <p>
+              Name: {theLastFailedTest.test} ({theLastFailedTest.time})
+            </p>
+            <p>
+              <a href={theLastFailedTest.logUrl} target="_blank" rel="noreferrer">
+                Test Log
+              </a>
+            </p>
+          </>
+        )}
+        <h3>The Passed Test</h3>
         <Table striped bordered hover>
           <thead>
             <tr>
@@ -49,7 +78,7 @@ class Marks extends Component {
             </tr>
           </thead>
           <tbody>
-            {testResult.map((result, index) => (
+            {testResults.map((result, index) => (
               <tr key={index}>
                 <td>{result.test}</td>
                 <td>{result.mark}</td>
