@@ -8,6 +8,10 @@ The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. 
 
 
 ## Deploy the updated application.
+For the first time, you need to install AWS SAM CLI.
+```
+./aws_sam_setup.sh
+```
 
 ```bash
 CloudProjectMarker$ sam build && sam deploy --parameter-overrides "SecretHash=b14ca5898a4e4133bbce2e123456123456"
@@ -59,6 +63,15 @@ cd web-game
 python3 -m http.server
 ```
 
+## Export Marks
+Change table name and region.
+```
+aws dynamodb scan --table-name CloudProjectMarker-PassedTestTable-XXXXXXX --region us-east-1 \
+--select ALL_ATTRIBUTES --page-size 500 --max-items 100000 --output json \
+| jq -r '.Items' \
+| jq -r 'map({Test: .Test.S, User: .User.S, Marks: .Marks.N, Time: .Time.S}) | (.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' \
+> marks.csv
+```
 
 ## Reference 
 
