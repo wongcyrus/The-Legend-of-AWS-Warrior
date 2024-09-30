@@ -1,5 +1,7 @@
+using System.Threading.Tasks;
 using Amazon.Runtime;
 using Amazon.SecurityToken;
+using Microsoft.Extensions.Logging;
 
 namespace ServerlessAPI.Helper;
 public class AwsAccount

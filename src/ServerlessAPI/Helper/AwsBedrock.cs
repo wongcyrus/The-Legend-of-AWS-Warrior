@@ -1,9 +1,12 @@
 
+using System.Linq;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
 using Amazon;
 using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
 using Amazon.Util;
+using Microsoft.Extensions.Logging;
 
 namespace ServerlessAPI.Helper;
 public class AwsBedrock
