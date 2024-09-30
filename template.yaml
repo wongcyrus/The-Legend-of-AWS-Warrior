@@ -6,7 +6,7 @@ Parameters:
     Description: Secret Hash value for the project
     Default: "THIS_IS_A_SECRET_HASH"
 Description: >
-  Sample SAM Template for CloudProjectMarker
+  CloudProjectMarker is a project grader for cloud projects.
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:

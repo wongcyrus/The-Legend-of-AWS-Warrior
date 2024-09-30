@@ -410,3 +410,10 @@ events/credentials.env
 events/event.json
 events/awsTestConfig.json
 
+src/ProjectTestsLib/T03_SecurityGroupTest.cs
+src/ProjectTestsLib/T04_SqsSnsTest.cs
+src/ProjectTestsLib/T05_DatabaseTest.cs
+src/ProjectTestsLib/T06_LambdaTest.cs
+src/ProjectTestsLib/T07_CloudWatchTest.cs
+src/ProjectTestsLib/T08_AutoscalingTest.cs
+src/ProjectTestsLib/T09_LoadBalancer.cs

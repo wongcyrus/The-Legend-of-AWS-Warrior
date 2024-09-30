@@ -78,9 +78,17 @@ class Playground extends Component {
 
   render() {
     const { dropdownData, selectedItem, testResult, loading } = this.state; // Retrieve the dropdown data and selected item from the state
-    const selectedItemDetails = dropdownData.find(
-      (item) => item.name === selectedItem
-    ); // Find the details of the selected item
+    let selectedItemDetails
+    if (Array.isArray(dropdownData)) {
+      selectedItemDetails = dropdownData.find(
+        (item) => item.name === selectedItem
+      );
+    } else {
+      console.log("dropdownData is not an array");
+    }
+    
+    const validDropdownData = Array.isArray(dropdownData) ? dropdownData : [];
+ 
     return (
       <div>
         <h2>Tasks</h2>
@@ -89,7 +97,7 @@ class Playground extends Component {
             Select a Task
           </Dropdown.Toggle>
           <Dropdown.Menu>
-            {dropdownData.map((item) => (
+            {validDropdownData.map((item) => (
               <Dropdown.Item key={item.name} eventKey={item.name}>
                 {item.name}
               </Dropdown.Item>

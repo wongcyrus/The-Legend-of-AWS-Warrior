@@ -41,9 +41,9 @@ See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-applica
 Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
 
 ## Full deployment
-You have to change the hash.
+You have to change the hash with the same length.
 ```
-./deploy.sh b14ca5898a4e4133bbce2e123456123456
+./deploy.sh b14ca5898a4e4133bbce2ea2315a1916
 ```
 
 ## Deploy the WebApps
