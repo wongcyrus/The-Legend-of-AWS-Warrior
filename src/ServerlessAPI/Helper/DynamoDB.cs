@@ -1,12 +1,8 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
-using Microsoft.Extensions.Logging;
+using Amazon.Lambda.Core;
 using ServerlessAPI.Helper;
 
 namespace ProjectTestsLib.Helper;
@@ -33,9 +29,9 @@ public class User
 public class DynamoDB
 {
     private readonly IAmazonDynamoDB dynamoClient;
-    private readonly ILogger<DynamoDB> logger;
+    private readonly ILambdaLogger logger;
 
-    public DynamoDB(IAmazonDynamoDB dynamoClient, ILogger<DynamoDB> logger)
+    public DynamoDB(IAmazonDynamoDB dynamoClient, ILambdaLogger logger)
     {
         this.dynamoClient = dynamoClient;
         this.logger = logger;

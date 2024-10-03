@@ -1,18 +1,9 @@
-using System.Threading.Tasks;
 using Amazon.Runtime;
 using Amazon.SecurityToken;
-using Microsoft.Extensions.Logging;
 
 namespace ServerlessAPI.Helper;
 public class AwsAccount
 {
-    private readonly ILogger<AwsAccount> logger;
-
-    public AwsAccount(ILogger<AwsAccount> logger)
-    {
-        this.logger = logger;        
-    }
-
     public async Task<string> GetAwsAccountNumber(string accessKeyId, string secretAccessKey, string sessionToken)
     {
         var credential = new SessionAWSCredentials(accessKeyId, secretAccessKey, sessionToken);

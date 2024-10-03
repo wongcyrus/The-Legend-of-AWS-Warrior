@@ -25,7 +25,6 @@ Globals:
     Runtime: dotnet8
     Timeout: 900
     Tracing: Active
- 
 
   Api:
     TracingEnabled: true
@@ -150,60 +149,19 @@ Resources:
         - AttributeName: "TestTime"
           KeyType: "RANGE"
 
-  NetCodeWebAPIServerless:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      Description: A Cloud Project Grader in a .NET Core WebAPI App with DynamoDB table and S3 bucket.
-      CodeUri: ./src/ServerlessAPI/
-      Handler: ServerlessAPI
-      Runtime: dotnet8
-      MemorySize: 2048
-      Policies:
-        - Statement:
-          - Effect: Allow
-            Action: 'bedrock:*'
-            Resource: '*'
-        - S3CrudPolicy:
-            BucketName: !Ref TestResultBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PassedTestTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref FailedTestTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AwsAccountTable
-      Environment:
-        Variables:
-          TEST_RESULT_Bucket: !Ref TestResultBucket
-          PASSED_TEST_TABLE: !Ref PassedTestTable
-          FAILED_TEST_TABLE: !Ref FailedTestTable
-          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
-          SECRET_HASH: !Ref SecretHash
-      # Events:
-      #   ProxyResource:
-      #     Type: HttpApi
-      #     Properties:
-      #       PayloadFormatVersion: "2.0"
-      #       Path: /{proxy+}
-      #       Method: ANY
-      #   RootResource:
-      #     PayloadFormatVersion: "2.0"
-      #     Type: HttpApi
-      #     Properties:
-      #       Path: /
-      #       Method: ANY
-
-  GetGameTaskFunction:
+  GameFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: 'dotnet8'
+      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
-      Handler: GetProduServerlessAPIcts::ServerlessAPI.Functions.Function::FunctionHandler
+      Handler: ServerlessAPI::ServerlessAPI.Functions.GameFunction::FunctionHandler
       Policies:
         - Statement:
           - Effect: Allow
             Action: 'bedrock:*'
             Resource: '*'
-        - S3CrudPolicy:
-            BucketName: !Ref TestResultBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref PassedTestTable
         - DynamoDBCrudPolicy:
@@ -212,11 +170,10 @@ Resources:
             TableName: !Ref AwsAccountTable
       Environment:
         Variables:
-          TEST_RESULT_Bucket: !Ref TestResultBucket
           PASSED_TEST_TABLE: !Ref PassedTestTable
           FAILED_TEST_TABLE: !Ref FailedTestTable
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
-          SECRET_HASH: !Ref SecretHash
+          SECRET_HASH: !Ref SecretHash 
       Events:
         Api:
           Type: HttpApi
@@ -224,6 +181,123 @@ Resources:
             Path: /game
             Method: GET
 
+  KeyGenFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: 'dotnet8'
+      Tool: "Amazon.Lambda.Annotations"
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.KeyGenFunction::FunctionHandler
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /keygen
+            Method: GET
+
+  AwsAccountFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: 'dotnet8'
+      Tool: "Amazon.Lambda.Annotations"
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.AwsAccountFunction::FunctionHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable
+      Environment:
+        Variables:
+          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          SECRET_HASH: !Ref SecretHash 
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /awsaccount
+            Method: GET
+
+  GraderFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: 'dotnet8'
+      Tool: "Amazon.Lambda.Annotations"
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.GraderFunction::FunctionHandler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref TestResultBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PassedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FailedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable
+      Environment:
+        Variables:
+          TEST_RESULT_Bucket: !Ref TestResultBucket
+          PASSED_TEST_TABLE: !Ref PassedTestTable
+          FAILED_TEST_TABLE: !Ref FailedTestTable
+          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          SECRET_HASH: !Ref SecretHash 
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /grader
+            Method: GET
+
+  GetPassedTestFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: 'dotnet8'
+      Tool: "Amazon.Lambda.Annotations"
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.GetPassedTestHandler::FunctionHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PassedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable
+      Environment:
+        Variables:
+          PASSED_TEST_TABLE: !Ref PassedTestTable
+          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          SECRET_HASH: !Ref SecretHash 
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /getpassedtest
+            Method: GET
+
+  GetTheLastFailedTestFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: 'dotnet8'
+      Tool: "Amazon.Lambda.Annotations"
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.GetTheLastFailedTestHandler::FunctionHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FailedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable
+      Environment:
+        Variables:
+          FAILED_TEST_TABLE: !Ref FailedTestTable
+          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          SECRET_HASH: !Ref SecretHash 
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /getthelastfailedtest
+            Method: GET
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

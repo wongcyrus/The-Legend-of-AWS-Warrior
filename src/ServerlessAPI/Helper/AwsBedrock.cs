@@ -1,19 +1,17 @@
 
-using System.Linq;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 using Amazon;
 using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
+using Amazon.Lambda.Core;
 using Amazon.Util;
-using Microsoft.Extensions.Logging;
 
 namespace ServerlessAPI.Helper;
 public class AwsBedrock
 {
-    private readonly ILogger<AwsBedrock> logger;
+    private readonly ILambdaLogger logger;
 
-    public AwsBedrock(ILogger<AwsBedrock> logger)
+    public AwsBedrock(ILambdaLogger logger)
     {
         this.logger = logger;
     }

@@ -1,19 +1,14 @@
-
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using System.Xml;
-using Microsoft.Extensions.Logging;
+using Amazon.Lambda.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using NUnit.Common;
 using NUnitLite;
 using ProjectTestsLib;
 using ProjectTestsLib.Helper;
-using ServerlessAPI.Controllers;
+using ServerlessAPI.Functions;
+using static ServerlessAPI.Functions.GameFunction;
 
 namespace ServerlessAPI.Helper;
 
@@ -28,10 +23,10 @@ public class NunitTestResult
 }
 public class TestRunner
 {
-    private readonly ILogger<TestRunner> logger;
+   private readonly ILambdaLogger logger;
     private readonly AmazonS3 amazonS3;
 
-    public TestRunner(ILogger<TestRunner> logger, AmazonS3 amazonS3)
+    public TestRunner(ILambdaLogger logger, AmazonS3 amazonS3)
     {
         this.logger = logger;
         this.amazonS3 = amazonS3;
@@ -140,7 +135,7 @@ public class TestRunner
         {
             ContractResolver = new CamelCasePropertyNamesContractResolver()
         };
-        var json = GameController.GetTasksJson();
+        var json = GameFunction.GetTasksJson();
         var matchingTask = json?.FirstOrDefault(c => c.Filter == tempFilter);
         return matchingTask;
     }
@@ -163,7 +158,7 @@ public class TestRunner
 
     private int GetReward(string fullname)
     {
-        var json = GameController.GetTasksJson();
+        var json = GameFunction.GetTasksJson();
         var matchingTask = json?.FirstOrDefault(c => c.Name == fullname);
         return matchingTask?.Reward ?? 0;
     }
