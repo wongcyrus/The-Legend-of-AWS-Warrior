@@ -49,29 +49,28 @@ public class GameFunction
             return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");
         }
 
-        if (new Random().NextDouble() < 0.5)
-        {
-            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, await awsBedrock.RandomNPCConversation());
-        }
-
         var passedTests = await dynamoDB.GetPassedTestNames(user.Email);
         logger.LogInformation($"Passed tests: {string.Join(", ", passedTests)}");
 
         var tasks = GetTasksJson();
         var filteredTasks = tasks.Where(t => !t.Tests.All(passedTests.Contains));
-        
+
         var mode = apigProxyEvent.QueryStringParameters["mode"];
-        if (string.IsNullOrEmpty(mode.Trim()))
+        if (string.IsNullOrEmpty(mode))
         {
             return ApiResponse.CreateResponse(HttpStatusCode.OK, filteredTasks);
         }
+
         var t = filteredTasks.Take(1).ToArray();
         if (new Random().NextDouble() < 0.7)
         {
             t[0].Instruction = await awsBedrock.RewriteInstruction(t[0].Instruction);
+            return ApiResponse.CreateResponse(HttpStatusCode.OK, t);
         }
-
-        return ApiResponse.CreateResponse(HttpStatusCode.OK, t);
+        else
+        {
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, await awsBedrock.RandomNPCConversation());
+        }
     }
 
     private static IEnumerable<Type> GetTypesWithHelpAttribute(Assembly assembly)

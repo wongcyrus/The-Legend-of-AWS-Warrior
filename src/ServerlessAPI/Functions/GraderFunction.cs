@@ -8,16 +8,14 @@ using Amazon.DynamoDBv2;
 using Microsoft.AspNetCore.StaticFiles;
 using System.Net;
 
-namespace ServerlessAPI.Controllers;
-
-
+namespace ServerlessAPI.Functions;
 public class GraderFunction
 {
     private ILambdaLogger? logger;
     private DynamoDB? dynamoDB;
     private TestRunner? testRunner;
 
-    public async Task<APIGatewayHttpApiV2ProxyResponse> Get(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
+    public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
     {
 
         this.logger = context.Logger;
@@ -28,7 +26,7 @@ public class GraderFunction
         var queryStringParameters = request.QueryStringParameters;
         if (queryStringParameters == null || !queryStringParameters.TryGetValue("api_key", out var apiKey) || string.IsNullOrEmpty(apiKey))
         {
-            return ApiResponse.CreateResponseMessage(HttpStatusCode.BadRequest, "Invalid request");         
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.BadRequest, "Invalid request");
         }
 
         var filter = queryStringParameters.ContainsKey("filter") ? queryStringParameters["filter"] : "";
@@ -38,7 +36,7 @@ public class GraderFunction
         var user = await dynamoDB.GetUser(apiKey);
         if (user == null)
         {
-            return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");           
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");
         }
 
         logger.LogInformation("GraderController.Get called for email: " + user);
@@ -46,6 +44,6 @@ public class GraderFunction
         var awsTestConfig = new AwsTestConfig(user.AccessKeyId, user.SecretAccessKey, user.SessionToken, user.Email, region, graderParameter, filter);
         var results = await testRunner.RunUnitTest(awsTestConfig);
         dynamoDB.SaveTestResults(user.Email, results);
-        return ApiResponse.CreateResponse(HttpStatusCode.OK, results);      
+        return ApiResponse.CreateResponse(HttpStatusCode.OK, results);
     }
 }
