@@ -20,20 +20,18 @@ public class GameFunction
     private DynamoDB? dynamoDB;
     private AwsBedrock? awsBedrock;
 
- 
+
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest apigProxyEvent,
         ILambdaContext context)
     {
-        context.Logger.LogLine("GameController.Get called");
         this.logger = context.Logger;
         string region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
-       
-        this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)),this.logger);
+
+        this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), this.logger);
         this.awsBedrock = new AwsBedrock(this.logger);
 
-        var apiKey = apigProxyEvent.QueryStringParameters["apiKey"];    
+        var apiKey = apigProxyEvent.QueryStringParameters["api_key"];
 
-        logger.LogInformation("GameController.Get called");
         if (string.IsNullOrEmpty(apiKey))
         {
             return new APIGatewayHttpApiV2ProxyResponse
@@ -43,25 +41,17 @@ public class GameFunction
             };
         }
 
-        var mode = apigProxyEvent.QueryStringParameters["mode"];
+
 
         var user = await dynamoDB.GetUser(apiKey);
         if (user == null)
         {
-            return new APIGatewayHttpApiV2ProxyResponse
-            {
-                Body = "Invalid User and key",
-                StatusCode = (int)HttpStatusCode.Forbidden,
-            };
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");
         }
 
         if (new Random().NextDouble() < 0.5)
         {
-            return new APIGatewayHttpApiV2ProxyResponse
-            {
-                Body = await awsBedrock.RandomNPCConversation(),
-                StatusCode = (int)HttpStatusCode.OK,
-            };
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, await awsBedrock.RandomNPCConversation());
         }
 
         var passedTests = await dynamoDB.GetPassedTestNames(user.Email);
@@ -69,14 +59,11 @@ public class GameFunction
 
         var tasks = GetTasksJson();
         var filteredTasks = tasks.Where(t => !t.Tests.All(passedTests.Contains));
-        if (string.IsNullOrEmpty(mode))
+        
+        var mode = apigProxyEvent.QueryStringParameters["mode"];
+        if (string.IsNullOrEmpty(mode.Trim()))
         {
-            // return new JsonResult(filteredTasks);
-            return new APIGatewayHttpApiV2ProxyResponse
-            {
-                Body = JsonConvert.SerializeObject(filteredTasks),
-                StatusCode = (int)HttpStatusCode.OK,
-            };
+            return ApiResponse.CreateResponse(HttpStatusCode.OK, filteredTasks);
         }
         var t = filteredTasks.Take(1).ToArray();
         if (new Random().NextDouble() < 0.7)
@@ -84,11 +71,7 @@ public class GameFunction
             t[0].Instruction = await awsBedrock.RewriteInstruction(t[0].Instruction);
         }
 
-        return new APIGatewayHttpApiV2ProxyResponse
-        {
-            Body = JsonConvert.SerializeObject(t),
-            StatusCode = (int)HttpStatusCode.OK,
-        };
+        return ApiResponse.CreateResponse(HttpStatusCode.OK, t);
     }
 
     private static IEnumerable<Type> GetTypesWithHelpAttribute(Assembly assembly)

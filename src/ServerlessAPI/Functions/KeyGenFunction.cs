@@ -12,18 +12,12 @@ public class KeyGenFunction
 
     public APIGatewayHttpApiV2ProxyResponse FunctionHandler(APIGatewayHttpApiV2ProxyRequest apigProxyEvent,
        ILambdaContext context)
-    {
-        context.Logger.LogLine("GameController.Get called");
+    {        
         logger = context.Logger;
-
         var email = apigProxyEvent.QueryStringParameters["email"];
         var hash = apigProxyEvent.QueryStringParameters["hash"];
         logger.LogInformation("KeyGenController.Get called for email: " + email);
 
-        return new APIGatewayHttpApiV2ProxyResponse
-        {
-            Body = AesOperation.EncryptString(hash, email),
-            StatusCode = (int)HttpStatusCode.OK,
-        };
+        return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, AesOperation.EncryptString(hash, email));   
     }
 }

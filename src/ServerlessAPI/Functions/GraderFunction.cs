@@ -6,6 +6,7 @@ using Amazon.Lambda.Core;
 using Amazon;
 using Amazon.DynamoDBv2;
 using Microsoft.AspNetCore.StaticFiles;
+using System.Net;
 
 namespace ServerlessAPI.Controllers;
 
@@ -27,7 +28,7 @@ public class GraderFunction
         var queryStringParameters = request.QueryStringParameters;
         if (queryStringParameters == null || !queryStringParameters.TryGetValue("api_key", out var apiKey) || string.IsNullOrEmpty(apiKey))
         {
-            return BadRequest("Invalid request");
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.BadRequest, "Invalid request");         
         }
 
         var filter = queryStringParameters.ContainsKey("filter") ? queryStringParameters["filter"] : "";
@@ -37,7 +38,7 @@ public class GraderFunction
         var user = await dynamoDB.GetUser(apiKey);
         if (user == null)
         {
-            return BadRequest("Invalid api key!");
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");           
         }
 
         logger.LogInformation("GraderController.Get called for email: " + user);
@@ -45,23 +46,6 @@ public class GraderFunction
         var awsTestConfig = new AwsTestConfig(user.AccessKeyId, user.SecretAccessKey, user.SessionToken, user.Email, region, graderParameter, filter);
         var results = await testRunner.RunUnitTest(awsTestConfig);
         dynamoDB.SaveTestResults(user.Email, results);
-        return Ok(results);
-    }
-    private APIGatewayHttpApiV2ProxyResponse BadRequest(string message)
-    {
-        return new APIGatewayHttpApiV2ProxyResponse
-        {
-            StatusCode = 400,
-            Body = message
-        };
-    }
-
-    private APIGatewayHttpApiV2ProxyResponse Ok(object results)
-    {
-        return new APIGatewayHttpApiV2ProxyResponse
-        {
-            StatusCode = 200,
-            Body = Newtonsoft.Json.JsonConvert.SerializeObject(results)
-        };
+        return ApiResponse.CreateResponse(HttpStatusCode.OK, results);      
     }
 }

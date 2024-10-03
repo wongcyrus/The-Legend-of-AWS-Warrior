@@ -26,10 +26,16 @@ public class AwsBedrock
     public async Task<string> RewriteInstruction(string instruction)
     {
         string prompt = """
-            Rewrite the following instruction for a game NPC which is girl in age 20 and ask for help from the AWS warrior:
-                            
-            """ + instruction + @"
+            Rewrite the instruction for a game NPC which is girl in age 20 and ask for help from the AWS warrior.
+            !!!ONLY RESPONSES THE REWRITTEN SENTENCE!!!
 
+            Here is the original instruction:
+
+            """ + instruction + 
+            @"
+
+            Response:
+            
         ";
 
         return await InvokeTitanTextG1Async(prompt);

@@ -149,11 +149,19 @@ Resources:
         - AttributeName: "TestTime"
           KeyType: "RANGE"
 
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'POST, GET, OPTIONS'" 
+        AllowHeaders: "'X-Forwarded-For'"
+        AllowOrigin: !Sub "'https://${CloudFrontDistribution.DomainName}'"
+        MaxAge: "'600'"
+        AllowCredentials: true
+
   GameFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.GameFunction::FunctionHandler
@@ -175,32 +183,30 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /game
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
 
   KeyGenFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.KeyGenFunction::FunctionHandler
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /keygen
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
 
   AwsAccountFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.AwsAccountFunction::FunctionHandler
@@ -212,17 +218,16 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /awsaccount
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
 
   GraderFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.GraderFunction::FunctionHandler
@@ -243,20 +248,19 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /grader
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
 
   GetPassedTestFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
-      Handler: ServerlessAPI::ServerlessAPI.Functions.GetPassedTestHandler::FunctionHandler
+      Handler: ServerlessAPI::ServerlessAPI.Functions.MarksFunction::GetPassedTestHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref PassedTestTable
@@ -268,20 +272,19 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /getpassedtest
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
 
   GetTheLastFailedTestFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
-      Handler: ServerlessAPI::ServerlessAPI.Functions.GetTheLastFailedTestHandler::FunctionHandler
+      Handler: ServerlessAPI::ServerlessAPI.Functions.MarksFunction::GetTheLastFailedTestHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref FailedTestTable
@@ -293,11 +296,13 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /getthelastfailedtest
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
@@ -312,10 +317,11 @@ Resources:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
       AutoConfigurationEnabled: "true"
+
 Outputs:
   WebApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/"
   TestResultBucket:
     Description: Test Result Bucket
     Value: !Ref TestResultBucket

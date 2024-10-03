@@ -13,7 +13,7 @@ class Marks extends Component {
   }
   componentDidMount() {
     const aws = new Aws();
-    const urlWithQueryParams = aws.getApiUrl("marks");
+    const urlWithQueryParams = aws.getApiUrl("getpassedtest");
 
     fetch(urlWithQueryParams)
       .then((response) => response.json())
@@ -27,7 +27,7 @@ class Marks extends Component {
         console.error(error);
       });
 
-    const urlWithQueryParams2 = aws.getApiUrl("marks/theLastFailedTest");
+    const urlWithQueryParams2 = aws.getApiUrl("getthelastfailedtest");
 
     fetch(urlWithQueryParams2)
       .then((response) => response.json())
