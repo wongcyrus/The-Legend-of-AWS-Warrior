@@ -41,8 +41,6 @@ public class GameFunction
             };
         }
 
-
-
         var user = await dynamoDB.GetUser(apiKey);
         if (user == null)
         {

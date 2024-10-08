@@ -152,6 +152,7 @@ Resources:
   ApiGatewayApi:
     Type: AWS::Serverless::Api
     Properties:
+      Name: !Sub "${AWS::StackName}-api"
       StageName: Prod
       Cors:
         AllowMethods: "'POST, GET, OPTIONS'" 
@@ -159,6 +160,20 @@ Resources:
         AllowOrigin: !Sub "'https://${CloudFrontDistribution.DomainName}'"
         MaxAge: "'600'"
         AllowCredentials: true
+      Auth:
+        ApiKeyRequired: 'true'
+
+  APIUsagePlan:
+    Type: 'AWS::ApiGateway::UsagePlan'
+    Properties:
+      ApiStages:
+        - ApiId: !Ref ApiGatewayApi
+          Stage: Prod
+      Description: To usage plan and api key in REST API.
+      Quota:
+        Limit: 2880
+        Period: DAY
+      UsagePlanName: "grader-usage-plan"
 
   GameFunction:
     Type: AWS::Serverless::Function
@@ -196,14 +211,27 @@ Resources:
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.KeyGenFunction::FunctionHandler
+      Environment:
+        Variables:
+          RestApiId: !Ref ApiGatewayApi
+          SECRET_HASH: !Ref SecretHash
+          UsagePlanId: !Ref APIUsagePlan
+      Policies:
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "apigateway:POST"
+              - "apigateway:GET"
+            Resource:
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"             
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys/*"
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/usageplans/*/keys" 
       Events:
         ApiEvent:
           Type: Api
           Properties:
             Path: /keygen
-            Method: GET
-            RestApiId:
-              Ref: ApiGatewayApi
+            Method: get
 
   AwsAccountFunction:
     Type: AWS::Serverless::Function
