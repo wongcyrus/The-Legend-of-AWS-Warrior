@@ -13,9 +13,13 @@ class Marks extends Component {
   }
   componentDidMount() {
     const aws = new Aws();
-    const urlWithQueryParams = aws.getApiUrl("marks");
+    const urlWithQueryParams = aws.getApiUrl("getpassedtest");
 
-    fetch(urlWithQueryParams)
+    fetch(urlWithQueryParams, {
+      headers: {
+        "x-api-key": localStorage.getItem("api_key")
+      }
+    })
       .then((response) => response.json())
       .then((data) => {
         // Handle the response data here
@@ -27,9 +31,13 @@ class Marks extends Component {
         console.error(error);
       });
 
-    const urlWithQueryParams2 = aws.getApiUrl("marks/theLastFailedTest");
+    const urlWithQueryParams2 = aws.getApiUrl("getthelastfailedtest");
 
-    fetch(urlWithQueryParams2)
+    fetch(urlWithQueryParams2, {
+      headers: {
+        "x-api-key": localStorage.getItem("api_key")
+      }
+    })
       .then((response) => response.json())
       .then((data) => {
         // Handle the response data here

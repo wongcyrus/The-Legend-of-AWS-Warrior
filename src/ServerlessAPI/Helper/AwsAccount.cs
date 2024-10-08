@@ -4,13 +4,6 @@ using Amazon.SecurityToken;
 namespace ServerlessAPI.Helper;
 public class AwsAccount
 {
-    private readonly ILogger<AwsAccount> logger;
-
-    public AwsAccount(ILogger<AwsAccount> logger)
-    {
-        this.logger = logger;        
-    }
-
     public async Task<string> GetAwsAccountNumber(string accessKeyId, string secretAccessKey, string sessionToken)
     {
         var credential = new SessionAWSCredentials(accessKeyId, secretAccessKey, sessionToken);

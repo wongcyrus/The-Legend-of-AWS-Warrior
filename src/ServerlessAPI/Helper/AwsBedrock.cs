@@ -3,14 +3,15 @@ using System.Text.Json.Nodes;
 using Amazon;
 using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
+using Amazon.Lambda.Core;
 using Amazon.Util;
 
 namespace ServerlessAPI.Helper;
 public class AwsBedrock
 {
-    private readonly ILogger<AwsBedrock> logger;
+    private readonly ILambdaLogger logger;
 
-    public AwsBedrock(ILogger<AwsBedrock> logger)
+    public AwsBedrock(ILambdaLogger logger)
     {
         this.logger = logger;
     }
@@ -24,12 +25,14 @@ public class AwsBedrock
 
     public async Task<string> RewriteInstruction(string instruction)
     {
-        string prompt = """
-            Rewrite the following instruction for a game NPC which is girl in age 20 and ask for help from the AWS warrior:
-                            
-            """ + instruction + @"
-
-        ";
+        string prompt =
+ """
+ <Message>
+ """ + instruction + 
+@"""
+</Message>
+Rewrite the message with the tone as a girl in age 20 and ask for help from the AWS warrior.            
+        """;
 
         return await InvokeTitanTextG1Async(prompt);
     }

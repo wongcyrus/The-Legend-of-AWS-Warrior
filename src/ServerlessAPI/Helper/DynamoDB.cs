@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
+using Amazon.Lambda.Core;
 using ServerlessAPI.Helper;
 
 namespace ProjectTestsLib.Helper;
@@ -28,9 +29,9 @@ public class User
 public class DynamoDB
 {
     private readonly IAmazonDynamoDB dynamoClient;
-    private readonly ILogger<DynamoDB> logger;
+    private readonly ILambdaLogger logger;
 
-    public DynamoDB(IAmazonDynamoDB dynamoClient, ILogger<DynamoDB> logger)
+    public DynamoDB(IAmazonDynamoDB dynamoClient, ILambdaLogger logger)
     {
         this.dynamoClient = dynamoClient;
         this.logger = logger;

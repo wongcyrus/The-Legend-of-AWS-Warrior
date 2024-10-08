@@ -22,11 +22,11 @@ if [ -z "$WebApiEndpoint" ]; then
     exit 1
 fi
 
-echo "export const baseUrl = '$WebApiEndpoint/api/';" > web-app/src/Constant.js
-sed -i 's|//api/|/api/|g' web-app/src/Constant.js
+echo "export const baseUrl = '$WebApiEndpoint/Prod/';" > web-app/src/Constant.js
+sed -i 's|//Prod/|/Prod/|g' web-app/src/Constant.js
 
-echo "export const baseUrl = '$WebApiEndpoint/api/';" > web-game/src/constant.js
-sed -i 's|//api/|/api/|g' web-game/src/constant.js
+echo "export const baseUrl = '$WebApiEndpoint/Prod/';" > web-game/src/constant.js
+sed -i 's|//Prod/|/Prod/|g' web-game/src/constant.js
 
 
 cd web-app

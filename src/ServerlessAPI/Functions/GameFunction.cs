@@ -1,65 +1,50 @@
+using System.Net;
 using System.Reflection;
 using System.Runtime.Serialization;
-using Microsoft.AspNetCore.Mvc;
+using Amazon;
+using Amazon.DynamoDBv2;
+using Amazon.Lambda.APIGatewayEvents;
+using Amazon.Lambda.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using ProjectTestsLib.Helper;
 using ServerlessAPI.Helper;
 
-namespace ServerlessAPI.Controllers;
 
-[DataContract]
-public class GameTaskData
+namespace ServerlessAPI.Functions;
+
+
+public class GameFunction
 {
-    [DataMember] public int GameClassOrder { get; set; }
-    [DataMember] public required string Name { get; set; }
-    [DataMember] public required string[] Tests { get; set; }
-    [DataMember] public required string Instruction { get; set; }
-    [DataMember] public required string Filter { get; set; }
-    [DataMember] public int TimeLimit { get; set; }
-    [DataMember] public int Reward { get; set; }
+    private ILambdaLogger? logger;
+    private DynamoDB? dynamoDB;
+    private AwsBedrock? awsBedrock;
 
-    public override string ToString()
+
+    public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest apigProxyEvent,
+        ILambdaContext context)
     {
-        return Name + "," + GameClassOrder + "," + TimeLimit + "," + Reward + "," + Filter + "=>" + Instruction.Substring(0, 30);
-    }
-}
+        this.logger = context.Logger;
+        string region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
 
-[Route("api/[controller]")]
-[Produces("application/json")]
-public class GameController : ControllerBase
-{
-    private readonly ILogger<GameController> logger;
-    private readonly DynamoDB dynamoDB;
-    private readonly AwsBedrock awsBedrock;
+        this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), this.logger);
+        this.awsBedrock = new AwsBedrock(this.logger);
 
-    public GameController(ILogger<GameController> logger, DynamoDB dynamoDB, AwsBedrock awsBedrock)
-    {
-        this.logger = logger;
-        this.dynamoDB = dynamoDB;
-        this.awsBedrock = awsBedrock;
-    }
+        var apiKey = apigProxyEvent.Headers["x-api-key"];
 
-
-    // GET: api/Game
-    [HttpGet]
-    public async Task<JsonResult> Get([FromQuery(Name = "api_key")] string apiKey, string mode)
-    {
-        logger.LogInformation("GameController.Get called");
         if (string.IsNullOrEmpty(apiKey))
         {
-            return new JsonResult("Invalid request");
+            return new APIGatewayHttpApiV2ProxyResponse
+            {
+                Body = "Invalid apiKey",
+                StatusCode = (int)HttpStatusCode.Forbidden,
+            };
         }
 
         var user = await dynamoDB.GetUser(apiKey);
         if (user == null)
         {
-            return new JsonResult("Invalid api key!");
-        }
-
-        if (new Random().NextDouble() < 0.5)
-        {
-            return new JsonResult(await awsBedrock.RandomNPCConversation());
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");
         }
 
         var passedTests = await dynamoDB.GetPassedTestNames(user.Email);
@@ -67,16 +52,23 @@ public class GameController : ControllerBase
 
         var tasks = GetTasksJson();
         var filteredTasks = tasks.Where(t => !t.Tests.All(passedTests.Contains));
+
+        var mode = apigProxyEvent.QueryStringParameters["mode"];
         if (string.IsNullOrEmpty(mode))
         {
-            return new JsonResult(filteredTasks);
+            return ApiResponse.CreateResponse(HttpStatusCode.OK, filteredTasks);
         }
+
         var t = filteredTasks.Take(1).ToArray();
         if (new Random().NextDouble() < 0.7)
         {
             t[0].Instruction = await awsBedrock.RewriteInstruction(t[0].Instruction);
+            return ApiResponse.CreateResponse(HttpStatusCode.OK, t);
         }
-        return new JsonResult(t);
+        else
+        {
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, await awsBedrock.RandomNPCConversation());
+        }
     }
 
     private static IEnumerable<Type> GetTypesWithHelpAttribute(Assembly assembly)
@@ -86,6 +78,23 @@ public class GameController : ControllerBase
                select type;
     }
 
+
+    [DataContract]
+    public class GameTaskData
+    {
+        [DataMember] public int GameClassOrder { get; set; }
+        [DataMember] public required string Name { get; set; }
+        [DataMember] public required string[] Tests { get; set; }
+        [DataMember] public required string Instruction { get; set; }
+        [DataMember] public required string Filter { get; set; }
+        [DataMember] public int TimeLimit { get; set; }
+        [DataMember] public int Reward { get; set; }
+
+        public override string ToString()
+        {
+            return Name + "," + GameClassOrder + "," + TimeLimit + "," + Reward + "," + Filter + "=>" + Instruction.Substring(0, 30);
+        }
+    }
     public static IList<GameTaskData> GetTasksJson()
     {
         {
