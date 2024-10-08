@@ -61,7 +61,11 @@ class Home extends Component {
       extractedCredentials.aws_session_token
     );
 
-    fetch(urlWithQueryParams)
+    fetch(urlWithQueryParams, {
+      headers: {
+        "x-api-key": localStorage.getItem("api_key")
+      }
+    })
       .then((response) => response.json())
       .then((data) => {
         // Handle the response data here
@@ -107,7 +111,7 @@ class Home extends Component {
               placeholder="API Key"
               value={this.state.api_key}
               onPasteCapture={this.onPasteCaptureApiKey}
-              onChange={(e) => {}}
+              onChange={(e) => { }}
             />
           </Form.Group>
           <Form.Group className="mb-3" controlId="formBasicCredentials">
@@ -120,7 +124,7 @@ class Home extends Component {
               className="text-muted"
               value={this.state.credentials}
               onPasteCapture={this.onPasteCaptureCredentials}
-              onChange={(e) => {}}
+              onChange={(e) => { }}
             />
           </Form.Group>
           <Form.Group className="mb-3" controlId="formBasicEmail">

@@ -21,24 +21,9 @@ namespace ServerlessAPI.Functions
             this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), this.logger);
             awsAccount = new AwsAccount();
 
-            logger.LogInformation("AwsAccountFunction.FunctionHandler called.");
-
-            var queryParams = request.QueryStringParameters;
-            if (queryParams == null ||
-                !queryParams.TryGetValue("aws_access_key", out var accessKeyId) ||
-                !queryParams.TryGetValue("aws_secret_access_key", out var secretAccessKey) ||
-                !queryParams.TryGetValue("aws_session_token", out var sessionToken) ||
-                !queryParams.TryGetValue("api_key", out var apiKey) ||
-                string.IsNullOrEmpty(accessKeyId) ||
-                string.IsNullOrEmpty(secretAccessKey) ||
-                string.IsNullOrEmpty(sessionToken) ||
-                string.IsNullOrEmpty(apiKey))
+            if (!TryGetQueryParameters(request.QueryStringParameters, out var accessKeyId, out var secretAccessKey, out var sessionToken))
             {
-                return new APIGatewayHttpApiV2ProxyResponse
-                {
-                    StatusCode = 400,
-                    Body = "Invalid request"
-                };
+                return ApiResponse.CreateResponseMessage(System.Net.HttpStatusCode.OK, "Invalid request");
             }
 
             string awsAccountNumber;
@@ -48,21 +33,32 @@ namespace ServerlessAPI.Functions
             }
             catch (Amazon.SecurityToken.AmazonSecurityTokenServiceException)
             {
-                return new APIGatewayHttpApiV2ProxyResponse
-                {
-                    StatusCode = 400,
-                    Body = "The AWS credentials are expired"
-                };
+                return ApiResponse.CreateResponseMessage(System.Net.HttpStatusCode.OK, "The AWS credentials are expired");
             }
 
+            var apiKey = request.Headers["x-api-key"];
             var status = await dynamoDB.RegisterUser(apiKey, awsAccountNumber, accessKeyId, secretAccessKey, sessionToken);
             var result = $"Your AWS account is {awsAccountNumber} and {SplitPascalCase(status.ToString()).ToLower()}.";
 
-            return new APIGatewayHttpApiV2ProxyResponse
+            return ApiResponse.CreateResponseMessage(System.Net.HttpStatusCode.OK, result);
+        }
+
+        private bool TryGetQueryParameters(IDictionary<string, string>? queryParams, out string accessKeyId, out string secretAccessKey, out string sessionToken)
+        {
+            accessKeyId = secretAccessKey = sessionToken = string.Empty;
+
+            if (queryParams == null ||
+                !queryParams.TryGetValue("aws_access_key", out accessKeyId) ||
+                !queryParams.TryGetValue("aws_secret_access_key", out secretAccessKey) ||
+                !queryParams.TryGetValue("aws_session_token", out sessionToken) ||
+                string.IsNullOrEmpty(accessKeyId) ||
+                string.IsNullOrEmpty(secretAccessKey) ||
+                string.IsNullOrEmpty(sessionToken))
             {
-                StatusCode = 200,
-                Body = result
-            };
+                return false;
+            }
+
+            return true;
         }
 
         private string SplitPascalCase(string input)

@@ -6,17 +6,16 @@ using Amazon.Lambda.Core;
 using Amazon;
 using Amazon.DynamoDBv2;
 using Microsoft.AspNetCore.StaticFiles;
+using System.Net;
 
-namespace ServerlessAPI.Controllers;
-
-
+namespace ServerlessAPI.Functions;
 public class GraderFunction
 {
     private ILambdaLogger? logger;
     private DynamoDB? dynamoDB;
     private TestRunner? testRunner;
 
-    public async Task<APIGatewayHttpApiV2ProxyResponse> Get(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
+    public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
     {
 
         this.logger = context.Logger;
@@ -24,10 +23,12 @@ public class GraderFunction
         this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
         this.testRunner = new TestRunner(this.logger, new AmazonS3(new FileExtensionContentTypeProvider()));
 
+        var apiKey = request.Headers["x-api-key"];
+
         var queryStringParameters = request.QueryStringParameters;
-        if (queryStringParameters == null || !queryStringParameters.TryGetValue("api_key", out var apiKey) || string.IsNullOrEmpty(apiKey))
+        if (queryStringParameters == null)
         {
-            return BadRequest("Invalid request");
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.BadRequest, "Invalid request");
         }
 
         var filter = queryStringParameters.ContainsKey("filter") ? queryStringParameters["filter"] : "";
@@ -37,7 +38,7 @@ public class GraderFunction
         var user = await dynamoDB.GetUser(apiKey);
         if (user == null)
         {
-            return BadRequest("Invalid api key!");
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");
         }
 
         logger.LogInformation("GraderController.Get called for email: " + user);
@@ -45,23 +46,6 @@ public class GraderFunction
         var awsTestConfig = new AwsTestConfig(user.AccessKeyId, user.SecretAccessKey, user.SessionToken, user.Email, region, graderParameter, filter);
         var results = await testRunner.RunUnitTest(awsTestConfig);
         dynamoDB.SaveTestResults(user.Email, results);
-        return Ok(results);
-    }
-    private APIGatewayHttpApiV2ProxyResponse BadRequest(string message)
-    {
-        return new APIGatewayHttpApiV2ProxyResponse
-        {
-            StatusCode = 400,
-            Body = message
-        };
-    }
-
-    private APIGatewayHttpApiV2ProxyResponse Ok(object results)
-    {
-        return new APIGatewayHttpApiV2ProxyResponse
-        {
-            StatusCode = 200,
-            Body = Newtonsoft.Json.JsonConvert.SerializeObject(results)
-        };
+        return ApiResponse.CreateResponse(HttpStatusCode.OK, results);
     }
 }

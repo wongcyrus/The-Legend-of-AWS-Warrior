@@ -28,7 +28,10 @@ Globals:
 
   Api:
     TracingEnabled: true
-
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
 Resources:
   TestResultBucket:
     Type: AWS::S3::Bucket
@@ -149,11 +152,30 @@ Resources:
         - AttributeName: "TestTime"
           KeyType: "RANGE"
 
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-api"
+      StageName: Prod
+      Cors:
+        AllowOrigin: !Sub "'https://${CloudFrontDistribution.DomainName}'"
+        MaxAge: "'600'"
+        AllowCredentials: true
+        
+  APIUsagePlan:
+    Type: 'AWS::ApiGateway::UsagePlan'
+    Properties:
+      ApiStages:
+        - ApiId: !Ref ApiGatewayApi
+          Stage: Prod
+      Description: To usage plan and api key in REST API.
+      Quota:
+        Limit: 2880
+        Period: DAY
+      UsagePlanName: "grader-usage-plan"
+
   GameFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.GameFunction::FunctionHandler
@@ -175,32 +197,45 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /game
             Method: GET
-
+            RestApiId:
+              Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
+            
   KeyGenFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.KeyGenFunction::FunctionHandler
+      Environment:
+        Variables:
+          RestApiId: !Ref ApiGatewayApi
+          SECRET_HASH: !Ref SecretHash
+          UsagePlanId: !Ref APIUsagePlan
+      Policies:
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "apigateway:POST"
+              - "apigateway:GET"
+            Resource:
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"             
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys/*"
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/usageplans/*/keys" 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /keygen
-            Method: GET
+            Method: get
 
   AwsAccountFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.AwsAccountFunction::FunctionHandler
@@ -212,17 +247,18 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /awsaccount
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   GraderFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
       Handler: ServerlessAPI::ServerlessAPI.Functions.GraderFunction::FunctionHandler
@@ -243,20 +279,21 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /grader
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   GetPassedTestFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
-      Handler: ServerlessAPI::ServerlessAPI.Functions.GetPassedTestHandler::FunctionHandler
+      Handler: ServerlessAPI::ServerlessAPI.Functions.MarksFunction::GetPassedTestHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref PassedTestTable
@@ -268,20 +305,21 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /getpassedtest
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   GetTheLastFailedTestFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: 'dotnet8'
-      Tool: "Amazon.Lambda.Annotations"
     Properties:
       CodeUri: ./src/ServerlessAPI
-      Handler: ServerlessAPI::ServerlessAPI.Functions.GetTheLastFailedTestHandler::FunctionHandler
+      Handler: ServerlessAPI::ServerlessAPI.Functions.MarksFunction::GetTheLastFailedTestHandler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref FailedTestTable
@@ -293,11 +331,15 @@ Resources:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           SECRET_HASH: !Ref SecretHash 
       Events:
-        Api:
-          Type: HttpApi
+        ApiEvent:
+          Type: Api
           Properties:
             Path: /getthelastfailedtest
             Method: GET
+            RestApiId:
+              Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
@@ -312,10 +354,11 @@ Resources:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
       AutoConfigurationEnabled: "true"
+
 Outputs:
   WebApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/"
   TestResultBucket:
     Description: Test Result Bucket
     Value: !Ref TestResultBucket

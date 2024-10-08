@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.RegularExpressions;
 using Amazon;
 using Amazon.DynamoDBv2;
@@ -18,27 +19,18 @@ namespace ServerlessAPI.Functions
             this.logger = context.Logger;
             string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
             this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
-            var apiKey = request.QueryStringParameters["api_key"];
-
+            var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
 
             // Check if the email is valid
             var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");
             if (!isValidEmail)
             {
-                return new APIGatewayHttpApiV2ProxyResponse
-                {
-                    StatusCode = 200,
-                    Body = "[]"
-                };
+                return ApiResponse.CreateResponseMessage(HttpStatusCode.BadRequest, "Invalid email");
             }
 
             var passedTest = await dynamoDB.GetPassedTests(email);
-            return new APIGatewayHttpApiV2ProxyResponse
-            {
-                StatusCode = 200,
-                Body = System.Text.Json.JsonSerializer.Serialize(passedTest)
-            };
+            return ApiResponse.CreateResponse(HttpStatusCode.OK, passedTest);
         }
 
         public async Task<APIGatewayHttpApiV2ProxyResponse> GetTheLastFailedTestHandler(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
@@ -48,26 +40,18 @@ namespace ServerlessAPI.Functions
             string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
             this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
 
-            var apiKey = request.QueryStringParameters["api_key"];
+            var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
 
             // Check if the email is valid
             var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");
             if (!isValidEmail)
             {
-                return new APIGatewayHttpApiV2ProxyResponse
-                {
-                    StatusCode = 200,
-                    Body = "[]"
-                };
+                return ApiResponse.CreateResponse(HttpStatusCode.OK, Array.Empty<string>());
             }
 
             var theLastFailedTest = await dynamoDB.GetTheLastFailedTest(email);
-            return new APIGatewayHttpApiV2ProxyResponse
-            {
-                StatusCode = 200,
-                Body = System.Text.Json.JsonSerializer.Serialize(theLastFailedTest)
-            };
+            return ApiResponse.CreateResponse(HttpStatusCode.OK, theLastFailedTest == null ? Array.Empty<string>() : theLastFailedTest);
         }
     }
 }
