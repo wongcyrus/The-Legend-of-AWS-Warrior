@@ -23,8 +23,10 @@ public class GraderFunction
         this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
         this.testRunner = new TestRunner(this.logger, new AmazonS3(new FileExtensionContentTypeProvider()));
 
+        var apiKey = request.Headers["x-api-key"];
+
         var queryStringParameters = request.QueryStringParameters;
-        if (queryStringParameters == null || !queryStringParameters.TryGetValue("api_key", out var apiKey) || string.IsNullOrEmpty(apiKey))
+        if (queryStringParameters == null)
         {
             return ApiResponse.CreateResponseMessage(HttpStatusCode.BadRequest, "Invalid request");
         }

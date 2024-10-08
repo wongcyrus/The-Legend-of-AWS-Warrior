@@ -79,12 +79,12 @@ export const npc_entity = (() => {
       if (filter) {
         console.log("Test with Filter: " + filter);
         const urlWithQueryParams = new URL(baseUrl + "grader");
-        urlWithQueryParams.searchParams.append(
-          "api_key",
-          localStorage.getItem("api_key")
-        );        
         urlWithQueryParams.searchParams.append("filter", filter);
-        fetch(urlWithQueryParams)
+        fetch(urlWithQueryParams, {
+          headers: {
+            "x-api-key": localStorage.getItem("api_key")
+          }
+        })
           .then((response) => response.json())
           .then((data) => {
             // Process the data here

@@ -40,8 +40,7 @@ class Aws {
     if (!api_key) {
       alert("Please set the key first!");
       return;
-    }
-    urlWithQueryParams.searchParams.append("api_key", api_key);
+    }   
     return urlWithQueryParams;
   };
 }

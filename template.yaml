@@ -28,7 +28,10 @@ Globals:
 
   Api:
     TracingEnabled: true
-
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
 Resources:
   TestResultBucket:
     Type: AWS::S3::Bucket
@@ -155,14 +158,10 @@ Resources:
       Name: !Sub "${AWS::StackName}-api"
       StageName: Prod
       Cors:
-        AllowMethods: "'POST, GET, OPTIONS'" 
-        AllowHeaders: "'X-Forwarded-For'"
         AllowOrigin: !Sub "'https://${CloudFrontDistribution.DomainName}'"
         MaxAge: "'600'"
         AllowCredentials: true
-      Auth:
-        ApiKeyRequired: 'true'
-
+        
   APIUsagePlan:
     Type: 'AWS::ApiGateway::UsagePlan'
     Properties:
@@ -205,7 +204,9 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-
+          Auth:
+            ApiKeyRequired: true
+            
   KeyGenFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -253,6 +254,8 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   GraderFunction:
     Type: AWS::Serverless::Function
@@ -283,6 +286,8 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   GetPassedTestFunction:
     Type: AWS::Serverless::Function
@@ -307,6 +312,8 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   GetTheLastFailedTestFunction:
     Type: AWS::Serverless::Function
@@ -331,6 +338,8 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
+          Auth:
+            ApiKeyRequired: true
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

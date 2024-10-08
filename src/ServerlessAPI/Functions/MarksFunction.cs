@@ -19,8 +19,7 @@ namespace ServerlessAPI.Functions
             this.logger = context.Logger;
             string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
             this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
-            var apiKey = request.QueryStringParameters["api_key"];
-
+            var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
 
             // Check if the email is valid
@@ -41,7 +40,7 @@ namespace ServerlessAPI.Functions
             string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
             this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
 
-            var apiKey = request.QueryStringParameters["api_key"];
+            var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
 
             // Check if the email is valid

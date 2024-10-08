@@ -19,7 +19,11 @@ class Playground extends Component {
     const urlWithQueryParams = aws.getApiUrl("game");
     urlWithQueryParams.searchParams.append("mode", "");
 
-    fetch(urlWithQueryParams)
+    fetch(urlWithQueryParams, {
+      headers: {
+        "x-api-key": localStorage.getItem("api_key")
+      }
+    })
       .then((response) => response.json())
       .then((data) => {
         // Handle the response data here
@@ -55,7 +59,11 @@ class Playground extends Component {
         dropdownDataByName.filter
       );
       this.setState({ loading: true });
-      fetch(urlWithQueryParams)
+      fetch(urlWithQueryParams, {
+        headers: {
+          "x-api-key": localStorage.getItem("api_key")
+        }
+      })
         .then((response) => response.json())
         .then((result) => {
           this.setState({ testResult: result });

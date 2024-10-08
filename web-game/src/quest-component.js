@@ -27,11 +27,11 @@ export const quest_component = (() => {
     _OnPicked(msg) {
       const urlWithQueryParams = new URL(baseUrl + "game");
       urlWithQueryParams.searchParams.append("mode", "game");
-      urlWithQueryParams.searchParams.append(
-        "api_key",
-        localStorage.getItem("api_key")
-      );
-      fetch(urlWithQueryParams)
+      fetch(urlWithQueryParams, {
+        headers: {
+          "x-api-key": localStorage.getItem("api_key")
+        }
+      })
         .then((response) => response.json())
         .then((data) => {
           // Process the data here

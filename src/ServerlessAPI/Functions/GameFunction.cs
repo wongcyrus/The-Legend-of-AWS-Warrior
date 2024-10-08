@@ -30,7 +30,7 @@ public class GameFunction
         this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), this.logger);
         this.awsBedrock = new AwsBedrock(this.logger);
 
-        var apiKey = apigProxyEvent.QueryStringParameters["api_key"];
+        var apiKey = apigProxyEvent.Headers["x-api-key"];
 
         if (string.IsNullOrEmpty(apiKey))
         {
