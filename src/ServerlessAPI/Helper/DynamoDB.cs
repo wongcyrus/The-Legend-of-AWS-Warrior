@@ -160,9 +160,25 @@ public class DynamoDB
         return AccountStatus.NotRegistered;
     }
 
-    public async Task<User?> GetUser(string apiKey)
+    public async Task<User?> GetUserApiKey(string apiKey)
     {
         var userAccount = await GetUserAccount(apiKey);
+        if (userAccount != null && userAccount.Item.Count != 0)
+        {
+            return new User
+            {
+                Email = userAccount.Item["User"].S,
+                AccessKeyId = userAccount.Item["AccessKeyId"].S,
+                SecretAccessKey = userAccount.Item["SecretAccessKey"].S,
+                SessionToken = userAccount.Item["SessionToken"].S
+            };
+        }
+        return null;
+    }
+
+    public async Task<User?> GetUserByEmail(string email)
+    {
+        var userAccount = await GetAccountByEmail(email);
         if (userAccount != null && userAccount.Item.Count != 0)
         {
             return new User
@@ -185,16 +201,20 @@ public class DynamoDB
         {
             return null;
         }
+        return await GetAccountByEmail(email);
+    }
+
+    private async Task<GetItemResponse?> GetAccountByEmail(string email)
+    {
         var awsAccountTable = Environment.GetEnvironmentVariable("AWS_ACCOUNT_TABLE")!;
-        var getItemRequest = new GetItemRequest
+        return await dynamoClient.GetItemAsync(new GetItemRequest
         {
             TableName = awsAccountTable,
             Key = new Dictionary<string, AttributeValue>
             {
                 { "User", new AttributeValue { S = email } }
             }
-        };
-        return await dynamoClient.GetItemAsync(getItemRequest);
+        });
     }
 
     private async Task<QueryResponse> GetPassedTestRecords(string email)
@@ -251,15 +271,16 @@ public class DynamoDB
         return null;
     }
 
-    public async void SaveTestResults(string email, NunitTestResult nunitTestResult)
+    public async Task SaveTestResults(string email, NunitTestResult nunitTestResult)
     {
         string now = DateTime.Now.ToString("yyyyMMddHHmmss");
         var tests = nunitTestResult.TestResults;
         var passedTesttable = Environment.GetEnvironmentVariable("PASSED_TEST_TABLE")!;
         var failedTesttable = Environment.GetEnvironmentVariable("FAILED_TEST_TABLE")!;
-
         var passedTest = tests.Where(x => x.Value > 0).ToList();
         var failedTest = tests.Where(x => x.Value == 0).ToList();
+
+        logger.LogInformation($"Email: {email}, Total tests: {tests.Count}, Passed tests: {passedTest.Count}, Failed tests: {failedTest.Count}");
 
         foreach (var test in passedTest)
         {
@@ -272,8 +293,10 @@ public class DynamoDB
                     { "Test", new AttributeValue { S = test.Key } }
                 }
             };
-            var getItemResponse = dynamoClient.GetItemAsync(getItemRequest).Result;
 
+            var getItemResponse = await dynamoClient.GetItemAsync(getItemRequest);
+
+            // logger.LogInformation("Get Item by email:" + email + " test:" + test.Key + " getItemResponse:" + getItemResponse.Item.Count);
             if (getItemResponse.Item.Count == 0)
             {
                 var request = new PutItemRequest
@@ -290,10 +313,11 @@ public class DynamoDB
                         { "XmlResultUrl", new AttributeValue { S = nunitTestResult.XmlResultUrl} },
                     }
                 };
-                await dynamoClient.PutItemAsync(request);
+                var result = await dynamoClient.PutItemAsync(request);
+                // logger.LogInformation("Put Item by email:" + email + " test:" + test.Key + " result:" + result.HttpStatusCode);                
             }
         }
-        logger.LogInformation("failedTest:" + failedTest.Count);
+
         foreach (var test in failedTest)
         {
             var request = new PutItemRequest
@@ -311,7 +335,7 @@ public class DynamoDB
                     }
             };
             await dynamoClient.PutItemAsync(request);
-        }
+        }       
     }
 
 }

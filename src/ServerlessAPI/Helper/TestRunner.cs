@@ -7,7 +7,6 @@ using NUnit.Common;
 using NUnitLite;
 using ProjectTestsLib;
 using ProjectTestsLib.Helper;
-using ServerlessAPI.Functions;
 using static ServerlessAPI.Functions.GameFunction;
 
 namespace ServerlessAPI.Helper;
@@ -23,7 +22,7 @@ public class NunitTestResult
 }
 public class TestRunner
 {
-   private readonly ILambdaLogger logger;
+    private readonly ILambdaLogger logger;
     private readonly AmazonS3 amazonS3;
 
     public TestRunner(ILambdaLogger logger, AmazonS3 amazonS3)
@@ -60,7 +59,10 @@ public class TestRunner
         await amazonS3.UploadFileToS3Async(tempCredentialsFilePath, Path.Combine(prefix, "awsTestConfig.json"));
 
         // logger.LogInformation(xml);
-        if (returnCode == 0)
+        if (
+            (returnCode == 0 && !string.IsNullOrEmpty(awsTestConfig.Filter)) || //All test passed.
+            (returnCode >= 0 && string.IsNullOrEmpty(awsTestConfig.Filter))     //Some or All filtered tests passed. 
+            ) 
         {
             var xmlPath = Path.Combine(tempDir, "TestResult.xml");
 
@@ -82,7 +84,7 @@ public class TestRunner
             var jsonResultUrl = await amazonS3.UploadFileToS3Async(jsonPath, Path.Combine(prefix, "TestResult_" + time + ".json"));
 
 
-            logger.LogInformation("NUnit success");
+            logger.LogInformation("NUnit filtered tests success!" + awsTestConfig.Filter);
             return new NunitTestResult
             {
                 LogUrl = logUrl,
@@ -91,6 +93,7 @@ public class TestRunner
                 TestResults = testesult
             };
         }
+        
         logger.LogInformation("NUnit error");
         return new NunitTestResult
         {
@@ -135,7 +138,7 @@ public class TestRunner
         {
             ContractResolver = new CamelCasePropertyNamesContractResolver()
         };
-        var json = GameFunction.GetTasksJson();
+        var json = GetTasksJson();
         var matchingTask = json?.FirstOrDefault(c => c.Filter == tempFilter);
         return matchingTask;
     }
@@ -158,7 +161,7 @@ public class TestRunner
 
     private int GetReward(string fullname)
     {
-        var json = GameFunction.GetTasksJson();
+        var json = GetTasksJson();
         var matchingTask = json?.FirstOrDefault(c => c.Name == fullname);
         return matchingTask?.Reward ?? 0;
     }

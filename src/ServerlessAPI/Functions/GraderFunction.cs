@@ -8,6 +8,7 @@ using Amazon.DynamoDBv2;
 using Microsoft.AspNetCore.StaticFiles;
 using System.Net;
 
+
 namespace ServerlessAPI.Functions;
 public class GraderFunction
 {
@@ -35,17 +36,57 @@ public class GraderFunction
         var region = queryStringParameters.ContainsKey("region") ? queryStringParameters["region"] : "us-east-1";
         var graderParameter = queryStringParameters.ContainsKey("grader_parameter") ? queryStringParameters["grader_parameter"] : "";
 
-        var user = await dynamoDB.GetUser(apiKey);
+        var user = await dynamoDB.GetUserApiKey(apiKey);
         if (user == null)
         {
             return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");
         }
 
-        logger.LogInformation("GraderController.Get called for email: " + user);
+        logger.LogInformation("GraderController.Get called for email: " + user.Email + " with filter: " + filter);
 
         var awsTestConfig = new AwsTestConfig(user.AccessKeyId, user.SecretAccessKey, user.SessionToken, user.Email, region, graderParameter, filter);
         var results = await testRunner.RunUnitTest(awsTestConfig);
-        dynamoDB.SaveTestResults(user.Email, results);
+        await dynamoDB.SaveTestResults(user.Email, results);
         return ApiResponse.CreateResponse(HttpStatusCode.OK, results);
+    }
+
+    public class Student
+    {
+        public string Email { get; set; }
+    }
+
+    public async Task<string> StepFunctionHandler(Student student, ILambdaContext context)
+    {
+        logger = context.Logger;
+        try
+        {
+            string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
+            dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), logger);
+            testRunner = new TestRunner(logger, new AmazonS3(new FileExtensionContentTypeProvider()));
+
+            var filter = "";
+            var region = "us-east-1";
+            var graderParameter = "";
+
+            logger.LogInformation("StepFunctionHandler called for email: " + student.Email);
+            var user = await dynamoDB.GetUserByEmail(student.Email);
+
+            if (user == null)
+            {
+                return student.Email + " not found.";
+            }
+            logger.LogInformation("StepFunctionHandler called for User.email: " + user.Email + " with filter: " + filter);
+
+            var awsTestConfig = new AwsTestConfig(user.AccessKeyId, user.SecretAccessKey, user.SessionToken, user.Email, region, graderParameter, filter);
+            var results = await testRunner.RunUnitTest(awsTestConfig);
+            await dynamoDB.SaveTestResults(user.Email, results);
+            return student.Email + " ok";
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e.Message);
+            return student.Email + " failed with error: " + e.Message;
+        }
+
     }
 }

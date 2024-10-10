@@ -1,0 +1,77 @@
+{
+  "StartAt": "Add empty LastEvaluatedKey",
+  "States": {
+    "Add empty LastEvaluatedKey": {
+      "Type": "Pass",
+      "Next": "Scan",
+      "Result": {
+        "LastEvaluatedKey": null
+      },
+      "ResultPath": "$"
+    },
+    "Scan": {
+      "Type": "Task",
+      "Next": "Map",
+      "Parameters": {
+        "TableName": "CloudProjectMarker-AwsAccountTable-160W5ZEFD9QSA",
+        "ProjectionExpression": "#User",
+        "ExpressionAttributeNames": {
+          "#User": "User"
+        },
+        "ExclusiveStartKey.$": "$.LastEvaluatedKey"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:dynamodb:scan"
+    },
+    "Map": {
+      "Type": "Map",
+      "Next": "Check for more",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Lambda Invoke",
+        "States": {
+          "Lambda Invoke": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "OutputPath": "$.Payload",
+            "Parameters": {
+              "FunctionName": "${StepFunctionGraderFunctionArn}",
+              "Payload.$": "$"
+            },
+            "End": true
+          }
+        }
+      },
+      "Label": "Map",
+      "MaxConcurrency": 100,
+      "ItemsPath": "$.Items",
+      "ResultPath": null,
+      "ItemSelector": {
+        "Email.$": "$$.Map.Item.Value.User.S"
+      }
+    },
+    "Check for more": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.LastEvaluatedKey",
+          "IsPresent": true,
+          "Next": "Add new LastEvaluatedKey"
+        }
+      ],
+      "Default": "Done"
+    },
+    "Done": {
+      "Type": "Succeed"
+    },
+    "Add new LastEvaluatedKey": {
+      "Type": "Pass",
+      "Next": "Scan",
+      "Parameters": {
+        "LastEvaluatedKey.$": "$.LastEvaluatedKey"
+      },
+      "ResultPath": null
+    }
+  }
+}

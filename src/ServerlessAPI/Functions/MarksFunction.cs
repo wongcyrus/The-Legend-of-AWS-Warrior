@@ -16,9 +16,9 @@ namespace ServerlessAPI.Functions
 
         public async Task<APIGatewayHttpApiV2ProxyResponse> GetPassedTestHandler(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
         {
-            this.logger = context.Logger;
+            logger = context.Logger;
             string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
-            this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
+            dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), logger);
             var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
 
@@ -36,9 +36,9 @@ namespace ServerlessAPI.Functions
         public async Task<APIGatewayHttpApiV2ProxyResponse> GetTheLastFailedTestHandler(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
         {
 
-            this.logger = context.Logger;
+            logger = context.Logger;
             string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
-            this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
+            dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), logger);
 
             var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
