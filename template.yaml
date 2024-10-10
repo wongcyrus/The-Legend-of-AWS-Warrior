@@ -6,6 +6,14 @@ Parameters:
     Description: Secret Hash value for the project
     Default: "THIS_IS_A_SECRET_HASH"
 
+  EnableScheduleGrader:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Description: Enable Schedule Grader
+    Default: false
+    
   LambdaArchitecture:
     Type: String
     AllowedValues:
@@ -340,6 +348,71 @@ Resources:
               Ref: ApiGatewayApi
           Auth:
             ApiKeyRequired: true
+
+  ScheduleGraderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.ScheduleGraderFunction::FunctionHandler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref TestResultBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PassedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FailedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !Ref GradeAllStudentsStateMachine
+      Environment:
+        Variables:
+          TEST_RESULT_Bucket: !Ref TestResultBucket
+          PASSED_TEST_TABLE: !Ref PassedTestTable
+          FAILED_TEST_TABLE: !Ref FailedTestTable
+          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          SECRET_HASH: !Ref SecretHash       
+      Events:
+        GraderEvent:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+
+  StepFunctionGraderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.GraderFunction::StepFunctionHandler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref TestResultBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PassedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FailedTestTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable
+      Environment:
+        Variables:
+          TEST_RESULT_Bucket: !Ref TestResultBucket
+          PASSED_TEST_TABLE: !Ref PassedTestTable
+          FAILED_TEST_TABLE: !Ref FailedTestTable
+          AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          SECRET_HASH: !Ref SecretHash
+
+  GradeAllStudentsStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionSubstitutions:
+        StepFunctionGraderFunctionArn: !GetAtt StepFunctionGraderFunction.Arn
+        AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+      Policies:      
+        - LambdaInvokePolicy:
+            FunctionName: !Ref StepFunctionGraderFunction
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AwsAccountTable    
+      DefinitionUri: ./src/statemachine/grader.asl.json
+
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

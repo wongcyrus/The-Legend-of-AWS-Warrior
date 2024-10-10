@@ -25,7 +25,7 @@ function App() {
       </Navbar>
       <Routes>
         <Route path="/" element={<Home/>} />
-        <Route path="/playground" element={<Playground/>} />
+        {/* <Route path="/playground" element={<Playground/>} /> */}
         <Route path="/marks" element={<Marks/>} />
       </Routes>
     </Container>

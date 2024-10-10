@@ -41,7 +41,7 @@ public class GameFunction
             };
         }
 
-        var user = await dynamoDB.GetUser(apiKey);
+        var user = await dynamoDB.GetUserApiKey(apiKey);
         if (user == null)
         {
             return ApiResponse.CreateResponseMessage(HttpStatusCode.Forbidden, "Invalid User and key");
