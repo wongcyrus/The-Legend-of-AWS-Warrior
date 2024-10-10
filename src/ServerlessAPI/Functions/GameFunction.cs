@@ -24,11 +24,11 @@ public class GameFunction
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest apigProxyEvent,
         ILambdaContext context)
     {
-        this.logger = context.Logger;
+        logger = context.Logger;
         string region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
 
-        this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), this.logger);
-        this.awsBedrock = new AwsBedrock(this.logger);
+        dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), logger);
+        awsBedrock = new AwsBedrock(logger);
 
         var apiKey = apigProxyEvent.Headers["x-api-key"];
 
