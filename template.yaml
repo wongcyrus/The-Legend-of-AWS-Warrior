@@ -14,7 +14,16 @@ Parameters:
       - enable
       - disable
     Description: Enable Schedule Grader
-    Default: enable  
+    Default: enable
+
+  ScheduleExpression:
+    Type: String
+    Description: Schedule Expression
+    Default: cron(0 * * * ? *)
+    AllowedValues:
+      - cron(0/5 * * * ? *)
+      - cron(0 * * * ? *)
+      - cron(0 0 * * ? *)
 
 Conditions:
   isEnableScheduleGrader: !Equals [ !Ref ScheduleGrader, enable ]
@@ -384,7 +393,7 @@ Resources:
         ScheduleEvent:
           Type: ScheduleV2
           Properties:
-            ScheduleExpression: rate(5 minutes)
+            ScheduleExpression: !Ref ScheduleExpression
 
 
   ApplicationResourceGroup:
