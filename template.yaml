@@ -14,7 +14,7 @@ Parameters:
       - enable
       - disable
     Description: Enable Schedule Grader
-    Default: enable
+    Default: disable
 
   ScheduleExpression:
     Type: String
@@ -135,6 +135,20 @@ Resources:
           Projection:
             ProjectionType: "ALL"
 
+  InstructionCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "Id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "Id"
+          KeyType: "HASH"    
+      TimeToLiveSpecification:
+        AttributeName: "TTL"
+        Enabled: true
+
   PassedTestTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -185,6 +199,9 @@ Resources:
       Quota:
         Limit: 2880
         Period: DAY
+      Throttle:
+        BurstLimit: 60
+        RateLimit: 60
       UsagePlanName: "grader-usage-plan"
 
   GameFunction:
@@ -203,11 +220,14 @@ Resources:
             TableName: !Ref FailedTestTable
         - DynamoDBCrudPolicy:
             TableName: !Ref AwsAccountTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InstructionCacheTable        
       Environment:
         Variables:
           PASSED_TEST_TABLE: !Ref PassedTestTable
           FAILED_TEST_TABLE: !Ref FailedTestTable
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          INSTRUCTION_CACHE_TABLE: !Ref InstructionCacheTable
           SECRET_HASH: !Ref SecretHash 
       Events:
         ApiEvent:

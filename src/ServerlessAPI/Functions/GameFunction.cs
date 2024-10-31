@@ -28,7 +28,7 @@ public class GameFunction
         string region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
 
         dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), logger);
-        awsBedrock = new AwsBedrock(logger);
+        awsBedrock = new AwsBedrock(logger, dynamoDB);
 
         var apiKey = apigProxyEvent.Headers["x-api-key"];
 
@@ -48,7 +48,7 @@ public class GameFunction
         }
 
         var passedTests = await dynamoDB.GetPassedTestNames(user.Email);
-        logger.LogInformation($"Passed tests: {string.Join(", ", passedTests)}");
+        logger.LogInformation($"Passed tests for {user.Email} : {string.Join(", ", passedTests)}");
 
         var tasks = GetTasksJson();
         var filteredTasks = tasks.Where(t => !t.Tests.All(passedTests.Contains));
@@ -62,12 +62,19 @@ public class GameFunction
         var t = filteredTasks.Take(1).ToArray();
         if (new Random().NextDouble() < 0.7)
         {
-            t[0].Instruction = await awsBedrock.RewriteInstruction(t[0].Instruction);
+            var result = await awsBedrock.RewriteInstruction(t[0].Instruction);
+            logger.LogInformation($"RewriteInstruction: {result}");
+            if (result != null)
+                t[0].Instruction = result;
             return ApiResponse.CreateResponse(HttpStatusCode.OK, t);
         }
         else
         {
-            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, await awsBedrock.RandomNPCConversation());
+            var result = await awsBedrock.RandomNPCConversation();
+            logger.LogInformation($"RandomNPCConversation: {result}");
+            if (string.IsNullOrEmpty(result))
+                return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, "Please save the AWS world!");         
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, result);
         }
     }
 
