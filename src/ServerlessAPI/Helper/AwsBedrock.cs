@@ -27,7 +27,7 @@ public class AwsBedrock
         """;
         Random random = new Random();
         int randomNumber = random.Next(1, 6);
-        return await InvokeTitanTextAsync(prompt + "->" + randomNumber, "amazon.titan-text-lite-v1");
+        return await InvokeTitanTextAsync(prompt + "->" + randomNumber, "amazon.titan-text-premier-v1:0");
     }
 
     public async Task<string?> RewriteInstruction(string instruction)
@@ -47,48 +47,22 @@ Rewrite the message with the tone as a girl in age 20 and ask for help from the 
 
     private async Task<string?> InvokeTitanTextAsync(string prompt, string titanTextModelId = "amazon.titan-text-express-v1")
     {
-
         string? cachedResult = await dynamoDB.GetCachedInstruction(prompt);
         if (!string.IsNullOrEmpty(cachedResult))
         {
             return cachedResult;
         }
-        AmazonBedrockRuntimeClient client = new(RegionEndpoint.USEast1);
-        string payload = new JsonObject()
-            {
-                { "inputText", prompt },
-                { "textGenerationConfig", new JsonObject()
-                    {
-                        { "maxTokenCount", 1024 },
-                        { "temperature", 1f },
-                        { "topP", 0.6f }
-                    }
-                }
-            }.ToJsonString();
+
+        string payload = CreatePayload(prompt);
 
         string? generatedText = null;
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         try
         {
-            logger.Log($@"InvokeModelAsync ${titanTextModelId} with payload\n: {payload}");
+            logger.Log($"InvokeModelAsync {titanTextModelId} with payload\n: {payload}");
 
-            InvokeModelResponse response = await client.InvokeModelAsync(new InvokeModelRequest()
-            {
-                ModelId = titanTextModelId,
-                Body = AWSSDKUtils.GenerateMemoryStreamFromString(payload),
-                ContentType = "application/json",
-                Accept = "application/json"
-            }, cts.Token);
-            if (response.HttpStatusCode == System.Net.HttpStatusCode.OK)
-            {
-                var results = JsonNode.ParseAsync(response.Body).Result?["results"]?.AsArray();
-                if (results != null)
-                    generatedText = string.Join(" ", results.Select(x => x?["outputText"]?.GetValue<string?>()));
-            }
-            else
-            {
-                logger.LogError("InvokeModelAsync failed with status code " + response.HttpStatusCode);
-            }
+            InvokeModelResponse response = await InvokeModelAsync(titanTextModelId, payload, cts.Token);
+            generatedText = await ParseResponseAsync(response);
         }
         catch (TaskCanceledException)
         {
@@ -100,9 +74,57 @@ Rewrite the message with the tone as a girl in age 20 and ask for help from the 
             logger.LogError("AmazonBedrockRuntimeException: " + e.Message);
             return null;
         }
+
         if (!string.IsNullOrEmpty(generatedText))
+        {
             await dynamoDB.SaveCachedInstruction(prompt, generatedText);
+        }
         return generatedText;
+    }
+
+    private string CreatePayload(string prompt)
+    {
+        return new JsonObject
+        {
+            { "inputText", prompt },
+            { "textGenerationConfig", new JsonObject
+                {
+                    { "maxTokenCount", 1024 },
+                    { "temperature", 1f },
+                    { "topP", 0.6f }
+                }
+            }
+        }.ToJsonString();
+    }
+
+    private async Task<InvokeModelResponse> InvokeModelAsync(string modelId, string payload, CancellationToken cancellationToken)
+    {
+        using var client = new AmazonBedrockRuntimeClient(RegionEndpoint.USEast1);
+        return await client.InvokeModelAsync(new InvokeModelRequest
+        {
+            ModelId = modelId,
+            Body = AWSSDKUtils.GenerateMemoryStreamFromString(payload),
+            ContentType = "application/json",
+            Accept = "application/json"
+        }, cancellationToken);
+    }
+
+    private async Task<string?> ParseResponseAsync(InvokeModelResponse response)
+    {
+        if (response.HttpStatusCode == System.Net.HttpStatusCode.OK)
+        {
+            var resultsNode = await JsonNode.ParseAsync(response.Body);
+            var resultsArray = resultsNode?["results"]?.AsArray();
+            if (resultsArray != null)
+            {
+                return string.Join(" ", resultsArray.Select(x => x?["outputText"]?.GetValue<string?>()));
+            }
+        }
+        else
+        {
+            logger.LogError("InvokeModelAsync failed with status code " + response.HttpStatusCode);
+        }
+        return null;
     }
 
 }
