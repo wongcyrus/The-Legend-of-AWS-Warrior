@@ -60,7 +60,7 @@ public class T02_VpcTest: AwsTest
     }
 
 
-    [GameTask("In 'Cloud Project VPC', No subnet assocaietes to the Main RouteTable and it can only contains one local route.", 2, 10)]
+    [GameTask("In 'Cloud Project VPC', No subnet associates with the Main RouteTable and it can only contain one local route.", 2, 10)]
     [Test, Order(4)]
     public async Task Test04_VpcMainRouteTable()
     {
@@ -81,7 +81,7 @@ public class T02_VpcTest: AwsTest
         });
     }
 
-    [GameTask("In 'Cloud Project VPC', 2 public subnet assocaietes to 2 public RouteTables and it contains internet route.", 2, 10)]
+    [GameTask("In 'Cloud Project VPC', 2 public subnets are associated with 2 public RouteTables and it contains an internet route.", 2, 10)]
     [Test, Order(5)]
     public async Task Test05_VpcPublicRouteTables()
     {
@@ -148,7 +148,7 @@ public class T02_VpcTest: AwsTest
         Assert.That(actualgatewayEndpoints.OrderBy(x => x), Is.EquivalentTo(expectedgatewayEndpoints.OrderBy(x => x)));
     }
 
-    [GameTask("In 'Cloud Project VPC', 2 Isolated subnet assocaietes to 2 Isolated RouteTables and it contains local route, and 2 gateway endpoints routes.", 2, 10)]
+    [GameTask("In 'Cloud Project VPC', 2 Isolated subnet associates to 2 Isolated RouteTables and it contains local route, and 2 gateway endpoints routes.", 2, 10)]
     [Test, Order(8)]
     public async Task Test08_VpcIsolatedRouteTables()
     {
@@ -191,7 +191,7 @@ public class T02_VpcTest: AwsTest
         };
     }
 
-    [GameTask("In 'Cloud Project VPC', 2 Isolated subnet assocaietes to 2 Isolated RouteTables and it contains local route, and 2 gateway endpoints routes.", 2, 10)]
+    [GameTask("In 'Cloud Project VPC', 2 Isolated subnet associates to 2 Isolated RouteTables and it contains local route, and 2 gateway endpoints routes.", 2, 10)]
     [Test, Order(8)]
     public async Task Test09_Vpc4SubnetsFor4IndependentRouteTables()
     {

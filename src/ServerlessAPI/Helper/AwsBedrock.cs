@@ -55,12 +55,11 @@ Rewrite the message with the tone as a girl in age 20 and ask for help from the 
 
         string payload = CreatePayload(prompt);
 
-        string? generatedText = null;
+        string? generatedText;
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         try
         {
             logger.Log($"InvokeModelAsync {titanTextModelId} with payload\n: {payload}");
-
             InvokeModelResponse response = await InvokeModelAsync(titanTextModelId, payload, cts.Token);
             generatedText = await ParseResponseAsync(response);
         }
