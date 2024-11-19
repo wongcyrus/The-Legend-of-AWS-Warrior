@@ -34,22 +34,26 @@
           "Lambda Invoke": {
             "Type": "Task",
             "Resource": "arn:aws:states:::lambda:invoke",
-            "OutputPath": "$.Payload",
             "Parameters": {
               "FunctionName": "${StepFunctionGraderFunctionArn}",
               "Payload.$": "$"
             },
-            "End": true
+            "End": true,
+            "ResultPath": "$.result",
+            "ResultSelector": {
+              "result.$": "$.Payload"
+            },
+            "OutputPath": "$.result"
           }
         }
       },
       "Label": "Map",
       "MaxConcurrency": 100,
       "ItemsPath": "$.Items",
-      "ResultPath": null,
       "ItemSelector": {
         "Email.$": "$$.Map.Item.Value.User.S"
-      }
+      },
+      "ResultPath": "$.results"
     },
     "Check for more": {
       "Type": "Choice",

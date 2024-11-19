@@ -335,7 +335,42 @@ public class DynamoDB
                     }
             };
             await dynamoClient.PutItemAsync(request);
-        }       
+        }
+    }
+
+    public async Task<string?> GetCachedInstruction(string prompt)
+    {
+        var cacheTable = Environment.GetEnvironmentVariable("INSTRUCTION_CACHE_TABLE")!;
+        var getItemRequest = new GetItemRequest
+        {
+            TableName = cacheTable,
+            Key = new Dictionary<string, AttributeValue>
+            {
+                { "Id", new AttributeValue { S = prompt } }
+            }
+        };
+        var getItemResponse = await dynamoClient.GetItemAsync(getItemRequest);
+        if (getItemResponse.Item.Count != 0)
+        {
+            return getItemResponse.Item["value"].S;
+        }
+        return null;
+    }
+
+    public async Task SaveCachedInstruction(string prompt, string instruction)
+    {
+        var cacheTable = Environment.GetEnvironmentVariable("INSTRUCTION_CACHE_TABLE")!;
+        var request = new PutItemRequest
+        {
+            TableName = cacheTable,
+            Item = new Dictionary<string, AttributeValue>
+            {
+                { "Id", new AttributeValue { S = prompt } },
+                { "value", new AttributeValue { S = instruction } },
+                { "TTL", new AttributeValue { N = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() + TimeSpan.FromMinutes(60).TotalSeconds).ToString() } }
+            }
+        };
+        await dynamoClient.PutItemAsync(request);
     }
 
 }
