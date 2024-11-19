@@ -194,7 +194,7 @@ Resources:
     Properties:
       ApiStages:
         - ApiId: !Ref ApiGatewayApi
-          Stage: Prod
+          Stage: !Ref ApiGatewayApi.Stage
       Description: To usage plan and api key in REST API.
       Quota:
         Limit: 2880
