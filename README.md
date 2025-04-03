@@ -7,14 +7,18 @@ The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. 
 [![廣東話 解說示範 The Legend of AWS Warrior Game](https://img.youtube.com/vi/nq4wNlL17Kk/0.jpg)](https://www.youtube.com/watch?v=nq4wNlL17Kk)
 
 
+## Tech Blog
+[The Legend of AWS Warrior: A Free Opensource 3D RPG Adventure Game with Generative AI for learning AWS](https://community.aws/content/2ftYEIAT0IlnPwAhvKhlD4PL52h/behind-the-scene-of-the-legend-of-aws-warrior)
+
+
 ## Deploy the updated application.
 For the first time, you need to install AWS SAM CLI.
-```
+```bash
 ./aws_sam_setup.sh
 ```
 
 ```bash
-CloudProjectMarker$ sam build && sam deploy --parameter-overrides "SecretHash=b14ca5898a4e4133bbce2e123456123456"
+sam build && sam deploy --parameter-overrides "SecretHash=b14ca5898a4e4133bbce2e123456123456"
 ```
 SecretHash is AES key.
 https://www.c-sharpcorner.com/article/encryption-and-decryption-using-a-symmetric-key-in-c-sharp/ 

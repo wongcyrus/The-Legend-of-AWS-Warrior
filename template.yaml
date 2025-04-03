@@ -40,6 +40,8 @@ Globals:
 
   Api:
     TracingEnabled: true
+    Auth:
+      ApiKeyRequired: true
     Cors:
       AllowMethods: "'*'"
       AllowHeaders: "'*'"
@@ -237,9 +239,18 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
-            
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /game
+            Method: options
+            Auth:
+              ApiKeyRequired: false
+
   KeyGenFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -287,8 +298,17 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /awsaccount
+            Method: options
+            Auth:
+              ApiKeyRequired: false
 
   GraderFunction:
     Type: AWS::Serverless::Function
@@ -319,8 +339,17 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /grader
+            Method: options
+            Auth:
+              ApiKeyRequired: false
 
   GetPassedTestFunction:
     Type: AWS::Serverless::Function
@@ -345,8 +374,17 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /getpassedtest
+            Method: options
+            Auth:
+              ApiKeyRequired: false
 
   GetTheLastFailedTestFunction:
     Type: AWS::Serverless::Function
@@ -371,9 +409,18 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
-  
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /getthelastfailedtest
+            Method: options
+            Auth:
+              ApiKeyRequired: false 
+
   StepFunctionGraderFunction:
     Type: AWS::Serverless::Function
     Properties:

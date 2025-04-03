@@ -34,9 +34,9 @@ public abstract class AwsTest
     protected void Setup()
     {
         var credentialPath = TestContext.Parameters.Get("AwsTestConfig", null);
-        if (credentialPath == null && File.Exists("/workspaces/cloud-project-marker/events/awsTestConfig.json"))
+        if (credentialPath == null && File.Exists("/workspaces/The-Legend-of-AWS-Warrior/events/awsTestConfig.json"))
         {
-            credentialPath = "/workspaces/cloud-project-marker/events/awsTestConfig.json";
+            credentialPath = "/workspaces/The-Legend-of-AWS-Warrior/events/awsTestConfig.json";
         }
         credentialPath = credentialPath!.Trim('\'');
         var awsTestConfigString = File.ReadAllText(credentialPath);
