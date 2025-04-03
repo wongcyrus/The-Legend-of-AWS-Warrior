@@ -1,10 +1,7 @@
-
-using System.Text.Json.Nodes;
 using Amazon;
 using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
 using Amazon.Lambda.Core;
-using Amazon.Util;
 using ProjectTestsLib.Helper;
 
 namespace ServerlessAPI.Helper;
@@ -27,7 +24,7 @@ public class AwsBedrock
         """;
         Random random = new Random();
         int randomNumber = random.Next(1, 6);
-        return await InvokeLargeLanguageModelAsync(prompt + "->" + randomNumber, "amazon.titan-text-premier-v1:0");
+        return await InvokeLargeLanguageModelAsync(prompt + "->" + randomNumber, "amazon.nova-pro-v1:0");
     }
 
     public async Task<string?> RewriteInstruction(string instruction)
@@ -45,7 +42,7 @@ Rewrite the message with the tone as a girl in age 20 and ask for help from the 
     }
 
 
-    private async Task<string?> InvokeLargeLanguageModelAsync(string prompt, string textModelId = "amazon.nova-micro-v1:0")
+    private async Task<string?> InvokeLargeLanguageModelAsync(string prompt, string modelId = "amazon.nova-micro-v1:0")
     {
         string? cachedResult = await dynamoDB.GetCachedInstruction(prompt);
         if (!string.IsNullOrEmpty(cachedResult))
@@ -53,15 +50,33 @@ Rewrite the message with the tone as a girl in age 20 and ask for help from the 
             return cachedResult;
         }
 
-        string payload = CreatePayload(prompt);
-
         string? generatedText;
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         try
         {
-            logger.Log($"InvokeModelAsync {textModelId} with payload\n: {payload}");
-            InvokeModelResponse response = await InvokeModelAsync(textModelId, payload, cts.Token);
-            generatedText = await ParseResponseAsync(response);
+            logger.Log($"InvokeModelAsync {modelId} with prompt\n: {prompt}");
+
+            var client = new AmazonBedrockRuntimeClient(RegionEndpoint.USEast1);
+            var request = new ConverseRequest
+            {
+                ModelId = modelId,
+                Messages = new List<Message>
+                {
+                    new Message
+                    {
+                        Role = ConversationRole.User,
+                        Content = [new ContentBlock { Text = prompt }]
+                    }
+                },
+                InferenceConfig = new InferenceConfiguration()
+                {
+                    MaxTokens = 1024,
+                    Temperature = 0.6F,
+                    TopP = 0.7F
+                }
+            };
+            var response = await client.ConverseAsync(request,cts.Token);
+            generatedText = response?.Output?.Message?.Content?[0]?.Text ?? "";
         }
         catch (TaskCanceledException)
         {
@@ -80,50 +95,4 @@ Rewrite the message with the tone as a girl in age 20 and ask for help from the 
         }
         return generatedText;
     }
-
-    private string CreatePayload(string prompt)
-    {
-        return new JsonObject
-        {
-            { "inputText", prompt },
-            { "textGenerationConfig", new JsonObject
-                {
-                    { "maxTokenCount", 1024 },
-                    { "temperature", 1f },
-                    { "topP", 0.6f }
-                }
-            }
-        }.ToJsonString();
-    }
-
-    private async Task<InvokeModelResponse> InvokeModelAsync(string modelId, string payload, CancellationToken cancellationToken)
-    {
-        using var client = new AmazonBedrockRuntimeClient(RegionEndpoint.USEast1);
-        return await client.InvokeModelAsync(new InvokeModelRequest
-        {
-            ModelId = modelId,
-            Body = AWSSDKUtils.GenerateMemoryStreamFromString(payload),
-            ContentType = "application/json",
-            Accept = "application/json"
-        }, cancellationToken);
-    }
-
-    private async Task<string?> ParseResponseAsync(InvokeModelResponse response)
-    {
-        if (response.HttpStatusCode == System.Net.HttpStatusCode.OK)
-        {
-            var resultsNode = await JsonNode.ParseAsync(response.Body);
-            var resultsArray = resultsNode?["results"]?.AsArray();
-            if (resultsArray != null)
-            {
-                return string.Join(" ", resultsArray.Select(x => x?["outputText"]?.GetValue<string?>()));
-            }
-        }
-        else
-        {
-            logger.LogError("InvokeModelAsync failed with status code " + response.HttpStatusCode);
-        }
-        return null;
-    }
-
 }
