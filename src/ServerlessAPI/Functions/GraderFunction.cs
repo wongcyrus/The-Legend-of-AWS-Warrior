@@ -19,10 +19,15 @@ public class GraderFunction
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request, ILambdaContext context)
     {
 
-        this.logger = context.Logger;
+        logger = context.Logger;
         string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
-        this.dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), this.logger);
-        this.testRunner = new TestRunner(this.logger, new AmazonS3(new FileExtensionContentTypeProvider()));
+        dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), logger);
+        testRunner = new TestRunner(logger, new AmazonS3(new FileExtensionContentTypeProvider()));
+
+        if (!request.Headers.ContainsKey("x-api-key"))
+        {
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, "Options request");
+        }
 
         var apiKey = request.Headers["x-api-key"];
 

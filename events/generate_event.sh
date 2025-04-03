@@ -7,9 +7,9 @@ with open('credentials.env', 'r') as file:
     credentials = file.read()
 
 # Extract the text after "aws_access_key_id="
-aws_access_key_id = re.search('aws_access_key_id=(\S*)', credentials).group(1)
-aws_secret_access_key = re.search('aws_secret_access_key=(\S*)', credentials).group(1)
-aws_session_token = re.search('aws_session_token=(\S*)', credentials).group(1)
+aws_access_key_id = re.search(r'aws_access_key_id=(\S*)', credentials).group(1)
+aws_secret_access_key = re.search(r'aws_secret_access_key=(\S*)', credentials).group(1)
+aws_session_token = re.search(r'aws_session_token=(\S*)', credentials).group(1)
 
 # Read the event.template file
 with open('event.template', 'r') as file:
@@ -31,9 +31,9 @@ with open('credentials.env', 'r') as file:
     credentials = file.read()
 
 # Extract the text after "aws_access_key_id="
-aws_access_key_id = re.search('aws_access_key_id=(\S*)', credentials).group(1)
-aws_secret_access_key = re.search('aws_secret_access_key=(\S*)', credentials).group(1)
-aws_session_token = re.search('aws_session_token=(\S*)', credentials).group(1)
+aws_access_key_id = re.search(r'aws_access_key_id=(\S*)', credentials).group(1)
+aws_secret_access_key = re.search(r'aws_secret_access_key=(\S*)', credentials).group(1)
+aws_session_token = re.search(r'aws_session_token=(\S*)', credentials).group(1)
 
 # Read the event.template file
 with open('awsTestConfig.template', 'r') as file:

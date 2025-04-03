@@ -38,15 +38,6 @@ Globals:
     Timeout: 900
     Tracing: Active
 
-  Api:
-    TracingEnabled: true
-    Auth:
-      ApiKeyRequired: true
-    Cors:
-      AllowMethods: "'*'"
-      AllowHeaders: "'*'"
-      AllowOrigin: "'*'"
-
 Resources:
   TestResultBucket:
     Type: AWS::S3::Bucket
@@ -190,6 +181,13 @@ Resources:
         AllowOrigin: !Sub "'https://${CloudFrontDistribution.DomainName}'"
         MaxAge: "'600'"
         AllowCredentials: true
+      TracingEnabled: true
+      Auth:
+        ApiKeyRequired: true
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
         
   APIUsagePlan:
     Type: 'AWS::ApiGateway::UsagePlan'
@@ -251,6 +249,12 @@ Resources:
             Auth:
               ApiKeyRequired: false
 
+  KeyGenApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-key-api"
+      StageName: Prod
+
   KeyGenFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -275,6 +279,8 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
+            RestApiId:
+              Ref: KeyGenApiGatewayApi
             Path: /keygen
             Method: get
 
@@ -481,6 +487,9 @@ Outputs:
   WebApiEndpoint:
     Description: API Gateway endpoint URL
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/"
+  KeygenApiEndpoint:
+    Description: Keygen API Gateway endpoint URL
+    Value: !Sub "https://${KeyGenApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/keygen?hash=${SecretHash}&email="
   TestResultBucket:
     Description: Test Result Bucket
     Value: !Ref TestResultBucket

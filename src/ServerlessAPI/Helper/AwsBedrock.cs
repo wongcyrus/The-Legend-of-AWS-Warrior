@@ -27,7 +27,7 @@ public class AwsBedrock
         """;
         Random random = new Random();
         int randomNumber = random.Next(1, 6);
-        return await InvokeTitanTextAsync(prompt + "->" + randomNumber, "amazon.titan-text-premier-v1:0");
+        return await InvokeLargeLanguageModelAsync(prompt + "->" + randomNumber, "amazon.titan-text-premier-v1:0");
     }
 
     public async Task<string?> RewriteInstruction(string instruction)
@@ -41,11 +41,11 @@ public class AwsBedrock
 Rewrite the message with the tone as a girl in age 20 and ask for help from the AWS warrior.            
         """;
 
-        return await InvokeTitanTextAsync(prompt, "amazon.titan-text-premier-v1:0");
+        return await InvokeLargeLanguageModelAsync(prompt, "amazon.nova-lite-v1:0");
     }
 
 
-    private async Task<string?> InvokeTitanTextAsync(string prompt, string titanTextModelId = "amazon.titan-text-express-v1")
+    private async Task<string?> InvokeLargeLanguageModelAsync(string prompt, string textModelId = "amazon.nova-micro-v1:0")
     {
         string? cachedResult = await dynamoDB.GetCachedInstruction(prompt);
         if (!string.IsNullOrEmpty(cachedResult))
@@ -59,8 +59,8 @@ Rewrite the message with the tone as a girl in age 20 and ask for help from the 
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         try
         {
-            logger.Log($"InvokeModelAsync {titanTextModelId} with payload\n: {payload}");
-            InvokeModelResponse response = await InvokeModelAsync(titanTextModelId, payload, cts.Token);
+            logger.Log($"InvokeModelAsync {textModelId} with payload\n: {payload}");
+            InvokeModelResponse response = await InvokeModelAsync(textModelId, payload, cts.Token);
             generatedText = await ParseResponseAsync(response);
         }
         catch (TaskCanceledException)
