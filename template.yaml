@@ -38,13 +38,6 @@ Globals:
     Timeout: 900
     Tracing: Active
 
-  Api:
-    TracingEnabled: true
-    Cors:
-      AllowMethods: "'*'"
-      AllowHeaders: "'*'"
-      AllowOrigin: "'*'"
-
 Resources:
   TestResultBucket:
     Type: AWS::S3::Bucket
@@ -188,6 +181,13 @@ Resources:
         AllowOrigin: !Sub "'https://${CloudFrontDistribution.DomainName}'"
         MaxAge: "'600'"
         AllowCredentials: true
+      TracingEnabled: true
+      Auth:
+        ApiKeyRequired: true
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
         
   APIUsagePlan:
     Type: 'AWS::ApiGateway::UsagePlan'
@@ -237,9 +237,24 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
-            
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /game
+            Method: options
+            Auth:
+              ApiKeyRequired: false
+
+  KeyGenApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-key-api"
+      StageName: Prod
+
   KeyGenFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -264,6 +279,8 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
+            RestApiId:
+              Ref: KeyGenApiGatewayApi
             Path: /keygen
             Method: get
 
@@ -287,8 +304,17 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /awsaccount
+            Method: options
+            Auth:
+              ApiKeyRequired: false
 
   GraderFunction:
     Type: AWS::Serverless::Function
@@ -319,8 +345,17 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /grader
+            Method: options
+            Auth:
+              ApiKeyRequired: false
 
   GetPassedTestFunction:
     Type: AWS::Serverless::Function
@@ -345,8 +380,17 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /getpassedtest
+            Method: options
+            Auth:
+              ApiKeyRequired: false
 
   GetTheLastFailedTestFunction:
     Type: AWS::Serverless::Function
@@ -371,9 +415,18 @@ Resources:
             Method: GET
             RestApiId:
               Ref: ApiGatewayApi
-          Auth:
-            ApiKeyRequired: true
-  
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /getthelastfailedtest
+            Method: options
+            Auth:
+              ApiKeyRequired: false 
+
   StepFunctionGraderFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -434,6 +487,9 @@ Outputs:
   WebApiEndpoint:
     Description: API Gateway endpoint URL
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/"
+  KeygenApiEndpoint:
+    Description: Keygen API Gateway endpoint URL
+    Value: !Sub "https://${KeyGenApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/keygen?hash=${SecretHash}&email="
   TestResultBucket:
     Description: Test Result Bucket
     Value: !Ref TestResultBucket

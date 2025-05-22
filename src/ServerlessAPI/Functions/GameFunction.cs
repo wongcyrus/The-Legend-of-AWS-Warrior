@@ -21,7 +21,7 @@ public class GameFunction
     private AwsBedrock? awsBedrock;
 
 
-    public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest apigProxyEvent,
+    public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context)
     {
         logger = context.Logger;
@@ -30,7 +30,12 @@ public class GameFunction
         dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), logger);
         awsBedrock = new AwsBedrock(logger, dynamoDB);
 
-        var apiKey = apigProxyEvent.Headers["x-api-key"];
+        if (!request.Headers.ContainsKey("x-api-key"))
+        {
+            return ApiResponse.CreateResponseMessage(System.Net.HttpStatusCode.OK, "Options request");
+        }
+
+        var apiKey = request.Headers["x-api-key"];
 
         if (string.IsNullOrEmpty(apiKey))
         {
@@ -53,7 +58,7 @@ public class GameFunction
         var tasks = GetTasksJson();
         var filteredTasks = tasks.Where(t => !t.Tests.All(passedTests.Contains));
 
-        var mode = apigProxyEvent.QueryStringParameters["mode"];
+        var mode = request.QueryStringParameters["mode"];
         if (string.IsNullOrEmpty(mode))
         {
             return ApiResponse.CreateResponse(HttpStatusCode.OK, filteredTasks);
@@ -73,7 +78,7 @@ public class GameFunction
             var result = await awsBedrock.RandomNPCConversation();
             logger.LogInformation($"RandomNPCConversation: {result}");
             if (string.IsNullOrEmpty(result))
-                return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, "Please save the AWS world!");         
+                return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, "Please save the AWS world!");
             return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, result);
         }
     }

@@ -19,7 +19,13 @@ namespace ServerlessAPI.Functions
             logger = context.Logger;
             string region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
             dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(region)), logger);
+           
             awsAccount = new AwsAccount();
+         
+            if(!request.Headers.ContainsKey("x-api-key"))
+            {
+                return ApiResponse.CreateResponseMessage(System.Net.HttpStatusCode.OK, "Options request");
+            }            
 
             if (!TryGetQueryParameters(request.QueryStringParameters, out var accessKeyId, out var secretAccessKey, out var sessionToken))
             {
