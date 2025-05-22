@@ -14,28 +14,28 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.AutoScaling" Version="3.7.401.23" />
-    <PackageReference Include="AWSSDK.CloudWatch" Version="3.7.401.23" />
-    <PackageReference Include="AWSSDK.CloudWatchLogs" Version="3.7.403.11" />
-    <PackageReference Include="AWSSDK.Core" Version="3.7.400.25" />
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.401.3" />
-    <PackageReference Include="AWSSDK.EC2" Version="3.7.406.3" />
-    <PackageReference Include="AWSSDK.ElasticLoadBalancingV2" Version="3.7.404.6" />
-    <PackageReference Include="AWSSDK.IdentityManagement" Version="3.7.402.19" />
-    <PackageReference Include="AWSSDK.Lambda" Version="3.7.405" />
-    <PackageReference Include="AWSSDK.SecretsManager" Version="3.7.400.25" />
-    <PackageReference Include="AWSSDK.SecurityToken" Version="3.7.400.25" />
-    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.7.400.25" />
-    <PackageReference Include="AWSSDK.SQS" Version="3.7.400.25" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="AWSSDK.AutoScaling" Version="3.7.407.69" />
+    <PackageReference Include="AWSSDK.CloudWatch" Version="3.7.402.74" />
+    <PackageReference Include="AWSSDK.CloudWatchLogs" Version="3.7.410.14" />
+    <PackageReference Include="AWSSDK.Core" Version="3.7.402.32" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.406.14" />
+    <PackageReference Include="AWSSDK.EC2" Version="3.7.437.2" />
+    <PackageReference Include="AWSSDK.ElasticLoadBalancingV2" Version="3.7.409.17" />
+    <PackageReference Include="AWSSDK.IdentityManagement" Version="3.7.405.4" />
+    <PackageReference Include="AWSSDK.Lambda" Version="3.7.412.10" />
+    <PackageReference Include="AWSSDK.SecretsManager" Version="3.7.400.126" />
+    <PackageReference Include="AWSSDK.SecurityToken" Version="3.7.401.75" />
+    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.7.400.126" />
+    <PackageReference Include="AWSSDK.SQS" Version="3.7.400.126" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="NUnit" Version="4.2.2" />
-    <PackageReference Include="NUnit.Analyzers" Version="4.3.0">
+    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.7.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
-    <PackageReference Include="NUnitLite" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+    <PackageReference Include="NUnitLite" Version="4.3.2" />
   </ItemGroup>
 
 </Project>

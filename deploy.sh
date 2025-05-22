@@ -15,6 +15,14 @@ WebApiEndpoint=$(aws cloudformation describe-stacks \
 --query "Stacks[0].Outputs[?OutputKey=='WebApiEndpoint'].OutputValue")
 echo "WebApiEndpoint: $WebApiEndpoint"
 
+KeygenApiEndpoint=$(aws cloudformation describe-stacks \
+    --stack-name CloudProjectMarker \
+    --region us-east-1 \
+    --no-paginate \
+    --no-cli-pager \
+    --output text \
+--query "Stacks[0].Outputs[?OutputKey=='KeygenApiEndpoint'].OutputValue")   
+
 
 # Check if WebApiEndpoint is set and not empty
 if [ -z "$WebApiEndpoint" ]; then
@@ -33,3 +41,7 @@ cd web-app
 npm i
 npm run build
 npm run deploy
+
+echo "Web app deployed successfully"
+echo "KeygenApiEndpoint"
+echo $KeygenApiEndpoint
