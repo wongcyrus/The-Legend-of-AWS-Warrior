@@ -52,7 +52,7 @@ public class GraderFunction
 
     public class Student
     {
-        public string Email { get; set; }
+        public required string Email { get; set; }
     }
 
     public async Task<string> StepFunctionHandler(Student student, ILambdaContext context)

@@ -14,11 +14,12 @@ For the first time, you need to install AWS SAM CLI.
 ```
 
 ```bash
-CloudProjectMarker$ sam build && sam deploy --parameter-overrides "SecretHash=b14ca5898a4e4133bbce2e123456123456"
+sam build && sam deploy --parameter-overrides "SecretHash=b14ca5898a4e4133bbce2e123456123456"
 ```
 SecretHash is AES key.
 https://www.c-sharpcorner.com/article/encryption-and-decryption-using-a-symmetric-key-in-c-sharp/ 
-
+  git config --global user.email "cywong@vtc.edu.hk"
+  git config --global user.name "Cyrus Wong"
 
 ## Cleanup
 
@@ -30,9 +31,9 @@ sam delete --stack-name CloudProjectMarker
 
 ## Packages update
 
-1. Install ```dotnet tool install --global dotnet-outdated-tool```.
-2. Go to "src/ProjectTestsLib", and run ```dotnet outdated --upgrade```.
-3. Go to "src/ServerlessAPI", and run ```dotnet outdated --upgrade```.
+```
+./update_packages.sh
+```
 
 ## Resources
 

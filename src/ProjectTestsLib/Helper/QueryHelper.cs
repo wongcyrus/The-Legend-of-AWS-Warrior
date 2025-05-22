@@ -14,14 +14,20 @@ public static class QueryHelper
     public static string GetVpcId(AmazonEC2Client ec2Client)
     {
         var describeVpcsRequest = new DescribeVpcsRequest();
-        describeVpcsRequest.Filters.Add(new Amazon.EC2.Model.Filter("tag:Name", ["Cloud Project VPC"]));
+        describeVpcsRequest.Filters=
+        [
+            new Amazon.EC2.Model.Filter("tag:Name", ["Cloud Project VPC"])
+        ];
         var describeVpcsResponse = ec2Client.DescribeVpcsAsync(describeVpcsRequest).Result;
         return describeVpcsResponse.Vpcs[0].VpcId;
     }
 
     public static VpcEndpoint GetEndPointByServiceName(AmazonEC2Client ec2Client, string serviceName)
     {
-        var describeVpcEndpointsRequest = new DescribeVpcEndpointsRequest();
+        var describeVpcEndpointsRequest = new DescribeVpcEndpointsRequest
+        {
+            Filters = []
+        };
         describeVpcEndpointsRequest.Filters.Add(new Amazon.EC2.Model.Filter("vpc-id", [GetVpcId(ec2Client)]));
         describeVpcEndpointsRequest.Filters.Add(new Amazon.EC2.Model.Filter("service-name", [serviceName]));
         var describeVpcEndpointsResponse = ec2Client.DescribeVpcEndpointsAsync(describeVpcEndpointsRequest).Result;

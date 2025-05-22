@@ -107,38 +107,53 @@ public class DynamoDB
         };
         var getAwsAccountItemResponse = await dynamoClient.QueryAsync(queryRequest);
 
-        if (getUserItemResponse.Item.ContainsKey("AwsAccountNumber"))
+        // Check if user exists       
+        var userItem = getUserItemResponse.Item;
+        
+        bool userExists = userItem != null && userItem.Count > 0;
+        
+        if (userExists)
         {
-            var awsAccountNumberInDB = getUserItemResponse.Item["AwsAccountNumber"].S;
-            logger.LogInformation("awsAccountNumberInDB:" + awsAccountNumberInDB);
-            if (awsAccountNumberInDB == awsAccountNumber)
+            // User exists, check if they have an AWS account number
+            if (userItem!.ContainsKey("AwsAccountNumber"))
             {
-                var request = new PutItemRequest
+                var awsAccountAttribute = getUserItemResponse.Item["AwsAccountNumber"];
+                var awsAccountNumberInDB = awsAccountAttribute?.S;
+                logger.LogInformation("awsAccountNumberInDB:" + awsAccountNumberInDB);
+
+                if (awsAccountNumberInDB == awsAccountNumber)
                 {
-                    TableName = awsAccountTable,
-                    Item = new Dictionary<string, AttributeValue>
-                {
-                    { "User", new AttributeValue { S = email } },
-                    { "AwsAccountNumber", new AttributeValue { S = awsAccountNumber } },
-                    { "AccessKeyId", new AttributeValue { S = accessKeyId } },
-                    { "SecretAccessKey", new AttributeValue { S = secretAccessKey } },
-                    { "SessionToken", new AttributeValue { S = sessionToken } },
-                    { "Time", new AttributeValue { S =  DateTime.Now.ToString("yyyyMMddHHmmss")} }
+                    var request = new PutItemRequest
+                    {
+                        TableName = awsAccountTable,
+                        Item = new Dictionary<string, AttributeValue>
+                    {
+                        { "User", new AttributeValue { S = email } },
+                        { "AwsAccountNumber", new AttributeValue { S = awsAccountNumber } },
+                        { "AccessKeyId", new AttributeValue { S = accessKeyId } },
+                        { "SecretAccessKey", new AttributeValue { S = secretAccessKey } },
+                        { "SessionToken", new AttributeValue { S = sessionToken } },
+                        { "Time", new AttributeValue { S =  DateTime.Now.ToString("yyyyMMddHHmmss")} }
+                    }
+                    };
+                    await dynamoClient.PutItemAsync(request);
+                    return AccountStatus.UpdatedYourKey;
                 }
-                };
-                await dynamoClient.PutItemAsync(request);
-                return AccountStatus.UpdatedYourKey;
-            }
-            else
-            {
-                return AccountStatus.NotAllowedChangeAwsAccount;
+                else
+                {
+                    return AccountStatus.NotAllowedChangeAwsAccount;
+                }
             }
         }
-        else if (getAwsAccountItemResponse.Count != 0)
+        
+        // Check if AWS account is already registered
+        if (getAwsAccountItemResponse.Count != 0)
         {
             return AccountStatus.NotAllowedToShareAwsAccount;
         }
-        if (getUserItemResponse.Item.Count == 0 && getAwsAccountItemResponse.Count == 0)
+        
+        // If user doesn't exist and AWS account is not registered, create a new user
+        if (!userExists && getAwsAccountItemResponse.Count == 0)
         {
             // save the user and awsAccountNumber
             var request = new PutItemRequest
@@ -157,13 +172,14 @@ public class DynamoDB
             await dynamoClient.PutItemAsync(request);
             return AccountStatus.NewlyRegistered;
         }
+        
         return AccountStatus.NotRegistered;
     }
 
     public async Task<User?> GetUserApiKey(string apiKey)
     {
         var userAccount = await GetUserAccount(apiKey);
-        if (userAccount != null && userAccount.Item.Count != 0)
+        if (userAccount != null && userAccount.Item != null && userAccount.Item.Count != 0)
         {
             return new User
             {
@@ -179,7 +195,7 @@ public class DynamoDB
     public async Task<User?> GetUserByEmail(string email)
     {
         var userAccount = await GetAccountByEmail(email);
-        if (userAccount != null && userAccount.Item.Count != 0)
+        if (userAccount != null && userAccount.Item != null && userAccount.Item.Count != 0)
         {
             return new User
             {
@@ -297,7 +313,7 @@ public class DynamoDB
             var getItemResponse = await dynamoClient.GetItemAsync(getItemRequest);
 
             // logger.LogInformation("Get Item by email:" + email + " test:" + test.Key + " getItemResponse:" + getItemResponse.Item.Count);
-            if (getItemResponse.Item.Count == 0)
+            if (getItemResponse.Item == null || getItemResponse.Item.Count == 0)
             {
                 var request = new PutItemRequest
                 {
@@ -320,6 +336,14 @@ public class DynamoDB
 
         foreach (var test in failedTest)
         {
+            // Defensive: handle possible nulls in URLs
+            var logUrl = nunitTestResult.LogUrl ?? string.Empty;
+            var jsonResultUrl = nunitTestResult.JsonResultUrl ?? string.Empty;
+            var xmlResultUrl = nunitTestResult.XmlResultUrl ?? string.Empty;
+            if (nunitTestResult.LogUrl == null || nunitTestResult.JsonResultUrl == null || nunitTestResult.XmlResultUrl == null)
+            {
+                logger.LogWarning($"Null URL(s) in NunitTestResult for failed test '{test.Key}'. LogUrl: {nunitTestResult.LogUrl}, JsonResultUrl: {nunitTestResult.JsonResultUrl}, XmlResultUrl: {nunitTestResult.XmlResultUrl}");
+            }
             var request = new PutItemRequest
             {
                 TableName = failedTesttable,
@@ -329,9 +353,9 @@ public class DynamoDB
                         { "TestTime", new AttributeValue { S = now} },
                         { "Test", new AttributeValue { S = test.Key } },
                         { "Time", new AttributeValue { S = now } },
-                        { "LogUrl", new AttributeValue { S = nunitTestResult.LogUrl} },
-                        { "JsonResultUrl", new AttributeValue { S = nunitTestResult.JsonResultUrl} },
-                        { "XmlResultUrl", new AttributeValue { S = nunitTestResult.XmlResultUrl} },
+                        { "LogUrl", new AttributeValue { S = logUrl} },
+                        { "JsonResultUrl", new AttributeValue { S = jsonResultUrl} },
+                        { "XmlResultUrl", new AttributeValue { S = xmlResultUrl} },
                     }
             };
             await dynamoClient.PutItemAsync(request);
@@ -350,7 +374,7 @@ public class DynamoDB
             }
         };
         var getItemResponse = await dynamoClient.GetItemAsync(getItemRequest);
-        if (getItemResponse.Item.Count != 0)
+        if (getItemResponse.Item != null && getItemResponse.Item.Count != 0)
         {
             return getItemResponse.Item["value"].S;
         }

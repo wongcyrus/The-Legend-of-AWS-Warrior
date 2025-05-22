@@ -48,15 +48,19 @@ namespace ServerlessAPI.Functions
             accessKeyId = secretAccessKey = sessionToken = string.Empty;
 
             if (queryParams == null ||
-                !queryParams.TryGetValue("aws_access_key", out accessKeyId) ||
-                !queryParams.TryGetValue("aws_secret_access_key", out secretAccessKey) ||
-                !queryParams.TryGetValue("aws_session_token", out sessionToken) ||
-                string.IsNullOrEmpty(accessKeyId) ||
-                string.IsNullOrEmpty(secretAccessKey) ||
-                string.IsNullOrEmpty(sessionToken))
+                !queryParams.TryGetValue("aws_access_key", out var accessKey) ||
+                !queryParams.TryGetValue("aws_secret_access_key", out var secretKey) ||
+                !queryParams.TryGetValue("aws_session_token", out var session) ||
+                string.IsNullOrEmpty(accessKey) ||
+                string.IsNullOrEmpty(secretKey) ||
+                string.IsNullOrEmpty(session))
             {
                 return false;
             }
+            
+            accessKeyId = accessKey;
+            secretAccessKey = secretKey;
+            sessionToken = session;
 
             return true;
         }
