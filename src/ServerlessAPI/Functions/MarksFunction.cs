@@ -24,7 +24,7 @@ namespace ServerlessAPI.Functions
             {
                 return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, "Options request");
             }
-            
+
             var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
 
@@ -45,6 +45,11 @@ namespace ServerlessAPI.Functions
             logger = context.Logger;
             string db_region = Environment.GetEnvironmentVariable("AWS_REGION") ?? RegionEndpoint.USEast2.SystemName;
             dynamoDB = new DynamoDB(new AmazonDynamoDBClient(RegionEndpoint.GetBySystemName(db_region)), logger);
+
+            if (!request.Headers.ContainsKey("x-api-key"))
+            {
+                return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, "Options request");
+            }
 
             var apiKey = request.Headers["x-api-key"];
             var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
