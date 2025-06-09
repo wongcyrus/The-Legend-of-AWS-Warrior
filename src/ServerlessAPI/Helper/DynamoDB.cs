@@ -76,7 +76,9 @@ public class DynamoDB
     }
     public async Task<AccountStatus> RegisterUser(string apiKey, string awsAccountNumber, string accessKeyId, string secretAccessKey, string sessionToken)
     {
+        logger.LogInformation("apiKey:" + apiKey);
         var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
+        logger.LogInformation("email:" + email);
         // Check if the email is valid
         var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");
         if (!isValidEmail)
