@@ -35,18 +35,19 @@ public class KeyGenFunction
         try
         {
             var amazonAPIGatewayClient = new AmazonAPIGatewayClient();
+            
             var response = await amazonAPIGatewayClient.CreateApiKeyAsync(new CreateApiKeyRequest
             {
                 Enabled = true,
                 Name = email,
                 Value = key,
-                StageKeys = new List<StageKey>
-            {
+                StageKeys =
+            [
                 new() {
                     RestApiId = restApiId,
                     StageName = "Prod"
                 }
-            }
+            ]
             });
             logger.LogInformation("Key created for email: " + email);
 
