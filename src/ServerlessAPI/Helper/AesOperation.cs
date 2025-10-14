@@ -5,6 +5,13 @@ namespace ServerlessAPI.Helper;
 
 public class AesOperation
 {
+    private static byte[] DeriveKeyFromString(string key)
+    {
+        // Use SHA256 to derive a 256-bit (32 byte) key from the input string
+        using var sha256 = SHA256.Create();
+        return sha256.ComputeHash(Encoding.UTF8.GetBytes(key));
+    }
+
     public static string EncryptString(string key, string plainText)
     {
         byte[] iv = new byte[16];
@@ -12,7 +19,7 @@ public class AesOperation
 
         using (Aes aes = Aes.Create())
         {
-            aes.Key = Encoding.UTF8.GetBytes(key);
+            aes.Key = DeriveKeyFromString(key);
             aes.IV = iv;
 
             ICryptoTransform encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
@@ -36,7 +43,7 @@ public class AesOperation
         byte[] buffer = Convert.FromBase64String(cipherText);
 
         using Aes aes = Aes.Create();
-        aes.Key = Encoding.UTF8.GetBytes(key);
+        aes.Key = DeriveKeyFromString(key);
         aes.IV = iv;
         ICryptoTransform decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
 
