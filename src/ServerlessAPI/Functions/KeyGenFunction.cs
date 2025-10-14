@@ -32,38 +32,88 @@ public class KeyGenFunction
         }
 
         var key = AesOperation.EncryptString(hash, email);
+        var amazonAPIGatewayClient = new AmazonAPIGatewayClient();
+        string? apiKeyId = null;
+
         try
         {
-            var amazonAPIGatewayClient = new AmazonAPIGatewayClient();
+            // First, check if a key with this name already exists
+            var existingKeys = await amazonAPIGatewayClient.GetApiKeysAsync(new GetApiKeysRequest
+            {
+                NameQuery = email,
+                IncludeValues = false
+            });
+
+            var existingKey = existingKeys.Items.FirstOrDefault(k => k.Name == email);
             
-            var response = await amazonAPIGatewayClient.CreateApiKeyAsync(new CreateApiKeyRequest
+            if (existingKey != null)
             {
-                Enabled = true,
-                Name = email,
-                Value = key,
-                StageKeys =
-            [
-                new() {
-                    RestApiId = restApiId,
-                    StageName = "Prod"
-                }
-            ]
-            });
-            logger.LogInformation("Key created for email: " + email);
+                logger.LogInformation($"Key already exists for email: {email}, ID: {existingKey.Id}");
+                apiKeyId = existingKey.Id;
+            }
+            else
+            {
+                // Create the API key
+                var response = await amazonAPIGatewayClient.CreateApiKeyAsync(new CreateApiKeyRequest
+                {
+                    Enabled = true,
+                    Name = email,
+                    Value = key,
+                    StageKeys =
+                    [
+                        new() {
+                            RestApiId = restApiId,
+                            StageName = "Prod"
+                        }
+                    ]
+                });
+                apiKeyId = response.Id;
+                logger.LogInformation($"Key created for email: {email}, ID: {apiKeyId}");
+            }
 
-            var usagePlanKeyResponse = await amazonAPIGatewayClient.CreateUsagePlanKeyAsync(new CreateUsagePlanKeyRequest
+            // Ensure the key is associated with the usage plan
+            try
             {
-                KeyId = response.Id,
-                KeyType = "API_KEY",
-                UsagePlanId = usagePlanId
-            });
-            logger.LogInformation(usagePlanKeyResponse.Value);
+                var usagePlanKeyResponse = await amazonAPIGatewayClient.CreateUsagePlanKeyAsync(new CreateUsagePlanKeyRequest
+                {
+                    KeyId = apiKeyId,
+                    KeyType = "API_KEY",
+                    UsagePlanId = usagePlanId
+                });
+                logger.LogInformation($"Key associated with usage plan: {usagePlanKeyResponse.Value}");
+            }
+            catch (ConflictException)
+            {
+                // Key is already associated with the usage plan, which is fine
+                logger.LogInformation($"Key {apiKeyId} already associated with usage plan {usagePlanId}");
+            }
         }
-        catch (ConflictException)
+        catch (ConflictException ex)
         {
-            logger.LogInformation("Key already exists for email: " + email);
-
+            logger.LogInformation($"Conflict exception: {ex.Message}");
         }
+        catch (Exception ex)
+        {
+            logger.LogError($"Error creating/associating API key: {ex.Message}");
+            
+            // If we created a key but failed to associate it with the usage plan, try to clean up
+            if (apiKeyId != null)
+            {
+                try
+                {
+                    await amazonAPIGatewayClient.DeleteApiKeyAsync(new DeleteApiKeyRequest { ApiKey = apiKeyId });
+                    logger.LogInformation($"Rolled back: Deleted orphaned API key {apiKeyId}");
+                }
+                catch (Exception rollbackEx)
+                {
+                    logger.LogError($"Failed to rollback API key {apiKeyId}: {rollbackEx.Message}");
+                }
+            }
+            
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.InternalServerError, 
+                "Failed to create API key. Please try again.");
+        }
+
         return new APIGatewayHttpApiV2ProxyResponse
         {
             StatusCode = (int)HttpStatusCode.OK,
