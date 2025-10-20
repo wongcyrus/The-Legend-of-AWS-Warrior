@@ -1,10 +1,13 @@
 #!/bin/bash
 
+# Load configuration
+source "$(dirname "$0")/config.sh"
+
 # Describe CloudProjectMarker stack and display in table format
-echo "=== CloudProjectMarker Stack Information ==="
+echo "=== $STACK_NAME Stack Information ==="
 
 # Get the full stack details
-STACK_OUTPUT=$(aws cloudformation describe-stacks --stack-name CloudProjectMarker)
+STACK_OUTPUT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION")
 
 # Extract and display stack basic info in table format
 echo "Stack Basic Information:"

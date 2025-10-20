@@ -172,22 +172,82 @@ Resources:
         - AttributeName: "TestTime"
           KeyType: "RANGE"
 
+  ApiKeyLookupTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "ApiKey"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "ApiKey"
+          KeyType: "HASH"
+
   ApiGatewayApi:
     Type: AWS::Serverless::Api
     Properties:
       Name: !Sub "${AWS::StackName}-api"
       StageName: Prod
       Cors:
-        AllowOrigin: !Sub "'https://${CloudFrontDistribution.DomainName}'"
+        AllowOrigin: "'*'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         MaxAge: "'600'"
-        AllowCredentials: true
+        AllowCredentials: false
       TracingEnabled: true
       Auth:
         ApiKeyRequired: true
-      Cors:
-        AllowMethods: "'*'"
-        AllowHeaders: "'*'"
-        AllowOrigin: "'*'"
+
+  # Gateway Responses to add CORS headers to error responses
+  ApiGatewayResponse4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref ApiGatewayApi
+
+  ApiGatewayResponse5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      ResponseType: DEFAULT_5XX
+      RestApiId: !Ref ApiGatewayApi
+
+  ApiGatewayResponseUnauthorized:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      ResponseType: UNAUTHORIZED
+      RestApiId: !Ref ApiGatewayApi
+
+  ApiGatewayResponseMissingAuthToken:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      ResponseType: MISSING_AUTHENTICATION_TOKEN
+      RestApiId: !Ref ApiGatewayApi
+
+  ApiGatewayResponseForbidden:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      ResponseType: ACCESS_DENIED
+      RestApiId: !Ref ApiGatewayApi
         
   APIUsagePlan:
     Type: 'AWS::ApiGateway::UsagePlan'
@@ -221,13 +281,22 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref AwsAccountTable
         - DynamoDBCrudPolicy:
-            TableName: !Ref InstructionCacheTable        
+            TableName: !Ref InstructionCacheTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApiKeyLookupTable
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "apigateway:GET"
+            Resource:
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"
       Environment:
         Variables:
           PASSED_TEST_TABLE: !Ref PassedTestTable
           FAILED_TEST_TABLE: !Ref FailedTestTable
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
           INSTRUCTION_CACHE_TABLE: !Ref InstructionCacheTable
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
           SECRET_HASH: !Ref SecretHash 
       Events:
         ApiEvent:
@@ -265,16 +334,21 @@ Resources:
           RestApiId: !Ref ApiGatewayApi
           SECRET_HASH: !Ref SecretHash
           UsagePlanId: !Ref APIUsagePlan
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
       Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApiKeyLookupTable
         - Statement:
           - Effect: "Allow"
             Action:
               - "apigateway:POST"
               - "apigateway:GET"
+              - "apigateway:DELETE"
             Resource:
               - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"             
               - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys/*"
-              - !Sub "arn:aws:apigateway:${AWS::Region}::/usageplans/*/keys" 
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/usageplans/*/keys"
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/usageplans/*/keys/*" 
       Events:
         ApiEvent:
           Type: Api
@@ -282,6 +356,23 @@ Resources:
             RestApiId:
               Ref: KeyGenApiGatewayApi
             Path: /keygen
+            Method: get
+
+  KeyTestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.KeyTestFunction::FunctionHandler
+      Environment:
+        Variables:
+          SECRET_HASH: !Ref SecretHash
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGatewayApi
+            Path: /keytest
             Method: get
 
   AwsAccountFunction:
@@ -292,9 +383,18 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AwsAccountTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApiKeyLookupTable
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "apigateway:GET"
+            Resource:
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"
       Environment:
         Variables:
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
           SECRET_HASH: !Ref SecretHash 
       Events:
         ApiEvent:
@@ -330,12 +430,21 @@ Resources:
             TableName: !Ref FailedTestTable
         - DynamoDBCrudPolicy:
             TableName: !Ref AwsAccountTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApiKeyLookupTable
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "apigateway:GET"
+            Resource:
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"
       Environment:
         Variables:
           TEST_RESULT_Bucket: !Ref TestResultBucket
           PASSED_TEST_TABLE: !Ref PassedTestTable
           FAILED_TEST_TABLE: !Ref FailedTestTable
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
           SECRET_HASH: !Ref SecretHash 
       Events:
         ApiEvent:
@@ -367,10 +476,19 @@ Resources:
             TableName: !Ref PassedTestTable
         - DynamoDBCrudPolicy:
             TableName: !Ref AwsAccountTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApiKeyLookupTable
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "apigateway:GET"
+            Resource:
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"
       Environment:
         Variables:
           PASSED_TEST_TABLE: !Ref PassedTestTable
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
           SECRET_HASH: !Ref SecretHash 
       Events:
         ApiEvent:
@@ -402,10 +520,19 @@ Resources:
             TableName: !Ref FailedTestTable
         - DynamoDBCrudPolicy:
             TableName: !Ref AwsAccountTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApiKeyLookupTable
+        - Statement:
+          - Effect: "Allow"
+            Action:
+              - "apigateway:GET"
+            Resource:
+              - !Sub "arn:aws:apigateway:${AWS::Region}::/apikeys"
       Environment:
         Variables:
           FAILED_TEST_TABLE: !Ref FailedTestTable
           AWS_ACCOUNT_TABLE: !Ref AwsAccountTable
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
           SECRET_HASH: !Ref SecretHash 
       Events:
         ApiEvent:
@@ -490,6 +617,16 @@ Outputs:
   KeygenApiEndpoint:
     Description: Keygen API Gateway endpoint URL
     Value: !Sub "https://${KeyGenApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/keygen?hash=${SecretHash}&email="
+  KeyTestApiEndpoint:
+    Description: Key Test API Gateway endpoint URL (requires x-api-key header)
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/keytest?email="
+  
+  UsagePlanId:
+    Description: API Gateway Usage Plan ID
+    Value: !Ref APIUsagePlan
+  UsagePlanName:
+    Description: API Gateway Usage Plan Name
+    Value: "grader-usage-plan"
   TestResultBucket:
     Description: Test Result Bucket
     Value: !Ref TestResultBucket
@@ -499,6 +636,9 @@ Outputs:
   FailedTestTable:
     Description: Failed Test Table
     Value: !Ref FailedTestTable
+  ApiKeyLookupTable:
+    Description: API Key Lookup Table
+    Value: !Ref ApiKeyLookupTable
   WebAppDomain:
     Value: !GetAtt CloudFrontDistribution.DomainName
   CloudFrontDistributionId:

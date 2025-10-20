@@ -4,7 +4,7 @@ version = 0.1
 
 [default]
 [default.global.parameters]
-stack_name = "CloudProjectMarker"
+stack_name = "CloudProjectMarkerTest"
 region = "us-east-1"
 
 [default.build.parameters]

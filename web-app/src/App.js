@@ -18,14 +18,14 @@ function App() {
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="me-auto">
             <Nav.Link href="/">Set Key</Nav.Link>
-            {/* <Nav.Link href="/playground">Playground</Nav.Link> */}
+            <Nav.Link href="/playground">Playground</Nav.Link>
             <Nav.Link href="/marks">Marks</Nav.Link>
           </Nav>
         </Navbar.Collapse>
       </Navbar>
       <Routes>
         <Route path="/" element={<Home/>} />
-        {/* <Route path="/playground" element={<Playground/>} /> */}
+        <Route path="/playground" element={<Playground/>} />
         <Route path="/marks" element={<Marks/>} />
       </Routes>
     </Container>

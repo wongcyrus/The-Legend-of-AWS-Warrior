@@ -1,11 +1,35 @@
 const child_process = require("node:child_process");
 const path = require("node:path");
+const fs = require("fs");
+
+// Load configuration from .env file
+const loadEnv = () => {
+  const envPath = path.resolve(__dirname, "../../.env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf8");
+    const config = {};
+    envContent.split("\n").forEach((line) => {
+      if (line && !line.startsWith("#")) {
+        const [key, value] = line.split("=");
+        if (key && value) {
+          config[key.trim()] = value.trim();
+        }
+      }
+    });
+    return config;
+  }
+  return { STACK_NAME: "CloudProjectMarkerTest", AWS_REGION: "us-east-1" };
+};
+
+const config = loadEnv();
+const STACK_NAME = config.STACK_NAME || "CloudProjectMarkerTest";
+const AWS_REGION = config.AWS_REGION || "us-east-1";
 
 const getCloudFormationOuputValue = (key) => {
   const command = `
     aws cloudformation describe-stacks \
-        --stack-name CloudProjectMarker \
-        --region us-east-1 \
+        --stack-name ${STACK_NAME} \
+        --region ${AWS_REGION} \
         --no-paginate \
         --no-cli-pager \
         --output text \
@@ -20,13 +44,13 @@ const uploadFiles = () => {
 
   console.log(`Uploading files from ${sourceDir} to s3://${s3BucketName}`);
   child_process.execSync(
-    `aws s3 sync --region us-east-1 ${sourceDir} s3://${s3BucketName}`,
+    `aws s3 sync --region ${AWS_REGION} ${sourceDir} s3://${s3BucketName}`,
     { stdio: "inherit" }
   );
 
   const gameSourceDir = path.resolve(path.join(__dirname, "../../web-game/"));
   child_process.execSync(
-    `aws s3 sync --region us-east-1 ${gameSourceDir} s3://${s3BucketName}`,
+    `aws s3 sync --region ${AWS_REGION} ${gameSourceDir} s3://${s3BucketName}`,
     { stdio: "inherit" }
   );
 };
@@ -39,7 +63,7 @@ const clearCloudFrontCache = () => {
 
   const command = `
     aws cloudfront create-invalidation \
-        --region us-east-1 \
+        --region ${AWS_REGION} \
         --no-paginate \
         --no-cli-pager \
         --paths "/*" \

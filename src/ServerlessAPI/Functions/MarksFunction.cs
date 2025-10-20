@@ -26,7 +26,15 @@ namespace ServerlessAPI.Functions
             }
 
             var apiKey = request.Headers["x-api-key"];
-            var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
+            
+            // Look up email from API Gateway using the API key
+            var apiKeyHelper = new ApiKeyHelper(logger);
+            var email = await apiKeyHelper.GetEmailFromApiKey(apiKey);
+            
+            if (string.IsNullOrEmpty(email))
+            {
+                return ApiResponse.CreateResponseMessage(HttpStatusCode.Unauthorized, "Invalid API key");
+            }
 
             // Check if the email is valid
             var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");
@@ -52,7 +60,15 @@ namespace ServerlessAPI.Functions
             }
 
             var apiKey = request.Headers["x-api-key"];
-            var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
+            
+            // Look up email from API Gateway using the API key
+            var apiKeyHelper = new ApiKeyHelper(logger);
+            var email = await apiKeyHelper.GetEmailFromApiKey(apiKey);
+            
+            if (string.IsNullOrEmpty(email))
+            {
+                return ApiResponse.CreateResponse(HttpStatusCode.OK, Array.Empty<string>());
+            }
 
             // Check if the email is valid
             var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");

@@ -74,15 +74,21 @@ public class DynamoDB
         NotRegistered,
         InvalidApiKey
     }
-    public async Task<AccountStatus> RegisterUser(string apiKey, string awsAccountNumber, string accessKeyId, string secretAccessKey, string sessionToken)
+    public async Task<AccountStatus> RegisterUser(string email, string awsAccountNumber, string accessKeyId, string secretAccessKey, string sessionToken)
     {
-        logger.LogInformation("apiKey:" + apiKey);
-        var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
         logger.LogInformation("email:" + email);
+        
+        if (string.IsNullOrEmpty(email))
+        {
+            logger.LogError("Email is null or empty");
+            return AccountStatus.InvalidApiKey;
+        }
+        
         // Check if the email is valid
         var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");
         if (!isValidEmail)
         {
+            logger.LogError($"Invalid email format: {email}");
             return AccountStatus.InvalidApiKey;
         }
         var awsAccountTable = Environment.GetEnvironmentVariable("AWS_ACCOUNT_TABLE")!;
@@ -212,11 +218,21 @@ public class DynamoDB
 
     private async Task<GetItemResponse?> GetUserAccount(string apiKey)
     {
-        var email = AesOperation.DecryptString(Environment.GetEnvironmentVariable("SECRET_HASH")!, apiKey);
+        // Look up email from API Gateway using the API key
+        var apiKeyHelper = new ApiKeyHelper(logger);
+        var email = await apiKeyHelper.GetEmailFromApiKey(apiKey);
+        
+        if (string.IsNullOrEmpty(email))
+        {
+            logger.LogError("Failed to get email from API key");
+            return null;
+        }
+        
         // Check if the email is valid
         var isValidEmail = Regex.IsMatch(email, @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$");
         if (!isValidEmail)
         {
+            logger.LogError($"Invalid email format from API key: {email}");
             return null;
         }
         return await GetAccountByEmail(email);

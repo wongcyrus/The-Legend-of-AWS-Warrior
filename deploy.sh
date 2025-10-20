@@ -1,14 +1,21 @@
+#!/bin/bash
+
+# Load configuration
+source "$(dirname "$0")/config.sh"
+
 SecretHash=$1
 if [ -z "$SecretHash" ]; then
     echo "SecretHash is required. Exiting script."
     exit 1
 fi
 
+print_config
+
 sam build && sam deploy --parameter-overrides "SecretHash=$SecretHash"
 
 WebApiEndpoint=$(aws cloudformation describe-stacks \
-    --stack-name CloudProjectMarker \
-    --region us-east-1 \
+    --stack-name "$STACK_NAME" \
+    --region "$AWS_REGION" \
     --no-paginate \
     --no-cli-pager \
     --output text \
@@ -16,8 +23,8 @@ WebApiEndpoint=$(aws cloudformation describe-stacks \
 echo "WebApiEndpoint: $WebApiEndpoint"
 
 KeygenApiEndpoint=$(aws cloudformation describe-stacks \
-    --stack-name CloudProjectMarker \
-    --region us-east-1 \
+    --stack-name "$STACK_NAME" \
+    --region "$AWS_REGION" \
     --no-paginate \
     --no-cli-pager \
     --output text \

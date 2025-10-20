@@ -1,6 +1,11 @@
 
 # Created by https://www.gitignore.io/api/macos,linux,windows,sublimetext,dotsettings,visualstudio,visualstudiocode
 
+### Local Configuration ###
+.env.local
+marks.csv
+api_keys.csv
+
 ### DotSettings ###
 *.DotSettings
 ### Linux ###
@@ -418,3 +423,5 @@ src/ProjectTestsLib/T07_CloudWatchTest.cs
 src/ProjectTestsLib/T08_AutoscalingTest.cs
 src/ProjectTestsLib/T09_LoadBalancer.cs
 admin/marks.csv
+src/ProjectTestsLib/T10_ApiGateway.cs
+admin/api_keys_*.csv

@@ -43,7 +43,18 @@ namespace ServerlessAPI.Functions
             }
 
             var apiKey = request.Headers["x-api-key"];
-            var status = await dynamoDB.RegisterUser(apiKey, awsAccountNumber, accessKeyId, secretAccessKey, sessionToken);
+            logger.LogInformation($"Received x-api-key header: {apiKey}");
+            
+            // Look up email from API Gateway using the API key
+            var apiKeyHelper = new ApiKeyHelper(logger);
+            var email = await apiKeyHelper.GetEmailFromApiKey(apiKey);
+            
+            if (string.IsNullOrEmpty(email))
+            {
+                return ApiResponse.CreateResponseMessage(System.Net.HttpStatusCode.Unauthorized, "Invalid API key");
+            }
+            
+            var status = await dynamoDB.RegisterUser(email, awsAccountNumber, accessKeyId, secretAccessKey, sessionToken);
             var result = $"Your AWS account is {awsAccountNumber} and {SplitPascalCase(status.ToString()).ToLower()}.";
 
             return ApiResponse.CreateResponseMessage(System.Net.HttpStatusCode.OK, result);

@@ -18,12 +18,10 @@ For the first time, you need to install AWS SAM CLI.
 ```
 
 ```bash
-sam build && sam deploy --parameter-overrides "SecretHash=b14ca5898a4e4133bbce2e123456123456"
+sam build && sam deploy --parameter-overrides "SecretHash=bb14ca5898a4e4133bbce2ea2315a1234"
 ```
-SecretHash is AES key.
-https://www.c-sharpcorner.com/article/encryption-and-decryption-using-a-symmetric-key-in-c-sharp/ 
-  git config --global user.email "cywong@vtc.edu.hk"
-  git config --global user.name "Cyrus Wong"
+SecretHash can be any string of any length. It will be hashed using SHA256 to derive a proper AES-256 encryption key. 
+
 
 ## Cleanup
 
@@ -46,9 +44,9 @@ See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-applica
 Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
 
 ## Full deployment
-You have to change the hash with the same length.
+You can use any string as the hash (any length).
 ```
-./deploy.sh b14ca5898a4e4133bbce2ea2315a1916
+./deploy.sh bb14ca5898a4e4133bbce2ea2315a1000
 ```
 
 ## Deploy the WebApps

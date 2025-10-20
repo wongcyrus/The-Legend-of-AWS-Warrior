@@ -1,4 +1,19 @@
-table_name="CloudProjectMarker-PassedTestTable-1V9YZHEHDRLCZ"
+#!/bin/bash
+
+# Load configuration
+source "$(dirname "$0")/../config.sh"
+
+# Get the PassedTestTable name from CloudFormation
+table_name=$(get_table_name "PassedTestTable")
+
+if [ -z "$table_name" ]; then
+    echo "Error: Could not find PassedTestTable in stack outputs"
+    exit 1
+fi
+
+echo "Using table: $table_name"
+echo ""
+
 # Initialize the ExclusiveStartKey to empty
 exclusive_start_key=""
 
