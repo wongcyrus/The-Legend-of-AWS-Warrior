@@ -22,7 +22,7 @@ fi
 
 # Set defaults if not defined in .env
 export AWS_REGION="${AWS_REGION:-us-east-1}"
-export STACK_NAME="${STACK_NAME:-CloudProjectMarkerTest}"
+export STACK_NAME="${STACK_NAME:-CloudProjectMarker}"
 
 # Function to get CloudFormation output value
 get_stack_output() {

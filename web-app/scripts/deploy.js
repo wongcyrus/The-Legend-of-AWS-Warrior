@@ -18,11 +18,11 @@ const loadEnv = () => {
     });
     return config;
   }
-  return { STACK_NAME: "CloudProjectMarkerTest", AWS_REGION: "us-east-1" };
+  return { STACK_NAME: "CloudProjectMarker", AWS_REGION: "us-east-1" };
 };
 
 const config = loadEnv();
-const STACK_NAME = config.STACK_NAME || "CloudProjectMarkerTest";
+const STACK_NAME = config.STACK_NAME || "CloudProjectMarker";
 const AWS_REGION = config.AWS_REGION || "us-east-1";
 
 const getCloudFormationOuputValue = (key) => {
