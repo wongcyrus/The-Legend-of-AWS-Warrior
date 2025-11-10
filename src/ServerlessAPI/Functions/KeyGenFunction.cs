@@ -146,15 +146,32 @@ public class KeyGenFunction
         }
 
         // Store the API key -> email mapping in the lookup table
+        // This is CRITICAL - if DynamoDB storage fails, we must rollback the API key
         try
         {
-            var apiKeyHelper = new ApiKeyHelper(logger);
             await StoreApiKeyInLookupTable(apiKeyValue!, email);
             logger.LogInformation($"Stored API key mapping in lookup table");
         }
         catch (Exception ex)
         {
-            logger.LogWarning($"Failed to store API key in lookup table (non-critical): {ex.Message}");
+            logger.LogError($"CRITICAL: Failed to store API key in lookup table: {ex.Message}");
+            
+            // Rollback: Delete the API key from API Gateway since we can't store the mapping
+            if (apiKeyId != null)
+            {
+                try
+                {
+                    await amazonAPIGatewayClient.DeleteApiKeyAsync(new DeleteApiKeyRequest { ApiKey = apiKeyId });
+                    logger.LogInformation($"Rolled back: Deleted API key {apiKeyId} due to DynamoDB failure");
+                }
+                catch (Exception rollbackEx)
+                {
+                    logger.LogError($"Failed to rollback API key {apiKeyId}: {rollbackEx.Message}");
+                }
+            }
+            
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.InternalServerError, 
+                "Failed to create API key. Please try again.");
         }
 
         // Return the actual API key value from API Gateway, not the encrypted email

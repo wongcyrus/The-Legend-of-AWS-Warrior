@@ -425,3 +425,4 @@ src/ProjectTestsLib/T09_LoadBalancer.cs
 admin/marks.csv
 src/ProjectTestsLib/T10_ApiGateway.cs
 admin/api_keys_*.csv
+admin/email.txt
