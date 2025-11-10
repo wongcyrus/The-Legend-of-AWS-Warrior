@@ -43,7 +43,6 @@ fi
 
 USAGE_PLAN_ID=$(echo "$STACK_OUTPUT" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="UsagePlanId") | .OutputValue')
 LOOKUP_TABLE=$(echo "$STACK_OUTPUT" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="ApiKeyLookupTable") | .OutputValue')
-REST_API_ID=$(echo "$STACK_OUTPUT" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="RestApiId") | .OutputValue')
 
 if [ -z "$USAGE_PLAN_ID" ] || [ "$USAGE_PLAN_ID" == "null" ]; then
     echo "Error: Could not find Usage Plan ID in stack outputs"
@@ -55,14 +54,8 @@ if [ -z "$LOOKUP_TABLE" ] || [ "$LOOKUP_TABLE" == "null" ]; then
     exit 1
 fi
 
-if [ -z "$REST_API_ID" ] || [ "$REST_API_ID" == "null" ]; then
-    echo "Error: Could not find RestApiId in stack outputs"
-    exit 1
-fi
-
 echo "Usage Plan ID: $USAGE_PLAN_ID"
 echo "DynamoDB Table: $LOOKUP_TABLE"
-echo "REST API ID: $REST_API_ID"
 echo ""
 
 # Function to generate encrypted key value (simplified - just use base64 of email for now)
@@ -87,10 +80,12 @@ EXISTING_KEY_ID=""
 EXISTING_KEY_VALUE=""
 
 # Check if any existing key is associated with our usage plan
-if [ "$(echo "$EXISTING_KEYS" | jq '.items | length')" -gt 0 ]; then
-    echo "$EXISTING_KEYS" | jq -c '.items[]' | while read -r key; do
-        KEY_ID=$(echo "$key" | jq -r '.id')
-        KEY_NAME=$(echo "$key" | jq -r '.name')
+KEY_COUNT=$(echo "$EXISTING_KEYS" | jq '.items | length')
+if [ "$KEY_COUNT" -gt 0 ]; then
+    for i in $(seq 0 $((KEY_COUNT - 1))); do
+        KEY_ID=$(echo "$EXISTING_KEYS" | jq -r ".items[$i].id")
+        KEY_NAME=$(echo "$EXISTING_KEYS" | jq -r ".items[$i].name")
+        KEY_VALUE=$(echo "$EXISTING_KEYS" | jq -r ".items[$i].value")
         
         if [ "$KEY_NAME" == "$EMAIL" ]; then
             # Check if this key is in our usage plan
@@ -102,20 +97,11 @@ if [ "$(echo "$EXISTING_KEYS" | jq '.items | length')" -gt 0 ]; then
             
             if [ -n "$USAGE_PLAN_CHECK" ]; then
                 EXISTING_KEY_ID="$KEY_ID"
-                EXISTING_KEY_VALUE=$(echo "$key" | jq -r '.value')
-                echo "$EXISTING_KEY_ID" > /tmp/existing_key_id.txt
-                echo "$EXISTING_KEY_VALUE" > /tmp/existing_key_value.txt
+                EXISTING_KEY_VALUE="$KEY_VALUE"
                 break
             fi
         fi
     done
-fi
-
-# Read from temp files if they exist
-if [ -f /tmp/existing_key_id.txt ]; then
-    EXISTING_KEY_ID=$(cat /tmp/existing_key_id.txt)
-    EXISTING_KEY_VALUE=$(cat /tmp/existing_key_value.txt)
-    rm -f /tmp/existing_key_id.txt /tmp/existing_key_value.txt
 fi
 
 if [ -n "$EXISTING_KEY_ID" ] && [ "$FORCE_REGENERATE" = false ]; then

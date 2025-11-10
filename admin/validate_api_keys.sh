@@ -85,31 +85,30 @@ DYNAMO_KEYS_FILE="$TEMP_DIR/dynamo_keys.txt"
 DYNAMO_EMAILS_FILE="$TEMP_DIR/dynamo_emails.txt"
 SOURCE_EMAILS_FILE="$TEMP_DIR/source_emails.txt"
 
-# Extract API Gateway keys with their values (in parallel for speed)
+# Extract API Gateway keys with their values
 echo "Fetching API key values from API Gateway (this may take a moment)..."
+TOTAL_KEYS=$(echo "$API_KEYS_JSON" | jq '.items | length')
+CURRENT=0
+
 echo "$API_KEYS_JSON" | jq -r '.items[] | "\(.name)|\(.id)"' | while IFS='|' read -r name id; do
-    (
-        KEY_VALUE=$(aws apigateway get-api-key \
-            --api-key "$id" \
-            --region "$AWS_REGION" \
-            --include-value \
-            --no-cli-pager \
-            --query 'value' \
-            --output text 2>/dev/null)
-        
-        if [ -n "$KEY_VALUE" ]; then
-            echo "$KEY_VALUE|$name" >> "$APIGW_KEYS_FILE"
-        fi
-    ) &
+    CURRENT=$((CURRENT + 1))
+    if [ $((CURRENT % 10)) -eq 0 ]; then
+        echo "  Progress: $CURRENT/$TOTAL_KEYS"
+    fi
     
-    # Limit concurrent processes to avoid overwhelming the API
-    if [ $(jobs -r | wc -l) -ge 20 ]; then
-        wait -n
+    KEY_VALUE=$(aws apigateway get-api-key \
+        --api-key "$id" \
+        --region "$AWS_REGION" \
+        --include-value \
+        --no-cli-pager \
+        --query 'value' \
+        --output text 2>/dev/null)
+    
+    if [ -n "$KEY_VALUE" ]; then
+        echo "$KEY_VALUE|$name" >> "$APIGW_KEYS_FILE"
     fi
 done
 
-# Wait for all background jobs to complete
-wait
 echo "✓ Fetched all API key values"
 
 # Extract DynamoDB keys

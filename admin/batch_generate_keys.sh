@@ -6,7 +6,8 @@
 #   --force: Regenerate keys even if they already exist
 #   --parallel: Generate keys in parallel (faster but more API calls)
 
-set -e
+# Note: Not using 'set -e' because we handle errors explicitly
+# and want to continue processing all emails even if some fail
 
 # Load configuration
 source "$(dirname "$0")/../config.sh"
@@ -79,7 +80,7 @@ process_email() {
     RESULT=$?
     
     if [ $RESULT -eq 0 ]; then
-        if echo "$OUTPUT" | grep -q "already exists"; then
+        if echo "$OUTPUT" | grep -q "API key already exists"; then
             echo "  ✓ Already exists"
             return 2  # Skip
         else
@@ -88,7 +89,7 @@ process_email() {
         fi
     else
         echo "  ✗ Failed"
-        echo "$OUTPUT" | grep -i "error" | head -1
+        echo "$OUTPUT" | grep -i "error" | head -1 || echo "  Unknown error"
         return 1  # Error
     fi
 }
@@ -126,10 +127,15 @@ if [ "$PARALLEL" = true ]; then
     done
 else
     # Sequential processing
-    while read -r email; do
+    # Use while loop with proper handling of last line without newline
+    while IFS= read -r email || [ -n "$email" ]; do
+        # Skip empty lines
         [ -z "$email" ] && continue
         
-        process_email "$email" "$FORCE_FLAG"
+        # Skip lines starting with # (comments)
+        [[ "$email" =~ ^#.*$ ]] && continue
+        
+        process_email "$email" "$FORCE_FLAG" || true
         RESULT=$?
         
         case $RESULT in
