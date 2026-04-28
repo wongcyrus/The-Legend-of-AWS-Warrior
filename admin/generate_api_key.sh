@@ -58,13 +58,29 @@ echo "Usage Plan ID: $USAGE_PLAN_ID"
 echo "DynamoDB Table: $LOOKUP_TABLE"
 echo ""
 
-# Function to generate encrypted key value (simplified - just use base64 of email for now)
-# In production, this should match the AesOperation.EncryptString logic from C#
+# Generate encrypted key value matching C# AesOperation.EncryptString logic:
+# Key = SHA256(SecretHash), IV = 16 zero bytes, AES-256-CBC, PKCS7 padding, then base64
 generate_key_value() {
     local email="$1"
-    # Simple base64 encoding as placeholder
-    # Replace this with actual AES encryption if needed to match C# logic
-    echo -n "$email" | base64 | tr -d '\n' | head -c 43
+    local secret_hash="${SECRET_HASH:-}"
+    
+    # If not in env, read from stack parameters
+    if [ -z "$secret_hash" ]; then
+        secret_hash=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" --region "$AWS_REGION" --no-cli-pager \
+            --query "Stacks[0].Parameters[?ParameterKey=='SecretHash'].ParameterValue" \
+            --output text 2>/dev/null)
+    fi
+    
+    if [ -z "$secret_hash" ]; then
+        echo "Error: Cannot determine SecretHash for key encryption" >&2
+        return 1
+    fi
+
+    local aes_key
+    aes_key=$(echo -n "$secret_hash" | openssl dgst -sha256 -binary | xxd -p | tr -d '\n')
+    local iv="00000000000000000000000000000000"
+    echo -n "$email" | openssl enc -aes-256-cbc -K "$aes_key" -iv "$iv" -base64 -A
 }
 
 # Check if key already exists for this email

@@ -24,7 +24,7 @@ public class AwsBedrock
         """;
         Random random = new Random();
         int randomNumber = random.Next(1, 6);
-        return await InvokeLargeLanguageModelAsync(prompt + "->" + randomNumber, "amazon.nova-pro-v1:0");
+        return await InvokeLargeLanguageModelAsync(prompt + "->" + randomNumber, "amazon.nova-2-lite-v1:0");
     }
 
     public async Task<string?> RewriteInstruction(string instruction)
@@ -38,11 +38,11 @@ public class AwsBedrock
 Rewrite the message with the tone as a girl in age 20 and ask for help from the AWS warrior.            
         """;
 
-        return await InvokeLargeLanguageModelAsync(prompt, "amazon.nova-lite-v1:0");
+        return await InvokeLargeLanguageModelAsync(prompt, "amazon.nova-2-lite-v1:0");
     }
 
 
-    private async Task<string?> InvokeLargeLanguageModelAsync(string prompt, string modelId = "amazon.nova-micro-v1:0")
+    private async Task<string?> InvokeLargeLanguageModelAsync(string prompt, string modelId = "amazon.nova-2-lite-v1:0")
     {
         string? cachedResult = await dynamoDB.GetCachedInstruction(prompt);
         if (!string.IsNullOrEmpty(cachedResult))

@@ -248,6 +248,16 @@ Resources:
         gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
       ResponseType: ACCESS_DENIED
       RestApiId: !Ref ApiGatewayApi
+
+  ApiGatewayResponseInvalidApiKey:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      ResponseType: INVALID_API_KEY
+      RestApiId: !Ref ApiGatewayApi
         
   APIUsagePlan:
     Type: 'AWS::ApiGateway::UsagePlan'
