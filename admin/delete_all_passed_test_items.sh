@@ -20,9 +20,17 @@ exclusive_start_key=""
 while :; do
     # Scan the table with pagination
     if [ -z "$exclusive_start_key" ]; then
-        scan_output=$(aws dynamodb scan --table-name "$table_name" --projection-expression "#usr,Test" --expression-attribute-names '{"#usr": "User"}' --output json)
+        if ! scan_output=$(aws dynamodb scan --table-name "$table_name" --projection-expression "#usr,Test" --expression-attribute-names '{"#usr": "User"}' --output json 2>&1); then
+            echo "Error: Failed to scan table '$table_name'"
+            echo "$scan_output"
+            exit 1
+        fi
     else
-        scan_output=$(aws dynamodb scan --table-name "$table_name" --exclusive-start-key "$exclusive_start_key" --projection-expression "#usr,Test" --expression-attribute-names '{"#usr": "User"}' --output json)
+        if ! scan_output=$(aws dynamodb scan --table-name "$table_name" --exclusive-start-key "$exclusive_start_key" --projection-expression "#usr,Test" --expression-attribute-names '{"#usr": "User"}' --output json 2>&1); then
+            echo "Error: Failed to scan table '$table_name'"
+            echo "$scan_output"
+            exit 1
+        fi
     fi
 
     # Extract the keys of each item

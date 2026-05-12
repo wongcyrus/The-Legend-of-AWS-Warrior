@@ -31,13 +31,12 @@ print_config
 
 # Get stack outputs
 echo "Fetching stack information..."
-STACK_OUTPUT=$(aws cloudformation describe-stacks \
+if ! STACK_OUTPUT=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$AWS_REGION" \
-    --no-cli-pager 2>/dev/null)
-
-if [ $? -ne 0 ]; then
-    echo "Error: Could not find stack '$STACK_NAME'"
+    --no-cli-pager 2>&1); then
+    echo "Error: Could not fetch stack '$STACK_NAME'"
+    echo "$STACK_OUTPUT"
     exit 1
 fi
 
@@ -66,10 +65,14 @@ generate_key_value() {
     
     # If not in env, read from stack parameters
     if [ -z "$secret_hash" ]; then
-        secret_hash=$(aws cloudformation describe-stacks \
+        if ! secret_hash=$(aws cloudformation describe-stacks \
             --stack-name "$STACK_NAME" --region "$AWS_REGION" --no-cli-pager \
             --query "Stacks[0].Parameters[?ParameterKey=='SecretHash'].ParameterValue" \
-            --output text 2>/dev/null)
+            --output text 2>&1); then
+            echo "Error: Failed to read SecretHash from stack '$STACK_NAME'" >&2
+            echo "$secret_hash" >&2
+            return 1
+        fi
     fi
     
     if [ -z "$secret_hash" ]; then
@@ -85,12 +88,16 @@ generate_key_value() {
 
 # Check if key already exists for this email
 echo "Checking for existing API key..."
-EXISTING_KEYS=$(aws apigateway get-api-keys \
+if ! EXISTING_KEYS=$(aws apigateway get-api-keys \
     --name-query "$EMAIL" \
     --region "$AWS_REGION" \
     --include-values \
     --no-cli-pager \
-    --output json)
+    --output json 2>&1); then
+    echo "Error fetching existing API keys for '$EMAIL'"
+    echo "$EXISTING_KEYS"
+    exit 1
+fi
 
 EXISTING_KEY_ID=""
 EXISTING_KEY_VALUE=""
@@ -153,15 +160,13 @@ KEY_VALUE=$(generate_key_value "$EMAIL")
 
 # Create API key
 echo "Creating API key..."
-CREATE_RESPONSE=$(aws apigateway create-api-key \
+if ! CREATE_RESPONSE=$(aws apigateway create-api-key \
     --name "$EMAIL" \
     --enabled \
     --value "$KEY_VALUE" \
     --region "$AWS_REGION" \
     --no-cli-pager \
-    --output json 2>&1)
-
-if [ $? -ne 0 ]; then
+    --output json 2>&1); then
     echo "Error creating API key: $CREATE_RESPONSE"
     exit 1
 fi
@@ -175,15 +180,13 @@ echo "Key Value: $API_KEY_VALUE"
 
 # Associate with usage plan
 echo "Associating with usage plan..."
-ASSOCIATE_RESPONSE=$(aws apigateway create-usage-plan-key \
+if ! ASSOCIATE_RESPONSE=$(aws apigateway create-usage-plan-key \
     --usage-plan-id "$USAGE_PLAN_ID" \
     --key-id "$API_KEY_ID" \
     --key-type "API_KEY" \
     --region "$AWS_REGION" \
     --no-cli-pager \
-    --output json 2>&1)
-
-if [ $? -ne 0 ]; then
+    --output json 2>&1); then
     # Check if it's a conflict (already associated)
     if echo "$ASSOCIATE_RESPONSE" | grep -q "ConflictException"; then
         echo "✓ Key already associated with usage plan"
@@ -203,13 +206,11 @@ fi
 # Store in DynamoDB
 echo "Storing in DynamoDB..."
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-DYNAMO_RESPONSE=$(aws dynamodb put-item \
+if ! DYNAMO_RESPONSE=$(aws dynamodb put-item \
     --table-name "$LOOKUP_TABLE" \
     --item "{\"ApiKey\": {\"S\": \"$API_KEY_VALUE\"}, \"Email\": {\"S\": \"$EMAIL\"}, \"CreatedAt\": {\"S\": \"$TIMESTAMP\"}}" \
     --region "$AWS_REGION" \
-    --no-cli-pager 2>&1)
-
-if [ $? -ne 0 ]; then
+    --no-cli-pager 2>&1); then
     echo "CRITICAL: Failed to store in DynamoDB: $DYNAMO_RESPONSE"
     echo "Rolling back: Deleting API key..."
     

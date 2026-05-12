@@ -15,10 +15,14 @@ print_config
 
 # Get the API Gateway ID and Usage Plan ID from CloudFormation outputs
 echo "Fetching stack information..."
-STACK_OUTPUT=$(aws cloudformation describe-stacks \
+if ! STACK_OUTPUT=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$AWS_REGION" \
-    --no-cli-pager)
+    --no-cli-pager 2>&1); then
+    echo "Error: Could not fetch stack '$STACK_NAME'"
+    echo "$STACK_OUTPUT"
+    exit 1
+fi
 
 USAGE_PLAN_ID=$(echo "$STACK_OUTPUT" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="UsagePlanId") | .OutputValue')
 USAGE_PLAN_NAME=$(echo "$STACK_OUTPUT" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey=="UsagePlanName") | .OutputValue // "grader-usage-plan"')
@@ -43,12 +47,16 @@ echo ""
 
 # Get all API keys in the usage plan
 echo "Fetching API keys from usage plan..."
-API_KEYS=$(aws apigateway get-usage-plan-keys \
+if ! API_KEYS=$(aws apigateway get-usage-plan-keys \
     --usage-plan-id "$USAGE_PLAN_ID" \
     --region "$AWS_REGION" \
     --no-cli-pager \
     --query 'items[*].[id,name]' \
-    --output text)
+    --output text 2>&1); then
+    echo "Error: Failed to fetch API keys from usage plan '$USAGE_PLAN_ID'"
+    echo "$API_KEYS"
+    exit 1
+fi
 
 if [ -z "$API_KEYS" ]; then
     echo "No API keys found in the usage plan."
@@ -87,13 +95,16 @@ while IFS=$'\t' read -r KEY_ID KEY_NAME; do
     
     # Get the actual API key value before deletion
     echo "  → Fetching API key value..."
-    API_KEY_VALUE=$(aws apigateway get-api-key \
+    if ! API_KEY_VALUE=$(aws apigateway get-api-key \
         --api-key "$KEY_ID" \
         --include-value \
         --region "$AWS_REGION" \
         --no-cli-pager \
         --query 'value' \
-        --output text 2>/dev/null)
+        --output text 2>&1); then
+        echo "  ✗ Could not retrieve API key value"
+        API_KEY_VALUE=""
+    fi
     
     if [ -n "$API_KEY_VALUE" ] && [ "$API_KEY_VALUE" != "null" ]; then
         API_KEY_VALUES+=("$API_KEY_VALUE")

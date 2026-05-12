@@ -23,13 +23,12 @@ print_config
 
 # Get the Usage Plan Name from the stack
 echo "Fetching stack information..."
-STACK_OUTPUT=$(aws cloudformation describe-stacks \
+if ! STACK_OUTPUT=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$AWS_REGION" \
-    --no-cli-pager 2>/dev/null)
-
-if [ $? -ne 0 ]; then
-    echo "Error: Could not find stack '$STACK_NAME'"
+    --no-cli-pager 2>&1); then
+    echo "Error: Could not fetch stack '$STACK_NAME'"
+    echo "$STACK_OUTPUT"
     exit 1
 fi
 
@@ -48,11 +47,15 @@ echo ""
 
 # Get all API keys in the usage plan with details
 echo "Fetching API keys from usage plan..."
-API_KEYS_JSON=$(aws apigateway get-usage-plan-keys \
+if ! API_KEYS_JSON=$(aws apigateway get-usage-plan-keys \
     --usage-plan-id "$USAGE_PLAN_ID" \
     --region "$AWS_REGION" \
     --no-cli-pager \
-    --output json)
+    --output json 2>&1); then
+    echo "Error: Failed to fetch API keys from usage plan '$USAGE_PLAN_ID'"
+    echo "$API_KEYS_JSON"
+    exit 1
+fi
 
 KEY_COUNT=$(echo "$API_KEYS_JSON" | jq '.items | length')
 
@@ -72,13 +75,15 @@ generate_csv() {
     # CSV Data
     echo "$API_KEYS_JSON" | jq -r '.items[] | "\(.name)|\(.id)"' | while IFS='|' read -r name id; do
         # Fetch the actual API key value
-        KEY_VALUE=$(aws apigateway get-api-key \
+        if ! KEY_VALUE=$(aws apigateway get-api-key \
             --api-key "$id" \
             --region "$AWS_REGION" \
             --include-value \
             --no-cli-pager \
             --query 'value' \
-            --output text 2>/dev/null)
+            --output text 2>&1); then
+            KEY_VALUE="(unable to retrieve)"
+        fi
         
         if [ -z "$KEY_VALUE" ]; then
             KEY_VALUE="(unable to retrieve)"

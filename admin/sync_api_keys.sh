@@ -23,13 +23,12 @@ print_config
 
 # Get the Usage Plan ID and DynamoDB table name from the stack
 echo "Fetching stack information..."
-STACK_OUTPUT=$(aws cloudformation describe-stacks \
+if ! STACK_OUTPUT=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$AWS_REGION" \
-    --no-cli-pager 2>/dev/null)
-
-if [ $? -ne 0 ]; then
-    echo "Error: Could not find stack '$STACK_NAME'"
+    --no-cli-pager 2>&1); then
+    echo "Error: Could not fetch stack '$STACK_NAME'"
+    echo "$STACK_OUTPUT"
     exit 1
 fi
 
@@ -52,19 +51,27 @@ echo ""
 
 # Fetch all API keys from API Gateway usage plan
 echo "Fetching API keys from API Gateway usage plan..."
-API_KEYS_JSON=$(aws apigateway get-usage-plan-keys \
+if ! API_KEYS_JSON=$(aws apigateway get-usage-plan-keys \
     --usage-plan-id "$USAGE_PLAN_ID" \
     --region "$AWS_REGION" \
     --no-cli-pager \
-    --output json)
+    --output json 2>&1); then
+    echo "Error: Failed to fetch API keys from usage plan '$USAGE_PLAN_ID'"
+    echo "$API_KEYS_JSON"
+    exit 1
+fi
 
 # Fetch all items from DynamoDB
 echo "Fetching API keys from DynamoDB..."
-DYNAMO_ITEMS=$(aws dynamodb scan \
+if ! DYNAMO_ITEMS=$(aws dynamodb scan \
     --table-name "$LOOKUP_TABLE" \
     --region "$AWS_REGION" \
     --no-cli-pager \
-    --output json)
+    --output json 2>&1); then
+    echo "Error: Failed to scan DynamoDB table '$LOOKUP_TABLE'"
+    echo "$DYNAMO_ITEMS"
+    exit 1
+fi
 
 # Create temporary files
 TEMP_DIR=$(mktemp -d)
@@ -82,13 +89,16 @@ echo "$API_KEYS_JSON" | jq -r '.items[] | "\(.name)|\(.id)"' | while IFS='|' rea
         echo "  Progress: $CURRENT/$TOTAL_KEYS"
     fi
     
-    KEY_VALUE=$(aws apigateway get-api-key \
+    if ! KEY_VALUE=$(aws apigateway get-api-key \
         --api-key "$id" \
         --region "$AWS_REGION" \
         --include-value \
         --no-cli-pager \
         --query 'value' \
-        --output text 2>/dev/null)
+        --output text 2>&1); then
+        echo "Warning: Could not fetch API key value for id '$id'"
+        continue
+    fi
     
     if [ -n "$KEY_VALUE" ]; then
         echo "$KEY_VALUE|$name" >> "$APIGW_KEYS_FILE"
