@@ -1,37 +1,21 @@
 import {baseUrl as basedUrl} from "../Constant";
 class Aws {
   extractAWSCredentials = (rawKey) => {
-    const accessKeyStartIndex =
-      rawKey.indexOf("aws_access_key_id=") + "aws_access_key_id=".length;
-    const accessKeyId = rawKey
-      .substring(accessKeyStartIndex, rawKey.indexOf("aws_secret_access_key="))
-      .replace(/(\r\n|\n|\r)/gm, "");
-    const secretKeyStartIndex =
-      rawKey.indexOf("aws_secret_access_key=") +
-      "aws_secret_access_key=".length;
-    const secretAccessKey = rawKey
-      .substring(secretKeyStartIndex, rawKey.indexOf("aws_session_token="))
-      .replace(/(\r\n|\n|\r)/gm, "");
-    const secretSessionTokenIndex =
-      rawKey.indexOf("aws_session_token=") + "aws_session_token=".length;
-
-    let secretSessionTokenEndIndex = rawKey.indexOf(
-      "\r",
-      secretSessionTokenIndex
-    );
-    if (secretSessionTokenEndIndex === -1)
-      secretSessionTokenEndIndex = rawKey.length;
-
-    const sessionToken = rawKey
-      .substring(secretSessionTokenIndex, secretSessionTokenEndIndex)
-      .replace(/(\r\n|\n|\r)/gm, "");
-    console.log({ accessKeyId, secretAccessKey, sessionToken });
-
-    return {
-      aws_access_key_id: accessKeyId,
-      aws_secret_access_key: secretAccessKey,
-      aws_session_token: sessionToken,
-    };
+    const credentials = {};
+    for (const key of [
+      "aws_access_key_id",
+      "aws_secret_access_key",
+      "aws_session_token",
+    ]) {
+      const match = rawKey.match(
+        new RegExp(`^[ \\t]*${key}[ \\t]*=[ \\t]*(\\S+)[ \\t]*$`, "m")
+      );
+      if (!match) {
+        throw new Error("Please paste complete AWS Academy Learner Lab credentials.");
+      }
+      credentials[key] = match[1];
+    }
+    return credentials;
   };
 
   getApiUrl = (controller) => {

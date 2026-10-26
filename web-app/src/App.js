@@ -1,7 +1,6 @@
 import React from "react";
 import "./App.css";
 import { Route, Routes } from "react-router-dom";
-import Playground from "./components/Playground/Playground";
 import Home from "./components/Home/Home";
 import Marks from "./components/Marks/Marks";
 

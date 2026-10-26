@@ -18,7 +18,7 @@ public class NunitTestResult
     public required string XmlResultUrl { get; set; }
     public required Dictionary<string, int> TestResults { get; set; }
 
-    public bool IsSuccess => TestResults.Values.All(c => c > 0);
+    public bool IsSuccess => TestResults.Count > 0 && TestResults.Values.All(c => c > 0);
 }
 public class TestRunner
 {
@@ -59,13 +59,10 @@ public class TestRunner
         await amazonS3.UploadFileToS3Async(tempCredentialsFilePath, Path.Combine(prefix, "awsTestConfig.json"));
 
         // logger.LogInformation(xml);
-        if (
-            (returnCode == 0 && !string.IsNullOrEmpty(awsTestConfig.Filter)) || //All test passed.
-            (returnCode >= 0 && string.IsNullOrEmpty(awsTestConfig.Filter))     //Some or All filtered tests passed. 
-            ) 
+        var xmlPath = Path.Combine(tempDir, "TestResult.xml");
+        if (returnCode >= 0 && File.Exists(xmlPath) &&
+            (returnCode == 0 || string.IsNullOrEmpty(awsTestConfig.Filter)))
         {
-            var xmlPath = Path.Combine(tempDir, "TestResult.xml");
-
             await amazonS3.UploadFileToS3Async(xmlPath, Path.Combine(prefix, "TestResult.xml"));
             var xmlResultUrl = await amazonS3.UploadFileToS3Async(xmlPath, Path.Combine(prefix, "TestResult_" + time + ".xml"));
 
@@ -84,7 +81,7 @@ public class TestRunner
             var jsonResultUrl = await amazonS3.UploadFileToS3Async(jsonPath, Path.Combine(prefix, "TestResult_" + time + ".json"));
 
 
-            logger.LogInformation("NUnit filtered tests success!" + awsTestConfig.Filter);
+            logger.LogInformation("NUnit test results processed: " + awsTestConfig.Filter);
             return new NunitTestResult
             {
                 LogUrl = logUrl,
@@ -100,7 +97,7 @@ public class TestRunner
             LogUrl = logUrl,
             JsonResultUrl = "",
             XmlResultUrl = "",
-            TestResults = GetGameTask(awsTestConfig)!.Tests.ToDictionary(c => c, c => 0)
+            TestResults = (GetGameTask(awsTestConfig)?.Tests ?? []).ToDictionary(c => c, c => 0)
         };
     }
 
@@ -113,8 +110,9 @@ public class TestRunner
         {
             "/test:"+nameof(ProjectTestsLib),
             "--work=" + tempDir,
-            "--output=" + tempDir,
-            "--err=" + tempDir,
+            "--output=" + Path.Combine(tempDir, "TestOutput.log"),
+            "--err=" + Path.Combine(tempDir, "TestError.log"),
+            "--result=" + Path.Combine(tempDir, "TestResult.xml"),
             "--params:AwsTestConfig=" + tempCredentialsFilePath + ";trace=" + awsTestConfig.Trace
         };
         runTestParameters.Insert(1, "--where=" + filter);
@@ -161,14 +159,19 @@ public class TestRunner
 
     private int GetReward(string fullname)
     {
-        var json = GetTasksJson();
-        var matchingTask = json?.FirstOrDefault(c => c.Name == fullname);
-        return matchingTask?.Reward ?? 0;
+        var separator = fullname.LastIndexOf('.');
+        if (separator < 0)
+        {
+            return 0;
+        }
+        var testClass = typeof(GameTaskAttribute).Assembly.GetType(fullname[..separator]);
+        var testMethod = testClass?.GetMethod(fullname[(separator + 1)..]);
+        return testMethod?.GetCustomAttribute<GameTaskAttribute>()?.Reward ?? 0;
     }
 
     private Dictionary<string, int> ParseNUnitTestResult(XmlDocument xmlDoc)
     {
-        var testCases = xmlDoc.SelectNodes("/test-run/test-suite/test-suite/test-suite/test-case");
+        var testCases = xmlDoc.SelectNodes("/test-run//test-case");
         var result = new Dictionary<string, int>();
         foreach (XmlNode node in testCases!)
         {

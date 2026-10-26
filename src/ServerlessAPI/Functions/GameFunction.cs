@@ -58,13 +58,18 @@ public class GameFunction
         var tasks = GetTasksJson();
         var filteredTasks = tasks.Where(t => !t.Tests.All(passedTests.Contains));
 
-        var mode = request.QueryStringParameters["mode"];
-        if (string.IsNullOrEmpty(mode))
+        if (request.QueryStringParameters == null ||
+            !request.QueryStringParameters.TryGetValue("mode", out var mode) ||
+            string.IsNullOrEmpty(mode))
         {
             return ApiResponse.CreateResponse(HttpStatusCode.OK, filteredTasks);
         }
 
         var t = filteredTasks.Take(1).ToArray();
+        if (t.Length == 0)
+        {
+            return ApiResponse.CreateResponseMessage(HttpStatusCode.OK, "You have completed all tasks!");
+        }
         if (new Random().NextDouble() < 0.7)
         {
             var result = await awsBedrock.RewriteInstruction(t[0].Instruction);

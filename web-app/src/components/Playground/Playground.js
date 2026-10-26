@@ -17,6 +17,9 @@ class Playground extends Component {
   componentDidMount() {
     const aws = new Aws();
     const urlWithQueryParams = aws.getApiUrl("game");
+    if (!urlWithQueryParams) {
+      return;
+    }
     urlWithQueryParams.searchParams.append("mode", "");
 
     fetch(urlWithQueryParams, {
@@ -54,6 +57,9 @@ class Playground extends Component {
 
       const aws = new Aws();
       const urlWithQueryParams = aws.getApiUrl("grader");
+      if (!urlWithQueryParams) {
+        return;
+      }
       urlWithQueryParams.searchParams.append(
         "filter",
         dropdownDataByName.filter
@@ -80,7 +86,10 @@ class Playground extends Component {
           }
           this.setState({ loading: false });
         })
-        .catch((error) => console.error("Error:", error));
+        .catch((error) => {
+          console.error("Error:", error);
+          this.setState({ loading: false });
+        });
     }
   };
 

@@ -12,10 +12,17 @@ The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. 
 
 
 ## Deploy the updated application.
-For the first time, you need to install AWS SAM CLI.
+For the first time, install AWS SAM CLI and the .NET 8 SDK (x86_64 Linux).
+The setup script requires `curl`, `unzip`, `tar`, and `sudo` (unless running as root).
+It installs a missing .NET 8 SDK under `~/.dotnet` and installs or updates SAM CLI
+system-wide. It stops on errors and removes temporary downloads automatically.
 ```bash
 ./aws_sam_setup.sh
 ```
+
+If .NET was installed under `~/.dotnet`, the setup script prints the environment
+exports needed for direct `dotnet` commands. Add them to `~/.bashrc` for future
+shells. The package update script discovers this local installation automatically.
 
 ```bash
 sam build && sam deploy --parameter-overrides "SecretHash=bb14ca5898a4e4133bbce2ea2315a1234"
@@ -33,8 +40,29 @@ sam delete --stack-name CloudProjectMarker
 
 ## Packages update
 
+Run `./aws_sam_setup.sh` first, or install the
+[.NET 8 SDK for Ubuntu](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu)
+(not just the runtime) and ensure `dotnet` is on your `PATH`. Then run:
+
 ```
 ./update_packages.sh
+```
+
+The script installs or updates `dotnet-outdated-tool` and upgrades packages in both
+.NET projects. It stops on the first error; completion is reported only if all
+commands succeed.
+
+## Local regression tests
+
+These tests do not call AWS or execute the infrastructure checks in
+`src/ProjectTestsLib/`. The backend tests use NUnitLite, like the application.
+Run from the repository root with the .NET 8 SDK, Node.js 22.7+ and Python 3:
+
+```bash
+dotnet run --project tests/ServerlessAPI.Tests -- --noresult --workers=0
+node --test web-game/tests/core.test.mjs
+python3 -m unittest discover -s tests -p 'test_*.py'
+(cd web-app && CI=true npm test -- --watchAll=false --runInBand)
 ```
 
 ## Resources

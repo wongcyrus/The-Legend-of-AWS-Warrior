@@ -37,16 +37,22 @@ export const entity_manager = (() => {
 
     SetActive(e, b) {
       const i = this._entities.indexOf(e);
-      if (i < 0) {
+      if (b) {
+        if (i < 0 && this._entitiesMap[e.Name] === e) {
+          this._entities.push(e);
+        }
         return;
       }
-
-      this._entities.splice(i, 1);
+      if (i >= 0) {
+        this._entities.splice(i, 1);
+      }
     }
 
     Update(timeElapsed) {
-      for (let e of this._entities) {
-        e.Update(timeElapsed);
+      for (let e of [...this._entities]) {
+        if (this._entities.includes(e)) {
+          e.Update(timeElapsed);
+        }
       }
     }
   }

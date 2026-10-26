@@ -12,8 +12,8 @@ class Home extends Component {
     this.onClickReset = this.onClickReset.bind(this);
     this.onClickSave = this.onClickSave.bind(this);
     this.state = {
-      api_key: "",
-      credentials: "",
+      api_key: localStorage.getItem("api_key") || "",
+      credentials: localStorage.getItem("credentials") || "",
       awsAccountStatus: "",
     };
   }
@@ -31,7 +31,7 @@ class Home extends Component {
   }
 
   onClickReset(e) {
-    this.setState({ api_key: "", credentials: "" });
+    this.setState({ api_key: "", credentials: "", awsAccountStatus: "" });
     localStorage.removeItem("credentials");
     localStorage.removeItem("api_key");
   }
@@ -45,9 +45,17 @@ class Home extends Component {
       return;
     }
     const aws = new Aws();
-    const extractedCredentials = aws.extractAWSCredentials(credentials);
     const urlWithQueryParams = aws.getApiUrl("awsaccount");
-    console.log("Extracted Credentials:", extractedCredentials);
+    if (!urlWithQueryParams) {
+      return;
+    }
+    let extractedCredentials;
+    try {
+      extractedCredentials = aws.extractAWSCredentials(credentials);
+    } catch (error) {
+      alert(error.message);
+      return;
+    }
     urlWithQueryParams.searchParams.append(
       "aws_access_key",
       extractedCredentials.aws_access_key_id
@@ -66,7 +74,12 @@ class Home extends Component {
         "x-api-key": localStorage.getItem("api_key")
       }
     })
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Unable to save AWS account.");
+        }
+        return response.json();
+      })
       .then((data) => {
         // Handle the response data here
         console.log(data);
@@ -75,6 +88,7 @@ class Home extends Component {
       .catch((error) => {
         // Handle any errors that occur during the request
         console.error(error);
+        this.setState({ awsAccountStatus: "Unable to save AWS account. Please try again." });
       });
   }
 
@@ -82,27 +96,25 @@ class Home extends Component {
     return (
       <div>
         <h2>Set your key</h2>
-        <p>
-          <lu>
-            <li>
-              This is a web app that allows you to save your AWS credentials and
-              API key in localStorage.
-            </li>
-            <li>
-              The API key is used to authenticate the request to the AWS API
-              Gateway.
-            </li>
-            <li>
-              The credentials are used to access your AWS account in the AWS
-              Academy Learner Lab and you need to paste a new credentials
-              everytime.
-            </li>
-            <li>
-              Click "Save AWS Account" to save your AWS account number with your
-              API key and you will not be able to change to another AWS account!
-            </li>
-          </lu>
-        </p>
+        <ul>
+          <li>
+            This is a web app that allows you to save your AWS credentials and
+            API key in localStorage.
+          </li>
+          <li>
+            The API key is used to authenticate the request to the AWS API
+            Gateway.
+          </li>
+          <li>
+            The credentials are used to access your AWS account in the AWS
+            Academy Learner Lab and you need to paste a new credentials
+            everytime.
+          </li>
+          <li>
+            Click "Save AWS Account" to save your AWS account number with your
+            API key and you will not be able to change to another AWS account!
+          </li>
+        </ul>
         <Form>
           <Form.Group className="mb-3" controlId="formBasicApiKey">
             <Form.Label>Copy and paste your Hash Key</Form.Label>

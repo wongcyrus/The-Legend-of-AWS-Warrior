@@ -3,6 +3,27 @@
 # Script to update .NET packages in The-Legend-of-AWS-Warrior project
 # Created: May 22, 2025
 
+set -euo pipefail
+
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+
+if [[ -x "$HOME/.dotnet/dotnet" ]]; then
+    export DOTNET_ROOT="$HOME/.dotnet"
+    export PATH="$DOTNET_ROOT:$PATH"
+fi
+
+if ! command -v dotnet &> /dev/null; then
+    echo "Error: dotnet was not found. Run ./aws_sam_setup.sh to install the .NET 8 SDK." >&2
+    exit 1
+fi
+
+if ! grep -q '^8\.' <<< "$(dotnet --list-sdks)"; then
+    echo "Error: the .NET 8 SDK is required. Run ./aws_sam_setup.sh; a runtime or a different SDK version is not sufficient." >&2
+    exit 1
+fi
+
+export PATH="${PATH}:${HOME}/.dotnet/tools"
+
 echo "Starting package update process..."
 
 # Step 1: Install dotnet-outdated-tool if not already installed
