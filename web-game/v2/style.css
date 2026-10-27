@@ -1,0 +1,84 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; color: #f7eed9; background: #182e30; }
+* { box-sizing: border-box; }
+body { margin: 0; overflow: hidden; }
+#container, #container > canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.v2-ui { position: fixed; z-index: 2; }
+a { color: #f4d59d; text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, select, input { font: inherit; }
+button, select { color: #fff0ce; border: 1px solid #b89d6755; background: #1b3234df; border-radius: 5px; padding: 8px 12px; cursor: pointer; }
+button:hover { background: #40564d; }
+button:disabled { opacity: 0.65; cursor: wait; }
+button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px solid #ffe2a3; outline-offset: 4px; }
+.eyebrow { font-size: 10px; letter-spacing: 3px; color: #edcc8e; font-weight: 700; }
+.masthead { top: 0; left: 0; right: 0; padding: 20px 28px; display: flex; align-items: center; justify-content: space-between; gap: 18px; background: linear-gradient(#132b32e8, #132b3200); }
+h1 { font-family: Georgia, serif; font-size: 27px; margin: 3px 0; font-weight: normal; }
+h1 span { font: 10px system-ui, sans-serif; color: #e6cd9c; border: 1px solid #d0aa6655; padding: 4px 6px; vertical-align: middle; margin-left: 9px; letter-spacing: 1px; }
+nav { display: flex; align-items: center; gap: 20px; font-size: 12px; }
+nav label { display: flex; align-items: center; gap: 7px; }
+nav select { padding: 6px; }
+.location { top: 106px; left: 28px; pointer-events: none; text-shadow: 0 2px 12px #102a2b; }
+.location h2 { font-family: Georgia, serif; font-size: 29px; margin: 5px 0; font-weight: normal; }
+.quest-card { top: 112px; right: 25px; width: 300px; padding: 16px; background: #172f32e8; border: 1px solid #e4c78b40; border-top: 2px solid #d8b574; border-radius: 5px; box-shadow: 0 12px 40px #14272b33; max-height: 45vh; overflow: auto; }
+.card-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#quest-state { font-size: 9px; letter-spacing: 1px; color: #9ed6b5; }
+.quest-card h2 { font: normal 18px Georgia, serif; margin: 12px 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.quest-card p { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.quest-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.quest-card button { font-size: 12px; }
+#status { color: #b9d2c4; border-top: 1px solid #d9cba42b; padding-top: 12px; }
+#result-link { display: block; font-size: 12px; margin-top: 10px; }
+[hidden], #result-link[hidden] { display: none !important; }
+.minimap { bottom: 82px; right: 28px; width: 200px; text-align: center; background: #172f32dc; border: 1px solid #d8b57466; border-radius: 8px; overflow: hidden; }
+.minimap canvas { display: block; width: 100%; }
+.minimap span { display: block; font-size: 8px; letter-spacing: 2px; padding: 8px; color: #ead4a7; }
+.player-hud { bottom: 90px; left: 28px; width: 220px; padding: 16px 10px; text-shadow: 0 2px 5px #183033; }
+.health-heading { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.health-heading strong { font: 21px Georgia, serif; }
+.health-track { margin-top: 10px; width: 200px; height: 8px; background: #193033; border: 1px solid #bcd2a255; border-radius: 8px; overflow: hidden; }
+#health-bar { width: 200px; height: 100%; background: linear-gradient(90deg, #54a58b, #b6cf79); transition: width 0.3s; }
+.player-stats { display: flex; gap: 16px; margin: 12px 0; font-size: 11px; color: #e3dec7; }
+.player-stats b { color: #fff5cc; }
+#home-button { font-size: 10px; padding: 6px 8px; }
+.controls { bottom: 21px; left: 50%; transform: translateX(-50%); display: flex; gap: 18px; white-space: nowrap; background: #142b30d9; padding: 12px 20px; border: 1px solid #e5d7ad22; border-radius: 30px; font-size: 10px; }
+kbd { color: #f5d89e; margin-right: 5px; font: inherit; font-weight: 700; }
+.credits { left: 15px; bottom: 5px; font-size: 8px; color: #d5dfd0; text-shadow: 0 1px 3px #193033; }
+.inventory-panel { left: 28px; bottom: 65px; width: 220px; font-size: 12px; background: #172f32ed; border-radius: 4px; padding: 8px; }
+.inventory-panel summary { cursor: pointer; }
+#inventory-slots { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 8px; }
+.inventory-slot { height: 22px; border: 1px solid #b89d6755; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.loading { position: fixed; z-index: 10; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 70%, #35584b, #132c33 70%); text-align: center; padding: 25px; }
+.loading h2 { font: normal 46px Georgia, serif; margin: 24px 0; }
+.loading p { font-size: 13px; color: #c4d6c7; max-width: 480px; line-height: 1.8; }
+progress { width: 280px; height: 5px; accent-color: #d5b675; margin: 20px; }
+#loading-actions a { margin-left: 20px; font-size: 13px; }
+dialog { inset: 0; max-width: 420px; padding: 30px; background: #193236; color: #fff1ce; border: 1px solid #bda374; border-radius: 9px; }
+dialog::backdrop { background: #0c202bcc; }
+dialog h2 { font: 28px Georgia, serif; }
+dialog p { font-size: 13px; line-height: 1.7; color: #c2d4c9; }
+dialog label { display: block; font-size: 12px; margin: 18px 0 8px; }
+dialog input { width: 100%; padding: 10px; background: #0f272c; color: #fff; border: 1px solid #74938b; border-radius: 5px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.task-dialog[open] { display: flex; flex-direction: column; gap: 16px; width: min(960px, calc(100vw - 40px)); height: min(820px, calc(100dvh - 40px)); max-width: none; max-height: calc(100dvh - 40px); padding: 28px; }
+.task-dialog h2 { margin: 0; overflow-wrap: anywhere; max-height: 15vh; overflow-y: auto; flex-shrink: 0; }
+.task-dialog .eyebrow, .task-dialog > p, .task-dialog .dialog-actions { flex-shrink: 0; margin: 0; }
+.task-instructions { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.8; }
+@media (max-width: 850px) {
+  .masthead { padding: 13px 16px; }
+  nav { gap: 10px; } nav > a:nth-child(2), nav label { display: none; }
+  h1 { font-size: 22px; } h1 span { display: none; }
+  .location { top: 85px; left: 16px; } .location h2 { font-size: 22px; }
+  .quest-card { top: 142px; right: 12px; width: 235px; max-height: 35vh; padding: 14px; }
+  .quest-card h2 { font-size: 18px; margin: 12px 0 7px; }
+  .task-dialog[open] { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); padding: 18px; gap: 12px; }
+  .minimap { width: 130px; right: 12px; bottom: 65px; }
+  .player-hud { left: 12px; bottom: 85px; } .inventory-panel { left: 12px; }
+  .controls { gap: 9px; padding: 10px; font-size: 9px; bottom: 25px; }
+  .controls span:last-child { display: none; }
+  .credits { font-size: 7px; }
+}
+@media (max-height: 500px) {
+  .task-dialog[open] { padding: 12px; gap: 8px; }
+  .task-dialog h2 { font-size: 20px; }
+  .task-dialog > p { font-size: 12px; line-height: 1.4; }
+}

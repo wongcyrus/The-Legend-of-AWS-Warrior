@@ -6,20 +6,33 @@ import Aws from "../../lib/Aws";
 class Marks extends Component {
   constructor(props) {
     super(props);
+    this.loadingMarks = false;
     this.state = {
       testResults: [],
       theLastFailedTest: null,
       error: "",
+      loading: true,
+      resetting: false,
+      resetMessage: "",
     };
   }
   componentDidMount() {
+    this.loadMarks();
+  }
+
+  loadMarks = () => {
+    if (this.loadingMarks || this.state.resetting) return;
+    this.loadingMarks = true;
+    this.setState({ loading: true, error: "", resetMessage: "" });
     const aws = new Aws();
     const urlWithQueryParams = aws.getApiUrl("getpassedtest");
     if (!urlWithQueryParams) {
+      this.loadingMarks = false;
+      this.setState({ loading: false });
       return;
     }
 
-    fetch(urlWithQueryParams, {
+    const passed = fetch(urlWithQueryParams, {
       headers: {
         "x-api-key": localStorage.getItem("api_key")
       }
@@ -44,7 +57,7 @@ class Marks extends Component {
 
     const urlWithQueryParams2 = aws.getApiUrl("getthelastfailedtest");
 
-    fetch(urlWithQueryParams2, {
+    const failed = fetch(urlWithQueryParams2, {
       headers: {
         "x-api-key": localStorage.getItem("api_key")
       }
@@ -67,7 +80,41 @@ class Marks extends Component {
         console.error(error);
         this.setState({ error: "Unable to load the last failed test. Please try again." });
       });
-  }
+    Promise.all([passed, failed]).then(() => {
+      this.loadingMarks = false;
+      this.setState({ loading: false });
+    });
+  };
+
+  resetMarks = async () => {
+    if (this.state.loading || this.state.resetting) return;
+    const url = new Aws().getApiUrl("resetmarks");
+    if (!url) return;
+    const key = localStorage.getItem("api_key");
+    if (!window.confirm(
+      "Permanently reset all of your marks and failed-test history? " +
+      "Your API key and AWS account link will be kept. " +
+      "Close game tabs and wait for any grading to finish before continuing."
+    )) return;
+    this.setState({ resetting: true, error: "", resetMessage: "" });
+    try {
+      const response = await fetch(url, { method: "POST", headers: { "x-api-key": key } });
+      if (!response.ok || (await response.json())?.isSuccess !== true) throw new Error("Reset failed.");
+      if (localStorage.getItem("api_key") !== key) throw new Error("Key changed.");
+      localStorage.removeItem("filter");
+      sessionStorage.removeItem("aws-warrior:v2:quest");
+      localStorage.setItem("aws-warrior:marks-reset", Date.now().toString());
+      this.setState({
+        testResults: [],
+        theLastFailedTest: null,
+        resetMessage: "Your marks and failed-test history have been reset.",
+      });
+    } catch {
+      this.setState({ error: "Unable to finish resetting marks. Some records may already be removed. Check your API key and retry." });
+    } finally {
+      this.setState({ resetting: false });
+    }
+  };
 
   handleButtonClick = (event) => {
     event.preventDefault();
@@ -80,8 +127,20 @@ class Marks extends Component {
       <div>
         <h2>Your Marks</h2>
         {this.state.error && <p role="alert">{this.state.error}</p>}
+        {this.state.resetMessage && <p role="status">{this.state.resetMessage}</p>}
         <Button variant="outline-primary" onClick={this.handleButtonClick}>
-          Play "The Legend of AWS Warrior" Now!
+          Play Classic
+        </Button>
+        <a className="btn btn-primary ms-2" href="game-v2.html" target="_blank" rel="noopener noreferrer">
+          Try Enhanced Beta
+        </a>
+        <Button variant="outline-secondary" className="ms-2" onClick={this.loadMarks}
+          disabled={this.state.loading || this.state.resetting}>
+          {this.state.loading ? "Loading marks..." : "Refresh marks"}
+        </Button>
+        <Button variant="outline-danger" className="ms-2" onClick={this.resetMarks}
+          disabled={this.state.loading || this.state.resetting}>
+          {this.state.resetting ? "Resetting marks..." : "Reset my marks"}
         </Button>
         {theLastFailedTest && (
           <>

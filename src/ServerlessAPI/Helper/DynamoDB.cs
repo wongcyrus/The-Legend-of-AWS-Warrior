@@ -37,6 +37,49 @@ public class DynamoDB
         this.logger = logger;
     }
 
+    public async Task ResetMarks(string email)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(email);
+        var passedTable = Environment.GetEnvironmentVariable("PASSED_TEST_TABLE")
+            ?? throw new InvalidOperationException("PASSED_TEST_TABLE is not configured.");
+        var failedTable = Environment.GetEnvironmentVariable("FAILED_TEST_TABLE")
+            ?? throw new InvalidOperationException("FAILED_TEST_TABLE is not configured.");
+        await DeleteUserRecords(passedTable, "Test", email);
+        await DeleteUserRecords(failedTable, "TestTime", email);
+    }
+
+    private async Task DeleteUserRecords(string table, string sortKey, string email)
+    {
+        Dictionary<string, AttributeValue>? cursor = null;
+        do
+        {
+            var page = await dynamoClient.QueryAsync(new QueryRequest
+            {
+                TableName = table,
+                KeyConditionExpression = "#user = :user",
+                ProjectionExpression = "#sort",
+                ExpressionAttributeNames = new() { ["#user"] = "User", ["#sort"] = sortKey },
+                ExpressionAttributeValues = new() { [":user"] = new AttributeValue { S = email } },
+                ConsistentRead = true,
+                Limit = 100,
+                ExclusiveStartKey = cursor
+            });
+            foreach (var batch in (page.Items ?? []).Chunk(10))
+            {
+                await Task.WhenAll(batch.Select(item => dynamoClient.DeleteItemAsync(new DeleteItemRequest
+                {
+                    TableName = table,
+                    Key = new()
+                    {
+                        ["User"] = new AttributeValue { S = email },
+                        [sortKey] = item[sortKey]
+                    }
+                })));
+            }
+            cursor = page.LastEvaluatedKey;
+        } while (cursor != null && cursor.Count > 0);
+    }
+
     public async Task<List<string>> GetPassedTestNames(string email)
     {
         QueryResponse getItemResponse = await GetPassedTestRecords(email);

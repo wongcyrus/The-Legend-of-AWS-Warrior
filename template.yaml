@@ -2,6 +2,9 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   CloudProjectMarker is a project grader for cloud projects.
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
 Parameters:
   SecretHash:
     Type: String
@@ -188,6 +191,20 @@ Resources:
     Properties:
       Name: !Sub "${AWS::StackName}-api"
       StageName: Prod
+      # Include error CORS in the API definition so API updates cannot erase it.
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
       Cors:
         AllowOrigin: "'*'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
@@ -563,6 +580,58 @@ Resources:
             Method: options
             Auth:
               ApiKeyRequired: false 
+
+  ResetMarksFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Students restart their own grading progress without replacing keys or account links.
+        must:
+          - Derive the student exclusively from the validated API key; never accept a target user.
+          - Delete only that student's passed and failed records; never scan or delete tables.
+    Properties:
+      CodeUri: ./src/ServerlessAPI
+      Handler: ServerlessAPI::ServerlessAPI.Functions.ResetMarksFunction::ResetMarksHandler
+      Timeout: 29
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:Query
+              - dynamodb:DeleteItem
+            Resource:
+              - !GetAtt PassedTestTable.Arn
+              - !GetAtt FailedTestTable.Arn
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+            Resource: !GetAtt ApiKeyLookupTable.Arn
+          - Effect: Allow
+            Action: apigateway:GET
+            Resource: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}::/apikeys"
+      Environment:
+        Variables:
+          PASSED_TEST_TABLE: !Ref PassedTestTable
+          FAILED_TEST_TABLE: !Ref FailedTestTable
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /resetmarks
+            Method: POST
+            Auth:
+              ApiKeyRequired: true
+        ProxyApiCors:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /resetmarks
+            Method: options
+            Auth:
+              ApiKeyRequired: false
 
   StepFunctionGraderFunction:
     Type: AWS::Serverless::Function

@@ -61,6 +61,7 @@ Run from the repository root with the .NET 8 SDK, Node.js 22.7+ and Python 3:
 ```bash
 dotnet run --project tests/ServerlessAPI.Tests -- --noresult --workers=0
 node --test web-game/tests/core.test.mjs
+node --test web-game/tests/v2.test.mjs
 python3 -m unittest discover -s tests -p 'test_*.py'
 (cd web-app && CI=true npm test -- --watchAll=false --runInBand)
 ```
@@ -89,10 +90,69 @@ npm run deploy
 ```
 
 ## Web Game
+
+Classic remains at `/game.html`; the enhanced beta is at `/game-v2.html`.
+The Marks page offers both versions. V2 adds a village, market, forest, lake,
+bridge, ruins, minimap, quest markers and adjustable graphics quality.
+Both versions share the API key and backend marks. V2 stores its active quest
+separately in `sessionStorage`, so it does not overwrite Classic's quest.
+
+Serve the game directory locally, then open either entry point:
+
 ```
 cd web-game
 python3 -m http.server
 ```
+
+Open `http://localhost:8000/game-v2.html` for V2. Use WASD to move and turn,
+Shift to run, Space to attack, E near a guide to get a task, and the mouse wheel to
+zoom. You can explore without an API key; set a key to request and grade quests.
+Receive new tasks only by pressing E near a character with a golden marker.
+Clicking characters or markers does not request tasks, and there is no task-fetch button.
+Guide characters walk around their home areas, pause when approached or spoken
+to, and keep their golden markers and minimap positions as they move.
+Defeated monsters return after a short delay at random walkable locations outside
+the village and away from players and other actors. The existing monster pool is
+reused so encounters continue without growing the population or accumulating bodies.
+V2 keeps a compact task tracker on screen. Full task requirements and NPC
+conversations open in a large, scrollable reading window and can be reopened
+without losing the current task. Instructions open when you accept a task.
+Complete those steps in AWS, then defeat a
+monster to grade the task. If grading fails, keep the same task, fix your resources,
+and defeat another monster to retry. There is no separate grading button.
+The game needs a desktop browser with WebGL and import-map support, and internet
+access for the pinned Three.js modules. Low quality disables shadows and ground
+decoration. This is a desktop keyboard/mouse beta, not a touch-controls release.
+
+If WebGL cannot start, V2 retries without antialiasing and with WebGL 1 when
+instanced rendering is available, using Low quality for compatibility. It does
+not require the high-performance GPU. If all attempts fail, enable graphics
+acceleration in your browser settings and restart the browser, close other 3D
+tabs, or try another browser with an up-to-date graphics driver. Both Classic
+and V2 require working WebGL; reducing graphics quality cannot enable disabled
+browser graphics.
+
+V2's code and new assets live under `web-game/v2/`; Classic's entry point and
+modules are unchanged. The existing deployment uploads both versions together.
+Town models are a curated subset of Kenney's CC0 Fantasy Town Kit 2.0
+(26 GLBs and a shared texture, about 526 KiB). Their original license and
+provenance are included under `web-game/v2/assets/`. Existing characters,
+animations, and Quaternius packs are reused without duplicating their files.
+
+## Reset your marks
+
+On the Marks page, choose **Reset my marks** and confirm. This permanently clears
+only the authenticated student's passed marks and failed-test history. It keeps
+their API key, saved credentials, linked AWS account, and actual AWS resources.
+Other students' records are not changed.
+
+Close game tabs and wait for grading to finish first: an in-progress or scheduled
+grader can award marks again afterward. A successful reset clears Classic's saved
+quest filter and invalidates V2 quests in other tabs in the same browser.
+The Home page's **Reset** button only clears locally saved credentials.
+
+The feature requires deploying the `/resetmarks` POST endpoint from `template.yaml`
+as well as the rebuilt frontend; a frontend-only deployment is not sufficient.
 
 ## Export Marks
 Change table name and region.

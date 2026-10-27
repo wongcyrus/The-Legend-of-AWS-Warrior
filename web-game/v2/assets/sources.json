@@ -1,0 +1,10 @@
+{
+  "pack": "Kenney Fantasy Town Kit",
+  "version": "2.0",
+  "author": "Kenney",
+  "license": "CC0-1.0",
+  "source": "https://kenney.nl/assets/fantasy-town-kit",
+  "download": "https://kenney.nl/media/pages/assets/fantasy-town-kit/efe948d309-1754222374/kenney_fantasy-town-kit_2.0.zip",
+  "contents": "26 selected GLB models and their shared colormap; original License.txt included.",
+  "existingAssets": "Nature, weapons and monsters reuse the repository's Quaternius CC0 packs. Existing characters and animations are reused unchanged; see resources/girl/readme.txt and resources/guard/readme.txt."
+}

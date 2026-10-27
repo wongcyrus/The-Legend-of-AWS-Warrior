@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#182e30">
+  <title>AWS Warrior - Enhanced Beta</title>
+  <link rel="icon" href="./favicon.ico">
+  <link rel="stylesheet" href="./v2/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "https://cdn.jsdelivr.net/npm/three@0.118/build/three.module.js": "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main id="container" aria-label="AWS Warrior 3D world"></main>
+  <div class="v2-ui masthead">
+    <div><span class="eyebrow">THE LEGEND OF</span><h1>AWS Warrior <span>BETA / V2</span></h1></div>
+    <nav aria-label="Game navigation">
+      <a href="./game.html">Play Classic</a>
+      <a href="./marks">Your marks</a>
+      <button id="key-button" type="button">Set Key</button>
+      <label>Quality <select id="quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+    </nav>
+  </div>
+  <section class="v2-ui location"><span class="eyebrow">YOUR JOURNEY</span><h2 id="region">Cloudhaven Village</h2></section>
+  <aside class="v2-ui quest-card" aria-label="Current quest">
+    <div class="card-heading"><span class="eyebrow">QUEST JOURNAL</span><span id="quest-state">EXPLORE</span></div>
+    <h2 id="quest-title">A world worth saving</h2>
+    <p id="quest-description">Press E near a character with a golden marker to receive an AWS task.</p>
+    <div class="quest-actions">
+      <button id="instructions-button" type="button" aria-haspopup="dialog" hidden>Read task</button>
+      <button id="conversation-button" type="button" aria-haspopup="dialog" hidden>Read conversation</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">Set your API key to connect chat and quest grading. You can explore without a key.</p>
+    <a id="result-link" target="_blank" rel="noopener noreferrer" hidden>View test log</a>
+  </aside>
+  <aside class="v2-ui minimap"><canvas id="map" width="200" height="200" aria-label="Map of the village, forest, lake and ruins"></canvas><span>THE CLOUDLANDS &middot; N &uarr;</span></aside>
+  <div class="v2-ui player-hud">
+    <div class="health-heading"><strong>Warrior</strong><span id="health-value">100 / 100</span></div>
+    <div class="health-track"><div id="health-bar"></div></div>
+    <div class="player-stats"><span>XP <b id="stats-experience">0</b></span><span>Power <b id="stats-strength">50</b></span><span>Monsters <b id="defeated">0</b></span></div>
+    <div hidden><span id="stats-wisdomness"></span><span id="stats-benchpress"></span><span id="stats-curl"></span></div>
+    <button id="home-button" type="button">Return to village</button>
+  </div>
+  <details class="v2-ui inventory-panel"><summary>Inventory</summary><div id="inventory-slots" aria-label="Inventory slots"></div></details>
+  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>E</kbd> Get task</span><span><kbd>Scroll</kbd> Zoom</span></footer>
+  <div class="v2-ui credits">Town assets: <a href="https://kenney.nl/assets/fantasy-town-kit" target="_blank" rel="noopener noreferrer">Kenney / CC0</a> &middot; Nature &amp; creatures: Quaternius &middot; <a href="./v2/assets/sources.json">Asset sources</a></div>
+  <section id="loading" class="loading" aria-label="Loading the enhanced world">
+    <span class="eyebrow">A NEW CHAPTER</span><h2>The Cloudlands await.</h2>
+    <p id="loading-message">Preparing the village, forest and ancient ruins...</p>
+    <p id="graphics-help" hidden>Enable graphics acceleration in your browser settings and restart the browser. Close other 3D game tabs, or try another WebGL-capable browser with an up-to-date graphics driver. If WebGL is disabled, Classic will also need it enabled.</p>
+    <progress id="loading-progress" max="100" value="0">Loading</progress>
+    <div id="loading-actions" hidden><button id="reload-button" type="button">Try again</button><a href="./game.html">Return to Classic</a></div>
+  </section>
+  <dialog id="task-dialog" class="v2-ui task-dialog" aria-labelledby="task-title">
+    <span id="reader-kind" class="eyebrow">AWS TASK INSTRUCTIONS</span>
+    <h2 id="task-title"></h2>
+    <div id="task-instructions" class="task-instructions" tabindex="0" role="region" aria-labelledby="task-title"></div>
+    <p id="task-help">Complete these steps in your AWS account. Defeat a monster to grade your work. After a failed attempt, fix your AWS resources and defeat another monster to retry.</p>
+    <div class="dialog-actions"><button id="close-task" type="button">Back to game</button></div>
+  </dialog>
+  <dialog id="key-dialog" class="v2-ui">
+    <form id="key-form">
+      <span class="eyebrow">YOUR ADVENTURE, SAME PROGRESS</span><h2>Set your API key</h2>
+      <p>Classic and V2 share your key and marks. Your active V2 quest stays separate in this browser tab.</p>
+      <label for="api-key">API key</label><input id="api-key" type="password" autocomplete="off" required>
+      <div class="dialog-actions"><button type="button" id="cancel-key">Cancel</button><button type="submit">Save key</button></div>
+    </form>
+  </dialog>
+  <script src="./v2/main.js" type="module"></script>
+</body>
+</html>
