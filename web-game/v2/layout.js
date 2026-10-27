@@ -1,5 +1,12 @@
 export const WORLD_LIMIT = 165;
 export const PLAYER_SPAWN = [0, 20];
+export const CHESTS = [
+  { id: "forest-cache", x: -110, z: -48, name: "Smuggler's cache" },
+  { id: "lake-cache", x: 116, z: 48, name: "Mirrorwater cache" },
+  { id: "ruins-cache", x: 57, z: -119, name: "Scholar's cache" },
+];
+export const BOSS = { x: 132, z: -120, name: "Crystal Warden" };
+export const SECRET_PATH = [{ x: -70, z: -50 }, { x: -110, z: -48 }];
 export const LAKE = { x: 78, z: 56, rx: 29, rz: 22 };
 export const BUILDINGS = [
   { x: -27, z: -25, rotation: 0, timber: false },
@@ -71,15 +78,22 @@ export function isPath(x, z, width = 6) {
     (Math.abs(z + x * 0.85) < width && x > 0);
 }
 
+export function isSecretPath(x, z, width = 3) {
+  const [a, b] = SECRET_PATH;
+  const dx = b.x - a.x, dz = b.z - a.z;
+  const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
+  return Math.hypot(x - a.x - t * dx, z - a.z - t * dz) < width;
+}
+
 export function createScenery(seed = 71829) {
   const random = seededRandom(seed);
   const groups = { trees: [], rocks: [], grass: [], flowers: [], bushes: [] };
-  const occupied = [...GUIDES, ...ENEMY_SPAWNS.map(([x, z]) => ({ x, z }))];
+  const occupied = [...GUIDES, ...CHESTS, BOSS, ...ENEMY_SPAWNS.map(([x, z]) => ({ x, z }))];
   for (let i = 0; i < 3400; i++) {
     const x = (random() * 2 - 1) * 153;
     const z = (random() * 2 - 1) * 153;
-    if (!isWalkable(x, z, 5) || isPath(x, z, 9) ||
-        occupied.some(p => Math.hypot(p.x - x, p.z - z) < 8)) continue;
+    if (!isWalkable(x, z, 5) || isPath(x, z, 9) || isSecretPath(x, z, 4) ||
+        occupied.some(p => Math.hypot(p.x - x, p.z - z) < (p === BOSS ? 15 : 8))) continue;
     const inVillage = Math.abs(x) < 61 && Math.abs(z) < 48;
     const kind = i % 11 === 0 ? "rocks" : i % 5 === 0 ? "bushes" :
       i % 3 === 0 ? "flowers" : i % 2 === 0 && !inVillage ? "trees" : "grass";

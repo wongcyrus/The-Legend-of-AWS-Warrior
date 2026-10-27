@@ -60,9 +60,11 @@ export class GameApi {
 
   async requestQuest() {
     this.syncMarksReset();
+    const key = this.keys.getItem("api_key");
     const reset = this.keys.getItem(MARKS_RESET_KEY);
     // Without game mode, the server returns the original AWS requirements, not NPC dialogue.
     const data = await this.request("game", {});
+    if (key !== this.keys.getItem("api_key")) throw new Error("Your API key changed. Press E to receive a task for this account.");
     if (reset !== this.keys.getItem(MARKS_RESET_KEY)) {
       throw new Error("Your marks were reset. Talk again to receive a new quest.");
     }

@@ -77,6 +77,63 @@ async function loadMarks() {
   return button;
 }
 
+function mockResetDigest(implementation) {
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'crypto');
+  const encoder = global.TextEncoder;
+  global.TextEncoder = require('util').TextEncoder;
+  Object.defineProperty(window, 'crypto', { configurable: true, value: { subtle: { digest: jest.fn(implementation) } } });
+  return () => {
+    if (descriptor) Object.defineProperty(window, 'crypto', descriptor);
+    else delete window.crypto;
+    global.TextEncoder = encoder;
+  };
+}
+
+test('successful reset scopes adventure invalidation to the API key hash, never the key itself', async () => {
+  const button = await loadMarks();
+  const restore = mockResetDigest(async () => new Uint8Array(32).fill(0xab).buffer);
+  try {
+    window.confirm.mockReturnValue(true);
+    global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ isSuccess: true }) });
+    fireEvent.click(button);
+    await screen.findByRole('status');
+    const marker = localStorage.getItem('aws-warrior:marks-reset');
+    expect(JSON.parse(marker)).toEqual({ owner: 'ab'.repeat(32), stamp: expect.any(String) });
+    expect(marker).not.toContain('example-key');
+  } finally { restore(); }
+});
+
+test('reset preserves the newly selected account when the key changes during owner hashing', async () => {
+  const button = await loadMarks();
+  let finish;
+  const restore = mockResetDigest(() => new Promise(resolve => { finish = resolve; }));
+  try {
+    window.confirm.mockReturnValue(true);
+    global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ isSuccess: true }) });
+    fireEvent.click(button);
+    await waitFor(() => expect(finish).toBeDefined());
+    localStorage.setItem('api_key', 'new-example-key');
+    localStorage.setItem('filter', 'new-account-task');
+    finish(new Uint8Array(32).buffer);
+    await screen.findByRole('alert');
+    expect(localStorage.getItem('filter')).toBe('new-account-task');
+    expect(localStorage.getItem('aws-warrior:marks-reset')).toBeNull();
+    expect(screen.getByText('PassingTest')).toBeInTheDocument();
+  } finally { restore(); }
+});
+
+test('reset still succeeds if Web Crypto is unavailable', async () => {
+  const button = await loadMarks();
+  const restore = mockResetDigest(async () => { throw new Error('Unavailable'); });
+  try {
+    window.confirm.mockReturnValue(true);
+    global.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ isSuccess: true }) });
+    fireEvent.click(button);
+    await screen.findByRole('status');
+    expect(localStorage.getItem('aws-warrior:marks-reset')).toMatch(/^\d+$/);
+  } finally { restore(); }
+});
+
 test('refresh reloads both result endpoints with the API key without resetting progress', async () => {
   await loadMarks();
   localStorage.setItem('filter', 'classic-quest');

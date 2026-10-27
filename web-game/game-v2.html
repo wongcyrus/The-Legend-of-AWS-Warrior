@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#182e30">
-  <title>AWS Warrior - Enhanced Beta</title>
+  <title>AWS Warrior - V2</title>
   <link rel="icon" href="./favicon.ico">
-  <link rel="stylesheet" href="./v2/style.css">
+  <link rel="stylesheet" href="./v2/style.css?v=20261027-equipment-bar-1">
   <script type="importmap">
     {
       "imports": {
@@ -18,15 +18,23 @@
 <body>
   <main id="container" aria-label="AWS Warrior 3D world"></main>
   <div class="v2-ui masthead">
-    <div><span class="eyebrow">THE LEGEND OF</span><h1>AWS Warrior <span>BETA / V2</span></h1></div>
+    <div class="game-brand">
+      <div class="brand-logos">
+        <img src="./resources/branding/hkiit-logo.png" alt="HKIIT" width="230" height="219">
+        <img src="./resources/branding/it114115-logo.png" alt="Cloud and Data Centre Administration programme" width="512" height="512">
+      </div>
+      <div><span class="eyebrow">THE LEGEND OF</span><h1><img class="aws-title-logo" src="./resources/branding/aws-logo.webp" alt="AWS" width="400" height="360"> Warrior <span>V2</span></h1></div>
+    </div>
     <nav aria-label="Game navigation">
       <a href="./game.html">Play Classic</a>
-      <a href="./marks">Your marks</a>
       <button id="key-button" type="button">Set Key</button>
+      <button id="sound-button" type="button" aria-pressed="false">Mute sound</button>
+      <label class="sound-volume">Volume <input id="sound-volume" type="range" min="0" max="100" step="5" aria-label="Sound effects volume"></label>
       <label>Quality <select id="quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
     </nav>
   </div>
-  <section class="v2-ui location"><span class="eyebrow">YOUR JOURNEY</span><h2 id="region">Cloudhaven Village</h2></section>
+  <section class="v2-ui location"><span class="eyebrow">YOUR JOURNEY</span><h2 id="region">Cloudhaven Village</h2><p id="village-progress">Village: 0 / 6 buildings restored</p></section>
+  <div id="combat-feedback" aria-hidden="true"></div>
   <aside class="v2-ui quest-card" aria-label="Current quest">
     <div class="card-heading"><span class="eyebrow">QUEST JOURNAL</span><span id="quest-state">EXPLORE</span></div>
     <h2 id="quest-title">A world worth saving</h2>
@@ -38,16 +46,25 @@
     <p id="status" role="status" aria-live="polite">Set your API key to connect chat and quest grading. You can explore without a key.</p>
     <a id="result-link" target="_blank" rel="noopener noreferrer" hidden>View test log</a>
   </aside>
-  <aside class="v2-ui minimap"><canvas id="map" width="200" height="200" aria-label="Map of the village, forest, lake and ruins"></canvas><span>THE CLOUDLANDS &middot; N &uarr;</span></aside>
+  <aside class="v2-ui minimap"><canvas id="map" width="200" height="200" aria-label="Map of the village, forest, lake and ruins"></canvas><span id="map-label">THE CLOUDLANDS &middot; N &uarr;</span></aside>
   <div class="v2-ui player-hud">
     <div class="health-heading"><strong>Warrior</strong><span id="health-value">100 / 100</span></div>
     <div class="health-track"><div id="health-bar"></div></div>
     <div class="player-stats"><span>XP <b id="stats-experience">0</b></span><span>Power <b id="stats-strength">50</b></span><span>Monsters <b id="defeated">0</b></span></div>
     <div hidden><span id="stats-wisdomness"></span><span id="stats-benchpress"></span><span id="stats-curl"></span></div>
+    <div class="equipment-heading">Weapons <span>Click / scroll to switch</span></div>
+    <div id="weapon-bar" class="equipment-bar" role="group" aria-label="Equip a weapon"></div>
+    <p id="weapon-summary">Sword: fast</p>
+    <div class="equipment-heading">Shields <span>Round shield equipped at start</span></div>
+    <div id="shield-bar" class="equipment-bar shield-bar" role="group" aria-label="Equip a shield"></div>
+    <button id="block-button" type="button" aria-pressed="false" disabled>Hold R / hold to Block</button>
+    <p id="shield-state" role="status">Preparing your round shield...</p>
+    <p id="dodge-state">Q: Dodge ready</p>
+    <p id="explore-hint">F: Open nearby chests</p>
     <button id="home-button" type="button">Return to village</button>
+    <p id="travel-status" role="status" aria-live="polite">Walk to a glowing gate and press T to travel.</p>
   </div>
-  <details class="v2-ui inventory-panel"><summary>Inventory</summary><div id="inventory-slots" aria-label="Inventory slots"></div></details>
-  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>E</kbd> Get task</span><span><kbd>Scroll</kbd> Zoom</span></footer>
+  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>R</kbd> Block</span><span><kbd>E</kbd> Get task</span><span><kbd>Q</kbd> Dodge</span><span><kbd>F</kbd> Open chest</span><span><kbd>T</kbd> Travel gate</span><span><kbd>Scroll</kbd> Weapon &middot; <kbd>Shift + scroll</kbd> Zoom</span></footer>
   <div class="v2-ui credits">Town assets: <a href="https://kenney.nl/assets/fantasy-town-kit" target="_blank" rel="noopener noreferrer">Kenney / CC0</a> &middot; Nature &amp; creatures: Quaternius &middot; <a href="./v2/assets/sources.json">Asset sources</a></div>
   <section id="loading" class="loading" aria-label="Loading the enhanced world">
     <span class="eyebrow">A NEW CHAPTER</span><h2>The Cloudlands await.</h2>
@@ -63,14 +80,14 @@
     <p id="task-help">Complete these steps in your AWS account. Defeat a monster to grade your work. After a failed attempt, fix your AWS resources and defeat another monster to retry.</p>
     <div class="dialog-actions"><button id="close-task" type="button">Back to game</button></div>
   </dialog>
-  <dialog id="key-dialog" class="v2-ui">
+  <dialog id="key-dialog" class="v2-ui" aria-describedby="key-help">
     <form id="key-form">
       <span class="eyebrow">YOUR ADVENTURE, SAME PROGRESS</span><h2>Set your API key</h2>
-      <p>Classic and V2 share your key and marks. Your active V2 quest stays separate in this browser tab.</p>
+      <p id="key-help">Classic and V2 share your key and marks. Your active V2 quest stays separate in this browser tab.</p>
       <label for="api-key">API key</label><input id="api-key" type="password" autocomplete="off" required>
       <div class="dialog-actions"><button type="button" id="cancel-key">Cancel</button><button type="submit">Save key</button></div>
     </form>
   </dialog>
-  <script src="./v2/main.js" type="module"></script>
+  <script src="./v2/main.js?v=20261027-equipment-bar-1" type="module"></script>
 </body>
 </html>

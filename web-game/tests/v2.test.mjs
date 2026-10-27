@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from '../v2/api.js';
 import { createRenderer, WebGLUnavailableError } from '../v2/renderer.js';
-import { findMeleeTargets, MELEE_RANGE } from '../v2/combat.js';
+import { findMeleeTargets, findMovementBlockers, MELEE_RANGE } from '../v2/combat.js';
 import { GuidePatrol, GUIDE_ROAM_RADIUS, GUIDE_WALK_SPEED } from '../v2/guides.js';
 import { findMonsterSpawn, MonsterRespawns } from '../v2/spawning.js';
 import { spatial_hash_grid } from '../src/spatial-hash-grid.js';
@@ -34,6 +34,104 @@ function api(fetcher, initial = {}) {
 
 const task = { name: 'Tests.Vpc', filter: 'test=Vpc', instruction: 'Build a VPC.' };
 const response = body => ({ ok: true, json: async () => body });
+
+test('talking without a key opens a clear reminder instead of contacting the NPC or reopening a saved task', () => {
+  const keys = storage();
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', { localStorage: keys });
+  let reminders = 0, requests = 0, instructions = 0, status;
+  const guide = { Broadcast: () => { requests++; } };
+  const game = {
+    api: { quest: null }, nearbyGuide: () => guide, renderer: { domElement: { focus() {} } },
+    status: message => { status = message; }, showKeyDialog: message => {
+      reminders++;
+      assert.match(message, /Set your API key first/);
+    }, showInstructions: () => { instructions++; },
+  };
+  for (const key of [null, '', '   ']) {
+    if (key === null) keys.removeItem('api_key'); else keys.setItem('api_key', key);
+    Game.prototype.talkToGuide.call(game);
+  }
+  assert.equal(reminders, 3);
+  assert.equal(requests, 0);
+  game.api.quest = task;
+  game.nearbyGuide = () => null;
+  Game.prototype.talkToGuide.call(game);
+  assert.equal(reminders, 4);
+  assert.equal(instructions, 0);
+  game.api.quest = null;
+  Game.prototype.talkToGuide.call(game);
+  assert.match(status, /Move closer/);
+  assert.equal(reminders, 4);
+  keys.setItem('api_key', 'example-key');
+  game.nearbyGuide = () => guide;
+  Game.prototype.talkToGuide.call(game);
+  assert.equal(requests, 1);
+  game.api.quest = task;
+  Game.prototype.talkToGuide.call(game);
+  assert.equal(instructions, 1);
+});
+
+test('the key reminder focuses the key input, clears held movement and dodge, and safely reuses an open dialog', () => {
+  const keys = storage();
+  let opened = 0, focused = 0;
+  const dialog = { open: false, showModal() { this.open = true; opened++; } };
+  const input = { value: 'stale', focus: () => { focused++; } }, help = {};
+  const document = { getElementById: id => ({ 'key-dialog': dialog, 'api-key': input, 'key-help': help })[id] };
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', { localStorage: keys, document });
+  const held = { forward: true, backward: false, space: true };
+  const game = { dodge: { remaining: 0.2 }, guard: { held: true, release() { this.held = false; } },
+    player: { GetComponent: () => ({ _keys: held }) } };
+  Game.prototype.showKeyDialog.call(game, 'Set your API key first.');
+  assert.equal(help.textContent, 'Set your API key first.');
+  assert.equal(input.value, '');
+  assert.equal(game.dodge.remaining, 0);
+  assert.equal(game.guard.held, false);
+  assert.ok(Object.values(held).every(value => value === false));
+  assert.equal(opened, 1);
+  keys.setItem('api_key', 'example-key');
+  Game.prototype.showKeyDialog.call(game);
+  assert.match(help.textContent, /Classic and V2 share/);
+  assert.equal(input.value, 'example-key');
+  assert.equal(opened, 1);
+  assert.equal(focused, 2);
+});
+
+test('V2 displays both supplied logos from the shared branding directory with accessible image labels', () => {
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  for (const name of ['hkiit-logo.png', 'it114115-logo.png']) {
+    assert.ok(existsSync(new URL('../resources/branding/' + name, import.meta.url)));
+    assert.equal(existsSync(new URL('../' + name, import.meta.url)), false);
+    assert.match(html, new RegExp(`<img src="\\./resources/branding/${name.replace('.', '\\.')}" alt="[^"]+" width="\\d+" height="\\d+">`));
+  }
+});
+
+test('the game title uses the supplied AWS logo while keeping Warrior as text', () => {
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  assert.ok(existsSync(new URL('../resources/branding/aws-logo.webp', import.meta.url)));
+  assert.match(html, /<h1><img class="aws-title-logo" src="\.\/resources\/branding\/aws-logo\.webp" alt="AWS" width="400" height="360"> Warrior /);
+  assert.match(html, /<title>AWS Warrior - V2<\/title>/);
+  assert.match(html, /Warrior <span>V2<\/span>/);
+  assert.doesNotMatch(html, /\bbeta\b/i);
+});
+
+test('V2 versions the entry point and new combat dependency to avoid stale cached exports', () => {
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  assert.match(html, /src="\.\/v2\/main\.js\?v=[^"]+" type="module"/);
+  assert.match(main, /import \{ findMeleeTargets, findMovementBlockers \} from "\.\/combat\.js\?v=[^"]+";/);
+});
+
+test('Adventure rewards panel is removed without removing weapons or village progress', () => {
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /Adventure rewards|adventure-journal|weapon-finish/);
+  assert.doesNotMatch(main, /getElementById\("weapon-finish"\)/);
+  assert.match(html, /id="village-progress"/);
+  assert.match(html, /id="weapon-bar"/);
+  assert.match(main, /Sword: "1", Axe: "2", Unarmed: "0"/);
+});
 
 test('V2 ignores mouse picking and only a non-repeated E outside a dialog requests a task', () => {
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
@@ -192,6 +290,65 @@ test('melee excludes its attacker and actors beyond actual weapon reach', () => 
 function context(extensions = {}) {
   return { getExtension: name => extensions[name] || null };
 }
+
+test('movement lets overlapping actors separate without allowing deeper penetration or missed grid-boundary collisions', () => {
+  for (const [x, z] of [[0, 85.5], [0, 87], [-85.5, 0], [87, -85.5]]) {
+    const grid = new spatial_hash_grid.SpatialHashGrid([[-200, -200], [200, 200]], [80, 80]);
+    const actor = { _position: { x, z } };
+    const other = { _position: { x, z: z - 3.5 }, GetComponent: () => ({ IsAlive: () => true }) };
+    grid.NewClient([x, z], [1, 1]).entity = actor;
+    grid.NewClient([x, z - 3.5], [1, 1]).entity = other;
+    assert.deepEqual(findMovementBlockers(grid, actor, { x, z: z + 0.1 }), []);
+    assert.deepEqual(findMovementBlockers(grid, actor, { x, z: z - 0.1 }), [other]);
+    assert.deepEqual(findMovementBlockers(grid, actor, { x: x + 0.1, z }), []);
+    assert.deepEqual(findMovementBlockers(grid, actor, { x, z: z + 1 }), []);
+    assert.deepEqual(findMovementBlockers(grid, actor, { x, z: z + 0.4 }, { x, z: z + 1 }), [other]);
+    other.GetComponent = () => ({ IsAlive: () => false });
+    assert.deepEqual(findMovementBlockers(grid, actor, { x, z: z - 0.1 }), []);
+    other.GetComponent = () => undefined;
+    assert.deepEqual(findMovementBlockers(grid, actor, { x, z: z - 0.1 }), [other]);
+  }
+});
+
+test('movement blocks entry into a new actor, allows escape from exact overlap and respects a second blocker', () => {
+  const grid = new spatial_hash_grid.SpatialHashGrid([[-200, -200], [200, 200]], [80, 80]);
+  const actor = { _position: { x: 0, z: 0 } };
+  const other = { _position: { x: 0, z: -4.1 }, GetComponent: () => undefined };
+  const client = grid.NewClient([0, -4.1], [1, 1]);
+  client.entity = other;
+  assert.deepEqual(findMovementBlockers(grid, actor, { x: 0, z: -0.2 }), [other]);
+  other._position.z = 0;
+  client.position = [0, 0]; grid.UpdateClient(client);
+  assert.deepEqual(findMovementBlockers(grid, actor, { x: 0, z: 0.1 }), []);
+  const second = { _position: { x: 0, z: 4.1 }, GetComponent: () => undefined };
+  grid.NewClient([0, 4.1], [1, 1]).entity = second;
+  assert.deepEqual(findMovementBlockers(grid, actor, { x: 0, z: 0.2 }), [second]);
+});
+
+test('V2 player and NPC movement use overlap escape while retaining terrain collisions', () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  for (const [name, next, namespace] of [
+    ['BasicCharacterController', 'BasicCharacterControllerInput', 'player_entity'],
+    ['NPCController', 'EnemyAttackController', 'npc_entity'],
+  ]) {
+    const source = main.match(new RegExp(`class ${name} extends[\\s\\S]*?(?=\\nclass ${next})`))[0];
+    const Controller = runInNewContext(source + `\n${name};`, {
+      [namespace]: { [name]: class { _FindIntersections() { assert.fail('Inherited collision locks overlaps'); } } },
+      findMovementBlockers,
+    });
+    const controller = new Controller();
+    const actor = { _position: { x: 0, z: 0 } };
+    const other = { _position: { x: 0, z: -3.5 }, GetComponent: () => undefined };
+    controller._parent = actor;
+    controller._params = {
+      world: { canWalk: () => true }, game: { grid: { FindNear: () => [{ entity: other }] } },
+    };
+    assert.equal(controller._FindIntersections({ x: 0, z: 0.1 }).length, 0);
+    assert.equal(controller._FindIntersections({ x: 0, z: -0.1 }).length, 1);
+    controller._params.world.canWalk = () => false;
+    assert.equal(controller._FindIntersections({ x: 0, z: 0.1 }).length, 1);
+  }
+});
 
 test('renderer uses the default GPU preference and passes the context to Three.js', () => {
   const gl = context();
@@ -431,6 +588,16 @@ test('quests accepted after a marks reset remain active', async () => {
   assert.deepEqual(client.quest, task);
 });
 
+test('a pending guide response cannot restore a quest after changing accounts', async () => {
+  let finish;
+  const client = api(() => new Promise(resolve => { finish = resolve; }));
+  const pending = client.requestQuest();
+  client.keys.setItem('api_key', 'another-example-key');
+  finish(response([task]));
+  await assert.rejects(pending, /API key changed/);
+  assert.equal(client.quest, null);
+});
+
 test('a pending guide response cannot restore a quest after marks were reset', async () => {
   let finish;
   const client = api(() => new Promise(resolve => { finish = resolve; }));
@@ -533,8 +700,11 @@ test('both entry points stay separate and V2 assets include their licenses', () 
   const beta = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
   assert.match(classic, /src="\.\/src\/main\.js"/);
   assert.doesNotMatch(classic, /v2\/main/);
-  assert.match(beta, /src="\.\/v2\/main\.js"/);
+  assert.match(beta, /src="\.\/v2\/main\.js\?v=[^"]+"/);
   assert.match(beta, /href="\.\/game\.html"/);
+  assert.doesNotMatch(beta, /href="\.\/marks"/);
+  assert.match(beta, /id="sound-button"/);
+  assert.match(beta, /id="sound-volume"/);
   assert.match(beta, /<dialog id="task-dialog"/);
   assert.match(beta, /id="task-instructions"/);
   assert.match(beta, /id="conversation-button"/);

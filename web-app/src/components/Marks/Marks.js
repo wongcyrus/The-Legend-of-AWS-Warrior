@@ -101,9 +101,18 @@ class Marks extends Component {
       const response = await fetch(url, { method: "POST", headers: { "x-api-key": key } });
       if (!response.ok || (await response.json())?.isSuccess !== true) throw new Error("Reset failed.");
       if (localStorage.getItem("api_key") !== key) throw new Error("Key changed.");
+      let owner;
+      try {
+        const digest = await window.crypto?.subtle?.digest("SHA-256", new TextEncoder().encode(key));
+        if (digest) owner = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+      } catch {
+        // Keep reset compatible with browsers without Web Crypto.
+      }
+      if (localStorage.getItem("api_key") !== key) throw new Error("Key changed.");
       localStorage.removeItem("filter");
       sessionStorage.removeItem("aws-warrior:v2:quest");
-      localStorage.setItem("aws-warrior:marks-reset", Date.now().toString());
+      const stamp = Date.now().toString();
+      localStorage.setItem("aws-warrior:marks-reset", owner ? JSON.stringify({ owner, stamp }) : stamp);
       this.setState({
         testResults: [],
         theLastFailedTest: null,

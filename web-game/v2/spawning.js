@@ -1,7 +1,8 @@
-export function findMonsterSpawn({ canWalk, player, occupied, random = Math.random }) {
+export function findMonsterSpawn({ canWalk, player, occupied, random = Math.random,
+  extent = 145, isSafe = (x, z) => Math.abs(x) < 62 && Math.abs(z) < 50 }) {
   for (let attempt = 0; attempt < 100; attempt++) {
-    const x = (random() * 2 - 1) * 145, z = (random() * 2 - 1) * 145;
-    if (Math.abs(x) < 62 && Math.abs(z) < 50) continue;
+    const x = (random() * 2 - 1) * extent, z = (random() * 2 - 1) * extent;
+    if (isSafe(x, z)) continue;
     if (Math.hypot(x - player.x, z - player.z) < 45) continue;
     if (occupied.some(actor => Math.hypot(x - actor.x, z - actor.z) < 10)) continue;
     if (canWalk(x, z)) return { x, z };

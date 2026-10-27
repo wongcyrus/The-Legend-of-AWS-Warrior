@@ -12,13 +12,21 @@ button:disabled { opacity: 0.65; cursor: wait; }
 button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px solid #ffe2a3; outline-offset: 4px; }
 .eyebrow { font-size: 10px; letter-spacing: 3px; color: #edcc8e; font-weight: 700; }
 .masthead { top: 0; left: 0; right: 0; padding: 20px 28px; display: flex; align-items: center; justify-content: space-between; gap: 18px; background: linear-gradient(#132b32e8, #132b3200); }
-h1 { font-family: Georgia, serif; font-size: 27px; margin: 3px 0; font-weight: normal; }
+.game-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.brand-logos { display: flex; gap: 8px; flex-shrink: 0; }
+.brand-logos img { display: block; width: 52px; height: 52px; padding: 3px; object-fit: contain; background: #fff; border-radius: 6px; }
+h1 { display: flex; align-items: center; gap: 6px; font-family: Georgia, serif; font-size: 27px; margin: 3px 0; font-weight: normal; }
+.aws-title-logo { width: 42px; height: 38px; object-fit: contain; vertical-align: middle; border-radius: 3px; }
 h1 span { font: 10px system-ui, sans-serif; color: #e6cd9c; border: 1px solid #d0aa6655; padding: 4px 6px; vertical-align: middle; margin-left: 9px; letter-spacing: 1px; }
 nav { display: flex; align-items: center; gap: 20px; font-size: 12px; }
 nav label { display: flex; align-items: center; gap: 7px; }
 nav select { padding: 6px; }
+.sound-volume input { width: 70px; accent-color: #d5b675; }
 .location { top: 106px; left: 28px; pointer-events: none; text-shadow: 0 2px 12px #102a2b; }
 .location h2 { font-family: Georgia, serif; font-size: 29px; margin: 5px 0; font-weight: normal; }
+.location p { font-size: 11px; color: #ffe0a0; }
+#combat-feedback { position: fixed; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+.damage-number { position: absolute; top: 0; left: 0; font-size: 23px; font-weight: 800; text-shadow: 0 2px 3px #14272b, 1px 0 #14272b; }
 .quest-card { top: 112px; right: 25px; width: 300px; padding: 16px; background: #172f32e8; border: 1px solid #e4c78b40; border-top: 2px solid #d8b574; border-radius: 5px; box-shadow: 0 12px 40px #14272b33; max-height: 45vh; overflow: auto; }
 .card-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 #quest-state { font-size: 9px; letter-spacing: 1px; color: #9ed6b5; }
@@ -32,21 +40,31 @@ nav select { padding: 6px; }
 .minimap { bottom: 82px; right: 28px; width: 200px; text-align: center; background: #172f32dc; border: 1px solid #d8b57466; border-radius: 8px; overflow: hidden; }
 .minimap canvas { display: block; width: 100%; }
 .minimap span { display: block; font-size: 8px; letter-spacing: 2px; padding: 8px; color: #ead4a7; }
-.player-hud { bottom: 90px; left: 28px; width: 220px; padding: 16px 10px; text-shadow: 0 2px 5px #183033; }
+.player-hud { bottom: 90px; left: 28px; width: 240px; padding: 12px 10px; max-height: calc(100vh - 180px); overflow-y: auto; text-shadow: 0 2px 5px #183033; }
 .health-heading { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
 .health-heading strong { font: 21px Georgia, serif; }
 .health-track { margin-top: 10px; width: 200px; height: 8px; background: #193033; border: 1px solid #bcd2a255; border-radius: 8px; overflow: hidden; }
 #health-bar { width: 200px; height: 100%; background: linear-gradient(90deg, #54a58b, #b6cf79); transition: width 0.3s; }
-.player-stats { display: flex; gap: 16px; margin: 12px 0; font-size: 11px; color: #e3dec7; }
+.player-stats { display: flex; gap: 16px; margin: 8px 0; font-size: 11px; color: #e3dec7; }
 .player-stats b { color: #fff5cc; }
 #home-button { font-size: 10px; padding: 6px 8px; }
-.controls { bottom: 21px; left: 50%; transform: translateX(-50%); display: flex; gap: 18px; white-space: nowrap; background: #142b30d9; padding: 12px 20px; border: 1px solid #e5d7ad22; border-radius: 30px; font-size: 10px; }
+.controls { bottom: 21px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100vw - 24px); gap: 18px; background: #142b30d9; padding: 12px 20px; border: 1px solid #e5d7ad22; border-radius: 30px; font-size: 10px; }
+.controls span { white-space: nowrap; }
 kbd { color: #f5d89e; margin-right: 5px; font: inherit; font-weight: 700; }
 .credits { left: 15px; bottom: 5px; font-size: 8px; color: #d5dfd0; text-shadow: 0 1px 3px #193033; }
-.inventory-panel { left: 28px; bottom: 65px; width: 220px; font-size: 12px; background: #172f32ed; border-radius: 4px; padding: 8px; }
-.inventory-panel summary { cursor: pointer; }
-#inventory-slots { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 8px; }
-.inventory-slot { height: 22px; border: 1px solid #b89d6755; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.equipment-heading { display: flex; justify-content: space-between; gap: 5px; margin: 7px 0 5px; font-size: 10px; color: #ffe0a0; }
+.equipment-heading span { font-size: 8px; color: #c2d4c9; }
+.equipment-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.equipment-bar button { position: relative; min-width: 0; height: 36px; padding: 3px; background: #142b30ed; }
+.equipment-bar button svg { display: block; width: 100%; height: 100%; }
+.equipment-bar button:hover { background: #40564d; border-color: #e3c991; }
+.equipment-bar [aria-pressed="true"] { border: 2px solid #ffe0a0; background: #49624a; box-shadow: inset 0 0 8px #f5cf6833; }
+.slot-key { position: absolute; top: 1px; left: 3px; color: #ffe0a0; font-size: 9px; }
+.shield-bar { grid-template-columns: repeat(6, 1fr); margin-bottom: 6px; }
+.shield-bar button { height: 32px; }
+#block-button { width: 100%; padding: 6px; font-size: 10px; touch-action: none; }
+#block-button[aria-pressed="true"] { border-color: #a9ddff; background: #375d72; }
+#weapon-summary, #dodge-state, #explore-hint, #travel-status, #shield-state { font-size: 10px; margin: 4px 0; line-height: 1.4; }
 .loading { position: fixed; z-index: 10; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 70%, #35584b, #132c33 70%); text-align: center; padding: 25px; }
 .loading h2 { font: normal 46px Georgia, serif; margin: 24px 0; }
 .loading p { font-size: 13px; color: #c4d6c7; max-width: 480px; line-height: 1.8; }
@@ -64,16 +82,29 @@ dialog input { width: 100%; padding: 10px; background: #0f272c; color: #fff; bor
 .task-dialog .eyebrow, .task-dialog > p, .task-dialog .dialog-actions { flex-shrink: 0; margin: 0; }
 .task-instructions { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.8; }
 @media (max-width: 850px) {
-  .masthead { padding: 13px 16px; }
-  nav { gap: 10px; } nav > a:nth-child(2), nav label { display: none; }
+  .masthead { padding: 13px 16px; gap: 8px; flex-wrap: wrap; }
+  .game-brand { gap: 12px; }
+  .brand-logos img { width: 40px; height: 40px; }
+  nav { gap: 10px; width: 100%; justify-content: space-between; } nav label { display: none; }
+  nav button { font-size: 10px; padding: 6px; }
+  nav > a { font-size: 10px; }
   h1 { font-size: 22px; } h1 span { display: none; }
-  .location { top: 85px; left: 16px; } .location h2 { font-size: 22px; }
-  .quest-card { top: 142px; right: 12px; width: 235px; max-height: 35vh; padding: 14px; }
+  .aws-title-logo { width: 30px; height: 27px; }
+  .location { top: 119px; left: 16px; } .location h2 { font-size: 22px; }
+  .quest-card { top: 178px; left: 12px; right: 12px; width: auto; max-height: 90px; padding: 8px 12px; }
   .quest-card h2 { font-size: 18px; margin: 12px 0 7px; }
   .task-dialog[open] { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); padding: 18px; gap: 12px; }
-  .minimap { width: 130px; right: 12px; bottom: 65px; }
-  .player-hud { left: 12px; bottom: 85px; } .inventory-panel { left: 12px; }
-  .controls { gap: 9px; padding: 10px; font-size: 9px; bottom: 25px; }
+  .location { max-width: calc(100vw - 100px); }
+  .location h2 { font-size: 18px; }
+  .minimap { width: 60px; right: 12px; top: 114px; bottom: auto; }
+  .minimap span { display: none; }
+  .player-hud { left: 12px; bottom: 90px; width: calc(100vw - 24px); max-height: calc(100dvh - 370px); padding: 6px 10px; background: #172f32ed; border: 1px solid #d8b57466; border-radius: 8px; }
+  .health-heading strong { font-size: 18px; }
+  .player-stats { margin: 5px 0; }
+  .equipment-heading { margin: 5px 0 3px; }
+  .equipment-heading span { font-size: 9px; }
+  #weapon-bar { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 36px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .controls { gap: 7px; padding: 9px; font-size: 9px; bottom: 25px; flex-wrap: wrap; justify-content: center; width: calc(100vw - 24px); white-space: normal; }
   .controls span:last-child { display: none; }
   .credits { font-size: 7px; }
 }

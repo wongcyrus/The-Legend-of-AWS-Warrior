@@ -60,8 +60,7 @@ Run from the repository root with the .NET 8 SDK, Node.js 22.7+ and Python 3:
 
 ```bash
 dotnet run --project tests/ServerlessAPI.Tests -- --noresult --workers=0
-node --test web-game/tests/core.test.mjs
-node --test web-game/tests/v2.test.mjs
+node --test web-game/tests/*.test.mjs
 python3 -m unittest discover -s tests -p 'test_*.py'
 (cd web-app && CI=true npm test -- --watchAll=false --runInBand)
 ```
@@ -91,7 +90,7 @@ npm run deploy
 
 ## Web Game
 
-Classic remains at `/game.html`; the enhanced beta is at `/game-v2.html`.
+Classic remains at `/game.html`; V2 is at `/game-v2.html`.
 The Marks page offers both versions. V2 adds a village, market, forest, lake,
 bridge, ruins, minimap, quest markers and adjustable graphics quality.
 Both versions share the API key and backend marks. V2 stores its active quest
@@ -105,15 +104,62 @@ python3 -m http.server
 ```
 
 Open `http://localhost:8000/game-v2.html` for V2. Use WASD to move and turn,
-Shift to run, Space to attack, E near a guide to get a task, and the mouse wheel to
-zoom. You can explore without an API key; set a key to request and grade quests.
+Shift to run, Space to attack, E near a guide to get a task, and T near a gate to
+travel. Scroll over the world to switch weapons; Shift + scroll zooms the camera.
+You can explore without an API key; set a key to request and grade quests.
 Receive new tasks only by pressing E near a character with a golden marker.
 Clicking characters or markers does not request tasks, and there is no task-fetch button.
+V2 includes synthesized footsteps, distinct sword/axe/punch sounds, dodges,
+monster warnings and attacks, spikes, travel gates, chests, healing, impacts,
+monster deaths, and task/result sounds. Enemy cues fade with distance and are
+rate-limited to avoid overlapping noise. Audio starts after the first key press or click. Mute and
+volume controls are in the top navigation; their settings persist in this browser.
+The Marks navigation link is omitted so it cannot take you out of the game.
+Click the weapon and shield icons to equip items, or scroll over the game to
+cycle weapons. Shift + scroll zooms the camera; keys 1/2/0 select Sword/Axe/Unarmed.
+The equipped icons have a gold border. Hover an icon for its name; the weapon
+summary shows damage, attack style and reach. The weapon bar scrolls horizontally
+on small screens. Scrolling UI panels or an open dialog does not switch weapons.
+You start with a round shield equipped. All 14 melee weapon models and five shield
+styles load when selected. Daggers favour speed, hammers favour damage, and
+spears and other long weapons have greater reach. Hold R or the Block button to
+stop frontal melee hits and cactus spikes; guarding slows movement and prevents
+attacks. Your back remains exposed. Heavy Yeti and Warden blows deal half damage
+through a block and break the guard for 1.5 seconds; release R before blocking again.
+Blocking lasts only while R or the Block button is held; it is not a toggle.
+Selecting No shield removes protection. Bows and ranged player attacks are not included.
+Sword attacks are fast; the axe hits harder but swings more slowly. Q dodges
+backward, or toward a held movement key, with a short invulnerable window and a
+cooldown. Dodges respect walls, water and actors. Enemy ground rings warn of
+incoming attacks; damage numbers and hit flashes make impacts visible.
+Passing a new AWS task repairs one of six village houses. Emerald, gold and
+crystal weapon finishes unlock through task victories or optional exploration.
+F opens a nearby hidden cache; follow the smuggler's trail west of the forest
+watcher, explore the lake shore, or search north of the ruins. The optional
+Crystal Warden waits northeast of the ruins and unlocks a crystal finish.
+These rewards are cosmetic, never AWS marks; normal monsters remain available
+for grading without opening caches or defeating the Warden. Adventure progress
+is saved locally per API-key hash, not as authoritative server progress, and
+resetting that student's marks clears their adventure rewards.
 Guide characters walk around their home areas, pause when approached or spoken
 to, and keep their golden markers and minimap positions as they move.
 Defeated monsters return after a short delay at random walkable locations outside
 the village and away from players and other actors. The existing monster pool is
 reused so encounters continue without growing the population or accumulating bodies.
+Three glowing gates in the village lead to Frostpeak Highlands, Sunspire Desert,
+and the nine-room Forgotten Vault. Stand near a gate and press T to
+enter; each map has a return gate, and Return to village also works after death.
+Highlands mix slow, heavy-hitting Yetis with existing monsters; the desert adds
+stationary Cacti with aimed, dodgeable spikes; the vault adds fast, fragile Bats.
+New monster models load on the first visit and are cached for later trips.
+Each destination has a guide and ordinary monsters that keep the same E-to-task,
+kill-to-grade loop. Travel does not change the active task, key, marks, equipment,
+or cosmetic progress. Only the current map is built: old terrain, signs and
+map-specific GPU resources are disposed, while the shared asset templates and a
+fixed character pool are reused. Inactive characters do not update or collide.
+The new terrain uses procedural geometry and the existing licensed asset packs.
+Shared scenery is cached at startup; map-specific monster models download on the
+first visit only. Terrain is built on demand rather than loading every map at once.
 V2 keeps a compact task tracker on screen. Full task requirements and NPC
 conversations open in a large, scrollable reading window and can be reopened
 without losing the current task. Instructions open when you accept a task.
@@ -122,7 +168,7 @@ monster to grade the task. If grading fails, keep the same task, fix your resour
 and defeat another monster to retry. There is no separate grading button.
 The game needs a desktop browser with WebGL and import-map support, and internet
 access for the pinned Three.js modules. Low quality disables shadows and ground
-decoration. This is a desktop keyboard/mouse beta, not a touch-controls release.
+decoration. V2 uses desktop keyboard/mouse controls, not full touch movement controls.
 
 If WebGL cannot start, V2 retries without antialiasing and with WebGL 1 when
 instanced rendering is available, using Low quality for compatibility. It does

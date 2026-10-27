@@ -81,7 +81,11 @@ export function instances(parent, model, placements, shadows = true) {
   const meshes = [];
   model.traverse(child => {
     if (!child.isMesh) return;
-    const mesh = new THREE.InstancedMesh(child.geometry, child.material, placements.length);
+    const geometry = child.geometry.isBufferGeometry ? child.geometry.clone() :
+      new THREE.BufferGeometry().fromGeometry(child.geometry);
+    const mesh = new THREE.InstancedMesh(geometry, child.material, placements.length);
+    // Three r118 has no InstancedMesh.dispose; let geometry disposal release its instance buffer.
+    geometry.setAttribute("mapInstanceMatrix", mesh.instanceMatrix);
     placements.forEach((placement, index) => {
       transform.position.set(placement.x, placement.y || 0, placement.z);
       transform.rotation.set(0, placement.rotation || 0, 0);

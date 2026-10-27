@@ -1,21 +1,33 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js";
-import { instances, normalized } from "./assets.js";
-import { BUILDINGS, LAKE, RUIN_WALLS, createScenery, isWalkable, seededRandom } from "./layout.js";
+import { instances, normalized } from "./assets.js?v=20261027-maps-1";
+import { BUILDINGS, LAKE, RUIN_WALLS, CHESTS, BOSS, SECRET_PATH, createScenery, isWalkable, seededRandom } from "./layout.js";
+import { MAPS, isMapWalkable } from "./maps.js?v=20261027-maps-1";
+import { buildExpedition, buildGates } from "./map-world.js?v=20261027-maps-1";
 
 export class World {
-  constructor(scene, models) {
+  constructor(scene, models, map = MAPS.village) {
     this.scene = scene;
     this.models = models;
-    this.scenery = createScenery();
+    this.map = map;
+    this.scenery = map.id === "village" ? createScenery() : { trees: [] };
     this.animated = [];
+    this.restorations = [];
+    this.chests = [];
     this.detail = new THREE.Group();
     scene.add(this.detail);
+    if (map.id !== "village") {
+      buildExpedition(this);
+      buildGates(this);
+      return;
+    }
     this.buildGround();
     this.buildVillage();
     this.buildLake();
     this.buildRuins();
     this.buildScenery();
+    this.buildAdventure();
     this.buildHorizon();
+    buildGates(this);
   }
 
   material(color, extra = {}) {
@@ -52,6 +64,10 @@ export class World {
     path(0, 0, 142, 10);
     path(-68, -51, 9, 172, Math.atan2(1, 0.75));
     path(65, -55, 9, 170, -Math.atan2(1, 0.85));
+    const [a, b] = SECRET_PATH;
+    const secret = this.mesh(new THREE.PlaneGeometry(Math.hypot(b.x - a.x, b.z - a.z), 3),
+      this.material(0x9b9767), (a.x + b.x) / 2, 0.02, (a.z + b.z) / 2);
+    secret.rotation.set(-Math.PI / 2, 0, -Math.atan2(b.z - a.z, b.x - a.x));
     const square = this.mesh(new THREE.CircleGeometry(23, 48),
       this.material(0xcdbb94), 0, 0.025, 0);
     square.rotation.x = -Math.PI / 2;
@@ -86,6 +102,24 @@ export class World {
       this.model("chimney", -0.4, 1.45, -0.35, 0.8, 0, house);
       this.model(building.timber ? "banner-green" : "banner-red",
         -0.45, 0.72, 1.02, 0.7, -Math.PI / 2, house);
+      const boards = new THREE.Group();
+      house.add(boards);
+      for (const angle of [-0.6, 0.6]) {
+        const board = this.mesh(new THREE.BoxGeometry(1.3, 0.13, 0.08),
+          this.material(0x544235), 0, 0.5, 1.03, boards);
+        board.rotation.z = angle;
+      }
+      const restored = new THREE.Group();
+      house.add(restored);
+      restored.visible = false;
+      this.mesh(new THREE.SphereGeometry(0.13, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffd479 }), 0, 0.85, 1.05, restored);
+      for (const x of [-0.7, 0.7]) {
+        const flowers = normalized(this.models.Flowers, 0.22);
+        flowers.position.set(x, 0, 1.2);
+        restored.add(flowers);
+      }
+      this.restorations.push({ boards, restored });
     }
     this.model("fountain-round-detail", 0, 0, -7, 4.2);
     this.model("stall-red", -15, 0, 10, 5, Math.PI / 2);
@@ -238,6 +272,44 @@ export class World {
     })), false);
   }
 
+  buildAdventure() {
+    for (const chest of CHESTS) {
+      const group = new THREE.Group();
+      group.position.set(chest.x, 0, chest.z);
+      this.scene.add(group);
+      const wood = this.material(0x785034);
+      this.mesh(new THREE.BoxGeometry(2.4, 1.4, 1.6), wood, 0, 0.7, 0, group);
+      const lid = new THREE.Group();
+      lid.position.set(0, 1.4, -0.8);
+      group.add(lid);
+      this.mesh(new THREE.BoxGeometry(2.5, 0.3, 1.7), wood, 0, 0.15, 0.8, lid);
+      for (const x of [-0.8, 0.8]) {
+        this.mesh(new THREE.BoxGeometry(0.16, 1.45, 1.65), this.material(0xd9b661), x, 0.7, 0, group);
+      }
+      const glow = this.mesh(new THREE.OctahedronGeometry(0.35),
+        new THREE.MeshBasicMaterial({ color: 0xffdc83 }), 0, 2.4, 0, group);
+      this.chests.push({ ...chest, group, lid, glow });
+    }
+    this.sign(-72, -49, "SMUGGLER'S TRAIL");
+    const arena = this.mesh(new THREE.RingGeometry(10.5, 11, 48),
+      new THREE.MeshBasicMaterial({ color: 0x9d87cc, transparent: true, opacity: 0.65,
+        side: THREE.DoubleSide }), BOSS.x, 0.06, BOSS.z);
+    arena.rotation.x = -Math.PI / 2;
+    this.sign(BOSS.x - 8, BOSS.z + 14, "OPTIONAL: CRYSTAL WARDEN");
+  }
+
+  setAdventure(data) {
+    this.restorations.forEach(({ boards, restored }, index) => {
+      boards.visible = index >= data.passed.length;
+      restored.visible = !boards.visible;
+    });
+    this.chests.forEach(chest => {
+      const opened = data.chests.includes(chest.id);
+      chest.lid.rotation.x = opened ? -1.15 : 0;
+      chest.glow.visible = !opened;
+    });
+  }
+
   update(time, player) {
     this.animated.forEach(({ object, type, offset = 0 }) => {
       if (type === "crystal") {
@@ -249,11 +321,14 @@ export class World {
         object.scale.setScalar(1 + Math.sin(time * 3) * 0.12);
       }
     });
-    this.motes.position.y = Math.sin(time * 0.25) * 0.6;
-    if (player) this.detail.visible = Math.abs(player.x) < 170 && Math.abs(player.z) < 170;
+    if (this.motes) this.motes.position.y = Math.sin(time * 0.25) * 0.6;
+    if (player) this.detail.visible = Math.abs(player.x) < this.map.limit && Math.abs(player.z) < this.map.limit;
   }
 
   canWalk(x, z) {
-    return isWalkable(x, z, 1.5, this.scenery.trees);
+    if (this.map.id !== "village") return isMapWalkable(this.map, x, z) &&
+      !this.scenery.trees.some(tree => Math.hypot(x - tree.x, z - tree.z) < 2.5);
+    return isWalkable(x, z, 1.5, this.scenery.trees) &&
+      !this.chests.some(chest => Math.hypot(x - chest.x, z - chest.z) < 2);
   }
 }

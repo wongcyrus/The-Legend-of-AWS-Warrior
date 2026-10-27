@@ -13,30 +13,80 @@ import { level_up_component } from "../src/level-up-component.js";
 import { spatial_hash_grid } from "../src/spatial-hash-grid.js";
 import { spatial_grid_controller } from "../src/spatial-grid-controller.js";
 import { baseUrl } from "../src/constant.js";
-import { Assets } from "./assets.js";
+import { Assets } from "./assets.js?v=20261027-maps-1";
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js";
-import { World } from "./world.js";
+import { World } from "./world.js?v=20261027-maps-1";
+import { MAPS, isSafePosition, nearbyGate } from "./maps.js?v=20261027-maps-1";
+import { sharedResources, disposeMap } from "./map-lifecycle.js?v=20261027-maps-1";
 import { createRenderer, WebGLUnavailableError } from "./renderer.js";
-import { findMeleeTargets } from "./combat.js";
+import { findMeleeTargets, findMovementBlockers } from "./combat.js?v=20261027-equipment-1";
 import { GuidePatrol } from "./guides.js";
-import { findMonsterSpawn, MonsterRespawns } from "./spawning.js";
-import { BUILDINGS, GUIDES, ENEMY_SPAWNS, LAKE, PLAYER_SPAWN, regionAt, seededRandom } from "./layout.js";
+import { SoundEffects } from "./audio.js?v=20261027-equipment-1";
+import { WEAPONS, FINISHES, AdventureProgress, DodgeMotion } from "./adventure.js?v=20261027-equipment-1";
+import { CombatFeedback } from "./feedback.js";
+import { findMonsterSpawn, MonsterRespawns } from "./spawning.js?v=20261027-maps-1";
+import { BUILDINGS, GUIDES, ENEMY_SPAWNS, LAKE, PLAYER_SPAWN, CHESTS, BOSS, regionAt, seededRandom } from "./layout.js";
+import { MONSTERS, monsterFor, clearShot, SpikeShots } from "./monsters.js?v=20261027-monsters-1";
+import { MonsterModels } from "./monster-models.js?v=20261027-monsters-1";
+import { SHIELDS, ShieldGuard } from "./shields.js?v=20261027-equipment-1";
+import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
+  Update(dt) {
+    const game = this._params.game;
+    this._animations.attack?.action.setEffectiveTimeScale(WEAPONS[game.weapon].speed);
+    if (game.dodge.active || game.progressChanging || game.traveling) {
+      this._velocity.set(0, 0, 0);
+      this._mixer?.update(dt);
+      return;
+    }
+    const keys = this.GetComponent("BasicCharacterControllerInput")._keys;
+    const shift = keys.shift, acceleration = this._acceleration.z;
+    const equipped = this.GetComponent("EquipWeapon");
+    if (game.guard.active || (game.weapon !== "Unarmed" && !equipped._target?.parent)) keys.space = false;
+    if (game.guard.active) {
+      keys.shift = false;
+      this._acceleration.z *= 0.4;
+      this._velocity.z = THREE.MathUtils.clamp(this._velocity.z, -4, 4);
+    }
+    try { super.Update(dt); }
+    finally { keys.shift = shift; this._acceleration.z = acceleration; }
+  }
+
   _FindIntersections(position) {
-    return this._params.world.canWalk(position.x, position.z) ? super._FindIntersections(position) : [true];
+    return this._params.world.canWalk(position.x, position.z) ?
+      findMovementBlockers(this._params.game.grid, this._parent, position) : [true];
   }
 }
 
 class BasicCharacterControllerInput extends player_input.BasicCharacterControllerInput {
   _onKeyDown(event) {
-    if (event.target.closest("input, select, dialog")) return;
+    if (event.target?.closest?.("input, select, dialog")) return;
+    if (event.code === "KeyR" || event.key?.toLowerCase() === "r") {
+      event.preventDefault();
+      if (!event.repeat) this._params.game.startBlock();
+      return;
+    }
+    if (!event.repeat && (event.code === "KeyT" || event.key?.toLowerCase() === "t" || event.keyCode === 84)) {
+      event.preventDefault();
+      this._params.game.useGate();
+      return;
+    }
     if (event.code === "KeyE" && !event.repeat) {
       event.preventDefault();
       this._params.game.talkToGuide();
       return;
     }
-    if (event.target.closest("button, a, summary")) return;
+    if (!event.repeat && ["KeyQ", "KeyF", "Digit1", "Digit2", "Digit0"].includes(event.code)) {
+      event.preventDefault();
+      const game = this._params.game;
+      if (game.progressChanging) return;
+      if (event.code === "KeyQ") game.tryDodge();
+      else if (event.code === "KeyF") game.openNearbyChest();
+      else game.selectWeapon({ Digit1: "Sword", Digit2: "Axe", Digit0: "Unarmed" }[event.code]);
+      return;
+    }
+    if (event.target?.closest?.("button, a, summary")) return;
     if (["Space", "KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) event.preventDefault();
     super._onKeyDown(event);
   }
@@ -44,12 +94,25 @@ class BasicCharacterControllerInput extends player_input.BasicCharacterControlle
   _onMouseUp() {
     // Keep V2 interaction keyboard-only instead of using Classic's picker.
   }
+
+  _onKeyUp(event) {
+    if (event.code === "KeyR" || event.key?.toLowerCase() === "r") this._params.game.guard.release();
+    super._onKeyUp(event);
+  }
 }
 
 class SpatialGridController extends spatial_grid_controller.SpatialGridController {
+  _OnPosition(message) {
+    if (this._client) super._OnPosition(message);
+  }
+
   FindNearbyEntities(range) {
-    // Shared melee controllers stop four units away but query a two-unit box.
-    return range === 2 ? findMeleeTargets(this._grid, this._parent) : super.FindNearbyEntities(range);
+    if (range !== 2) return super.FindNearbyEntities(range);
+    const weapon = this._parent.GetComponent("EquipWeapon");
+    const controller = this._parent.GetComponent("BasicCharacterController");
+    return findMeleeTargets(this._grid, this._parent, WEAPONS[weapon?.Name]?.reach || 5)
+      .filter(({ entity: target }) => !controller ||
+        clearShot(this._parent._position, target._position, (x, z) => controller._params.world.canWalk(x, z)));
   }
 }
 
@@ -139,22 +202,99 @@ class GuideController extends entity.Component {
 }
 
 class NPCController extends npc_entity.NPCController {
+  _LoadModels() {
+    const name = this._params.resourceName.replace(".fbx", "");
+    this._params.game.monsterModels.load(name).then(() => this.setMonster(name)).catch(error => {
+      this._params.game.failed = true;
+      this._params.game.fail(new Error(`Could not load ${name}. Reload to try again. ${error.message}`));
+    });
+  }
+
+  setMonster(name) {
+    if (this.kind === name) return;
+    const { model, animations } = this._params.game.monsterModels.create(name);
+    this._stateMachine._currentState?.Exit();
+    this._stateMachine._currentState = null;
+    if (this._target) {
+      this._mixer.stopAllAction();
+      this._mixer.uncacheRoot(this._target);
+      this._params.game.monsterModels.release(this._target);
+    }
+    this.kind = name;
+    this.profile = this._params.boss ? {
+      ...MONSTERS.Cyclops, label: BOSS.name, health: 480, damage: 16,
+      scale: 0.042, windup: 1.15, cooldown: 1,
+    } : MONSTERS[name];
+    this._target = model;
+    this._target.scale.setScalar(this.profile.scale);
+    this._target.position.copy(this._parent._position);
+    this._params.scene.add(model);
+    this._mixer = new THREE.AnimationMixer(model);
+    for (const [state, source] of Object.entries(animations)) {
+      const clip = source.clone();
+      clip.name = state;
+      this._animations[state] = { clip, action: this._mixer.clipAction(clip) };
+    }
+    this._stateMachine.SetState("idle");
+    this._acceleration.z = this.profile.acceleration;
+    this._OnPosition({ value: this._parent._position });
+  }
+
+  _OnPosition(message) {
+    super._OnPosition(message);
+    if (this._target && this.profile) this._target.position.y = this.profile.hover;
+  }
+
+  _OnAIWalk(dt) {
+    if (this.profile.ranged) {
+      this._velocity.set(0, 0, 0);
+      this._input._keys.forward = false;
+      if (this._FindPlayer().length()) {
+        const player = this.FindEntity("player");
+        this._target.lookAt(player._position.x, this._target.position.y, player._position.z);
+      }
+      return;
+    }
+    super._OnAIWalk(dt);
+    this._input._keys.space = false;
+  }
+
+  _UpdateAI(dt) {
+    const attack = this.GetComponent("EnemyAttackController");
+    if (attack && attack.remaining !== null) return;
+    super._UpdateAI(dt);
+  }
+
+  Update(dt) {
+    if (this._params.game.traveling) return;
+    super.Update(dt);
+    if (this.kind === "Bat" && this._target && this.GetComponent("HealthComponent").IsAlive()) {
+      this._target.position.y = this.profile.hover + Math.sin(this._params.game.clock.elapsedTime * 7) * 0.35;
+    }
+  }
+
   _OnDeath() {
     if (this._stateMachine._currentState?.Name === "death") return;
     this._stateMachine.SetState("death");
+    this._params.game.sound.play("death");
     this._params.game.defeated++;
     document.getElementById("defeated").textContent = this._params.game.defeated;
     this._params.game.grade();
-    this._params.game.respawns.schedule(this._parent);
+    if (this._params.boss) this._params.game.rewardBoss();
+    else this._params.game.respawns.schedule(this._parent);
   }
 
   _FindIntersections(position) {
-    return this._params.world.canWalk(position.x, position.z) ? super._FindIntersections(position) : [true];
+    return this._params.world.canWalk(position.x, position.z) ?
+      findMovementBlockers(this._params.game.grid, this._parent, position) : [true];
   }
 
   _FindPlayer() {
     const player = this.FindEntity("player");
-    if (Math.abs(player._position.x) < 58 && Math.abs(player._position.z) < 46) {
+    if (this._params.boss && player._position.distanceTo(new THREE.Vector3(BOSS.x, 0, BOSS.z)) > 28) {
+      return new THREE.Vector3();
+    }
+    if (isSafePosition(this._params.game.map, player._position.x, player._position.z)) {
       return new THREE.Vector3();
     }
     if (player._position.distanceTo(this._parent._position) > 36) return new THREE.Vector3();
@@ -162,31 +302,281 @@ class NPCController extends npc_entity.NPCController {
   }
 }
 
+class EnemyAttackController extends entity.Component {
+  constructor(game, boss = false) {
+    super(); this.game = game; this.boss = boss; this.remaining = null; this.cooldown = 0;
+  }
+
+  InitComponent() {
+    this.ring = this.game.world.mesh(new THREE.RingGeometry(5, 5.5, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffb95e, transparent: true, opacity: 0.7,
+        side: THREE.DoubleSide, depthWrite: false }), 0, 0.12, 0);
+    this.ring.rotation.x = -Math.PI / 2;
+    this.ring.visible = false;
+    this.aimLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(), new THREE.Vector3(),
+    ]), new THREE.LineBasicMaterial({ color: 0xe7ee7c }));
+    this.aimLine.visible = false;
+    this.game.scene.add(this.aimLine);
+  }
+
+  reset() {
+    this.remaining = null; this.cooldown = 1; this.ring.visible = false;
+    this.aimLine.visible = false;
+    this.aim = null;
+  }
+
+  Update(dt) {
+    const health = this.GetComponent("HealthComponent");
+    const controller = this.GetComponent("NPCController");
+    const player = this.game.player;
+    if (this.game.traveling || !controller._stateMachine._currentState || !health.IsAlive() ||
+        !player.GetComponent("HealthComponent").IsAlive()) { this.reset(); return; }
+    const profile = controller.profile;
+    this.cooldown = Math.max(0, this.cooldown - dt);
+    const distance = this._parent._position.distanceTo(player._position);
+    const safe = isSafePosition(this.game.map, player._position.x, player._position.z);
+    if (safe) { this.reset(); return; }
+    if (this.remaining === null) {
+      if (distance > profile.range || this.cooldown > 0) return;
+      if (profile.ranged && !clearShot(this._parent._position, player._position,
+        (x, z) => this.game.world.canWalk(x, z))) return;
+      this.remaining = profile.windup;
+      const cue = { Yeti: "yeti", Cactus: "cactus", Bat: "bat" }[controller.kind];
+      if (cue) this.game.sound.play(cue, distance);
+      this.aim = { x: player._position.x, z: player._position.z };
+      controller._velocity.set(0, 0, 0);
+      controller._stateMachine.SetState("attack");
+      this.ring.position.set(this._parent._position.x, 0.12, this._parent._position.z);
+      this.ring.scale.setScalar(profile.ranged ? 0.7 : profile.reach / 5.5);
+      this.ring.visible = true;
+      if (profile.ranged) {
+        const points = this.aimLine.geometry.attributes.position;
+        points.setXYZ(0, this._parent._position.x, 0.2, this._parent._position.z);
+        points.setXYZ(1, this.aim.x, 0.2, this.aim.z);
+        points.needsUpdate = true;
+        this.aimLine.geometry.computeBoundingSphere();
+        this.aimLine.visible = true;
+      }
+    } else {
+      this.remaining -= dt;
+      this.ring.material.color.setHex(this.remaining < 0.3 ? 0xff4c4c : 0xffb95e);
+      if (this.remaining <= 0) {
+        if (profile.ranged) {
+          if (this.game.spikes.fire(this._parent._position, this.aim, health._params.strength, this._parent)) {
+            this.game.sound.play("spike", distance);
+          }
+        } else if (distance <= profile.reach) player.Broadcast({
+          topic: "health.damage", value: health._params.strength, attacker: this._parent,
+        });
+        if (controller.kind === "Yeti") this.game.sound.play("slam", distance);
+        this.remaining = null;
+        this.cooldown = profile.cooldown;
+        this.ring.visible = false;
+        this.aimLine.visible = false;
+      }
+    }
+  }
+}
+
 class HealthComponent extends health_component.HealthComponent {
   _OnDamage(message) {
-    if (!this.IsAlive()) return;
+    if (!this.IsAlive() || !Number.isFinite(message.value) || message.value <= 0) return;
+    const game = this._params.game;
+    if (game.progressChanging) return;
+    const position = this._parent._position.clone().add(new THREE.Vector3(0, 7, 0));
+    if (this._params.updateUI && game.dodge.active) {
+      game.feedback.show(position, "DODGED", "#8ce8e0");
+      game.sound.play("evade");
+      return;
+    }
+    if (this._params.updateUI && game.guard.active) {
+      const source = message.attacker?._position;
+      const direction = message.direction || (source ? {
+        x: source.x - this._parent._position.x, z: source.z - this._parent._position.z,
+      } : null);
+      const attacker = message.attacker?.GetComponent("NPCController");
+      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this._parent._rotation);
+      const result = game.guard.block(message.value, direction, forward,
+        !message.direction && (attacker?.kind === "Yeti" || attacker?._params.boss));
+      if (result.blocked) {
+        game.feedback.show(position, result.broken ? "GUARD BROKEN" : "BLOCKED", "#a9ddff");
+        game.sound.play(result.broken ? "guardBreak" : "block");
+        if (!result.damage) return;
+        message = { ...message, value: result.damage };
+      }
+    }
+    const before = this._health;
     super._OnDamage(message);
+    if (this._health < before) {
+      game.sound.play(this._params.updateUI ? "hurt" : "hit");
+      game.feedback.show(position, String(Math.round(message.value)), this._params.updateUI ? "#ff9c91" : "#ffe0a0");
+      game.feedback.flash(this.GetComponent(this._params.updateUI ? "BasicCharacterController" : "NPCController")._target);
+    }
     if (this._params.updateUI) {
       document.getElementById("health-value").textContent = `${this._health} / ${this._maxHealth}`;
-      if (!this.IsAlive()) this._params.game.status("You fell in battle. Return to the village to recover.");
+      if (!this.IsAlive()) {
+        game.guard.release();
+        this._params.game.status("You fell in battle. Return to the village to recover.");
+      }
     }
   }
 }
 
 class EquipWeapon extends equip_weapon_component.EquipWeapon {
+  _UnloadModels() {
+    if (!this._target) return;
+    this._target.parent?.remove(this._target);
+    this.disposeModel(this._target);
+    this._target = null;
+  }
+
+  disposeModel(model) {
+    model.traverse(object => {
+      object.geometry?.dispose();
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) material?.dispose();
+    });
+  }
+
   _OnEquip(message) {
-    if (!message.value) {
-      this._UnloadModels();
-      this._name = null;
-      return;
+    const name = message.value || null;
+    if (name === this._name) return;
+    if (name && !this.GetComponent("InventoryController").GetItemByName(name)) return;
+    this._revision = (this._revision || 0) + 1;
+    this._UnloadModels();
+    this._name = name;
+    if (name) {
+      this._LoadModels(this.GetComponent("InventoryController").GetItemByName(name).GetComponent("InventoryItem"),
+        () => this._AttachTarget());
     }
+  }
+
+  _LoadModels(item, callback) {
+    const revision = this._revision;
+    const loader = new FBXLoader(new THREE.LoadingManager());
+    loader.setPath("./resources/weapons/FBX/");
+    loader.load(item.RenderParams.name + ".fbx", model => {
+      if (revision !== this._revision) { this.disposeModel(model); return; }
+      this._target = model;
+      model.scale.setScalar(item.RenderParams.scale);
+      if (this._params.shield) {
+        const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+        this._shieldNormal = size.x < size.y && size.x < size.z ? new THREE.Vector3(1, 0, 0) :
+          size.y < size.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+        model.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+      }
+      else { model.rotateY(Math.PI); model.rotateX(-Math.PI / 3); model.rotateY(-1); }
+      model.traverse(object => { object.castShadow = true; object.receiveShadow = true; });
+      this.applyFinish();
+      callback();
+    }, undefined, () => {
+      if (revision !== this._revision) return;
+      const game = this._params.game;
+      if (this._params.shield) game.selectShield("None");
+      else game.selectWeapon("Unarmed", true);
+      game.status("This equipment could not load. You can keep playing and select it again to retry.");
+    });
+  }
+
+  applyFinish() {
+    const color = FINISHES[this._params.game.progress.data.finish].color;
+    this._target?.traverse(object => {
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        if (!material?.color) continue;
+        material.userData.originalColor ||= material.color.clone();
+        if (color === null) material.color.copy(material.userData.originalColor);
+        else material.color.setHex(color);
+      }
+    });
+  }
+}
+
+class EquipShield extends EquipWeapon {
+  InitComponent() {
+    this.forward = new THREE.Vector3();
+    this.point = new THREE.Vector3();
+    this.parentRotation = new THREE.Quaternion();
+    this.rotation = new THREE.Quaternion();
+    this._RegisterHandler("load.character", message => this._OnCharacterLoaded(message));
+    this._RegisterHandler("inventory.shield", message => this._OnEquip(message));
+  }
+
+  _OnEquip(message) {
+    if ((message.value || null) === this._name) return;
+    this._params.game.guard.release();
     super._OnEquip(message);
+  }
+
+  _UnloadModels() {
+    this._params.game.guard.equipped = false;
+    super._UnloadModels();
+  }
+
+  _AttachTarget() {
+    super._AttachTarget();
+    this._params.game.guard.equipped = Boolean(this._target?.parent);
+  }
+
+  Update() {
+    if (!this._target) return;
+    const active = this._params.game.guard.active;
+    if (active && this._target.parent) {
+      const player = this._params.game.player, hand = this._target.parent;
+      this.forward.set(0, 0, 1).applyQuaternion(player._rotation);
+      this.point.copy(player._position).addScaledVector(this.forward, 1.4);
+      this.point.x += this.forward.z * 0.6;
+      this.point.z -= this.forward.x * 0.6;
+      this.point.y = 3;
+      hand.updateWorldMatrix(true, false);
+      this._target.position.copy(hand.worldToLocal(this.point));
+      hand.getWorldQuaternion(this.parentRotation);
+      this.rotation.setFromUnitVectors(this._shieldNormal, this.forward);
+      this._target.quaternion.copy(this.parentRotation.inverse().multiply(this.rotation));
+    } else {
+      this._target.position.set(0, 0, 0);
+      this._target.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+    }
+  }
+}
+
+class InventoryController extends entity.Component {
+  constructor() { super(); this.items = new Set(); }
+  InitComponent() {
+    this._RegisterHandler("inventory.add", message => { this.items.add(message.value); message.added = true; });
+  }
+  GetItemByName(name) {
+    const item = name || "Unarmed";
+    return this.items.has(item) ? this.FindEntity(item) : null;
+  }
+}
+
+class SoundComponent extends entity.Component {
+  constructor(sound, weapon = () => "Sword") {
+    super(); this.sound = sound; this.weapon = weapon; this.action = null; this.time = 0;
+  }
+
+  InitComponent() {
+    this._RegisterHandler("player.action", message => {
+      if (message.action === "attack" && (this.action !== "attack" || message.time < this.time)) {
+        this.sound.play(WEAPONS[this.weapon()]?.sound ||
+          ({ Axe: "axe", Unarmed: "punch" }[this.weapon()] || "swing"));
+      }
+      this.action = message.action;
+      this.time = message.time;
+    });
   }
 }
 
 class Game {
   constructor() {
     this.api = new GameApi({ baseUrl });
+    this.sound = new SoundEffects();
+    this.progress = new AdventureProgress();
+    this.map = MAPS.village;
+    this.dodge = new DodgeMotion();
+    this.guard = new ShieldGuard();
+    this.weapon = "Sword";
+    this.feedback = new CombatFeedback(document.getElementById("combat-feedback"));
     this.manager = new entity_manager.EntityManager();
     this.grid = new spatial_hash_grid.SpatialHashGrid([[-200, -200], [200, 200]], [80, 80]);
     this.respawns = new MonsterRespawns();
@@ -196,6 +586,21 @@ class Game {
     this.conversation = "";
     this.quality = localStorage.getItem("aws-warrior:v2:quality") || "medium";
     this.markers = [];
+    this.guideActors = [];
+    this.enemies = [];
+    this.monsterModels = new MonsterModels();
+    this.spikeGeometry = new THREE.ConeGeometry(0.35, 2, 5);
+    this.spikeGeometry.rotateX(Math.PI / 2);
+    this.spikeMaterial = new THREE.MeshBasicMaterial({ color: 0xc5e874 });
+    this.spikes = new SpikeShots({
+      spawn: shot => {
+        shot.mesh = new THREE.Mesh(this.spikeGeometry, this.spikeMaterial);
+        shot.mesh.rotation.y = Math.atan2(shot.vx, shot.vz);
+        shot.mesh.position.set(shot.x, 3, shot.z);
+        this.scene.add(shot.mesh);
+      },
+      remove: shot => this.scene.remove(shot.mesh),
+    });
     this.cameraDistance = 29;
     this.clock = new THREE.Clock();
     this.bindUI();
@@ -203,12 +608,169 @@ class Game {
 
   status(message) { document.getElementById("status").textContent = message; }
 
-  bindUI() {
+  showKeyDialog(message = "Classic and V2 share your key and marks. Your active V2 quest stays separate in this browser tab.") {
     const dialog = document.getElementById("key-dialog");
-    document.getElementById("key-button").onclick = () => {
-      document.getElementById("api-key").value = localStorage.getItem("api_key") || "";
-      dialog.showModal();
+    const input = document.getElementById("api-key");
+    input.value = localStorage.getItem("api_key") || "";
+    document.getElementById("key-help").textContent = message;
+    this.dodge.remaining = 0;
+    this.guard.release();
+    if (this.player) {
+      const keys = this.player.GetComponent("BasicCharacterControllerInput")._keys;
+      Object.keys(keys).forEach(key => { keys[key] = false; });
+    }
+    if (!dialog.open) dialog.showModal();
+    input.focus();
+  }
+
+  async syncProgress() {
+    const key = localStorage.getItem("api_key"), reset = localStorage.getItem(MARKS_RESET_KEY);
+    const changed = key !== this.progressKey || reset !== this.progressReset;
+    this.progressKey = key; this.progressReset = reset; this.progressChanging = true;
+    this.guard.release();
+    if (!await this.progress.selectAccount(key, reset)) return;
+    this.progressChanging = false;
+    this.updateAdventure();
+    if (changed && this.map.id === "village" && this.boss?.GetComponent("NPCController")._stateMachine._currentState &&
+        !this.boss.GetComponent("HealthComponent").IsAlive()) this.respawnEnemy(this.boss, BOSS);
+  }
+
+  updateAdventure() {
+    const data = this.progress.data;
+    this.world?.setAdventure(data);
+    this.player?.GetComponent("EquipWeapon").applyFinish();
+    this.player?.GetComponent("EquipShield").applyFinish();
+    document.getElementById("village-progress").textContent =
+      `Village: ${Math.min(data.passed.length, BUILDINGS.length)} / ${BUILDINGS.length} buildings restored`;
+  }
+
+  selectWeapon(name, force = false) {
+    if (!this.player || !Object.hasOwn(WEAPONS, name)) return false;
+    const state = this.player.GetComponent("BasicCharacterController")._stateMachine._currentState?.Name;
+    if (!force && (state === "attack" || this.dodge.active)) {
+      this.status("Finish your swing or dodge before changing weapons."); return false;
+    }
+    if (this.weapon !== name) this.sound.play("equip");
+    this.weapon = name;
+    this.player.Broadcast({ topic: "inventory.equip", value: name === "Unarmed" ? null : name });
+    document.querySelectorAll("[data-weapon]").forEach(button =>
+      button.setAttribute("aria-pressed", String(button.dataset.weapon === name)));
+    return true;
+  }
+
+  selectShield(name) {
+    if (!this.player || (name !== "None" && !Object.hasOwn(SHIELDS, name))) return false;
+    this.guard.release();
+    this.player.Broadcast({ topic: "inventory.shield", value: name === "None" ? null : name });
+    document.querySelectorAll("[data-shield]").forEach(button =>
+      button.setAttribute("aria-pressed", String(button.dataset.shield === name)));
+    this.sound.play("equip");
+    return true;
+  }
+
+  scrollEquipment(event) {
+    if (!event.deltaY || event.target.closest(".v2-ui, dialog") || document.querySelector("dialog[open]") ||
+        !this.ready || this.traveling || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) return;
+    event.preventDefault();
+    if (event.shiftKey) {
+      this.cameraDistance = THREE.MathUtils.clamp(this.cameraDistance + event.deltaY * 0.02, 18, 46);
+      return;
+    }
+    const now = performance.now();
+    if (now - (this.lastWeaponScroll ?? -Infinity) < 160) return;
+    if (this.selectWeapon(nextWeapon(Object.keys(WEAPONS), this.weapon, event.deltaY))) this.lastWeaponScroll = now;
+  }
+
+  startBlock() {
+    if (!this.ready || this.traveling || this.progressChanging || this.dodge.active ||
+        !this.player.GetComponent("HealthComponent").IsAlive()) return false;
+    if (!this.guard.equipped) { this.status("Choose a shield and let it load before blocking."); return false; }
+    if (this.guard.broken > 0) return false;
+    const controller = this.player.GetComponent("BasicCharacterController");
+    if (controller._stateMachine._currentState?.Name === "attack") return false;
+    this.guard.held = true;
+    controller._velocity.multiplyScalar(0.4);
+    this.player.GetComponent("BasicCharacterControllerInput")._keys.space = false;
+    return true;
+  }
+
+  tryDodge() {
+    if (!this.ready || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) return false;
+    const controller = this.player.GetComponent("BasicCharacterController");
+    if (controller._stateMachine._currentState?.Name === "attack") return false;
+    const keys = this.player.GetComponent("BasicCharacterControllerInput")._keys;
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.player._rotation);
+    const direction = keys.left ? { x: -forward.z, z: forward.x } :
+      keys.right ? { x: forward.z, z: -forward.x } :
+        { x: forward.x * (keys.forward ? 1 : -1), z: forward.z * (keys.forward ? 1 : -1) };
+    if (!this.dodge.start(direction)) return false;
+    this.guard.release();
+    controller._velocity.set(0, 0, 0);
+    controller._stateMachine.SetState("idle");
+    this.sound.play("dodge");
+    return true;
+  }
+
+  nearbyChest() {
+    if (this.map.id !== "village") return null;
+    return CHESTS.filter(chest => !this.progress.data.chests.includes(chest.id) &&
+      Math.hypot(chest.x - this.player._position.x, chest.z - this.player._position.z) < 7)
+      .sort((a, b) => Math.hypot(a.x - this.player._position.x, a.z - this.player._position.z) -
+        Math.hypot(b.x - this.player._position.x, b.z - this.player._position.z))[0];
+  }
+
+  openNearbyChest() {
+    if (!this.ready || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) return false;
+    const chest = this.nearbyChest();
+    if (!chest) { this.status("Find a glowing cache and press F nearby. Look for the smuggler's trail west of the forest watcher."); return false; }
+    const emerald = this.progress.unlocked("verdant");
+    if (!this.progress.openChest(chest.id)) return false;
+    if (!emerald && this.progress.data.finish === "plain") this.progress.selectFinish("verdant");
+    this.updateAdventure();
+    this.sound.play("chest");
+    this.status(`${chest.name} opened! Forest emerald weapon finish unlocked. Exploration rewards are cosmetic, not AWS marks.`);
+    return true;
+  }
+
+  rewardBoss() {
+    if (this.progressChanging || !this.progress.defeatBoss()) return;
+    this.progress.selectFinish("crystal");
+    this.updateAdventure();
+    this.sound.play("success");
+    this.status("Crystal Warden defeated! Crystal weapon finish unlocked. Ordinary monsters still check your AWS tasks.");
+  }
+
+  bindUI() {
+    const soundButton = document.getElementById("sound-button");
+    const soundVolume = document.getElementById("sound-volume");
+    const updateSound = () => {
+      soundButton.textContent = this.sound.available
+        ? this.sound.muted ? "Unmute sound" : "Mute sound" : "Sound unavailable";
+      soundButton.setAttribute("aria-pressed", String(this.sound.muted));
+      soundButton.disabled = soundVolume.disabled = !this.sound.available;
+      soundVolume.value = Math.round(this.sound.volume * 100);
     };
+    const unlockSound = () => this.sound.unlock().then(updateSound);
+    soundButton.onclick = () => {
+      this.sound.setMuted(!this.sound.muted);
+      unlockSound();
+      updateSound();
+      this.renderer?.domElement.focus();
+    };
+    soundVolume.oninput = () => {
+      this.sound.setVolume(Number(soundVolume.value) / 100);
+      unlockSound();
+    };
+    soundVolume.onpointerup = () => this.renderer?.domElement.focus();
+    document.addEventListener("pointerdown", unlockSound, { passive: true });
+    document.addEventListener("keydown", unlockSound);
+    document.addEventListener("visibilitychange", () => {
+      this.sound.setPaused(document.hidden);
+      if (document.hidden) this.guard.release();
+    });
+    updateSound();
+    const dialog = document.getElementById("key-dialog");
+    document.getElementById("key-button").onclick = () => this.showKeyDialog();
     const closeDialog = () => {
       dialog.close();
       this.renderer?.domElement.focus();
@@ -227,6 +789,7 @@ class Game {
         this.showQuest();
       }
       localStorage.setItem("api_key", key);
+      this.syncProgress();
       closeDialog();
       this.status("Key saved. Press E near a guide to receive a quest.");
     };
@@ -245,34 +808,65 @@ class Game {
       localStorage.setItem("aws-warrior:v2:quality", this.quality);
       this.applyQuality();
     };
-    const slots = document.getElementById("inventory-slots");
-    for (let i = 1; i <= 32; i++) {
-      const slot = document.createElement("div");
-      slot.id = i <= 24 ? `inventory-${i}` : `inventory-equip-${i - 24}`;
-      slot.className = "inventory-slot";
-      slot.draggable = true;
-      slot.title = i <= 24 ? `Inventory slot ${i}` : `Equipment slot ${i - 24}`;
-      slots.appendChild(slot);
+    for (const [id, kind, entries] of [
+      ["weapon-bar", "weapon", Object.entries(WEAPONS).map(([name, weapon]) => [name, weapon.label])],
+      ["shield-bar", "shield", [["None", "No shield"], ...Object.entries(SHIELDS)]],
+    ]) {
+      const bar = document.getElementById(id);
+      for (const [name, label] of entries) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset[kind] = name;
+        button.setAttribute("aria-label", label);
+        button.setAttribute("aria-pressed", String(kind === "weapon" && name === this.weapon));
+        const weapon = WEAPONS[name];
+        button.title = weapon ? `${label}: ${weapon.style}, reach ${weapon.reach || 5}` : label;
+        button.innerHTML = equipmentIcon(name);
+        const shortcut = { Sword: "1", Axe: "2", Unarmed: "0" }[name];
+        if (kind === "weapon" && shortcut) {
+          const hint = document.createElement("span");
+          hint.className = "slot-key"; hint.textContent = shortcut;
+          button.appendChild(hint);
+        }
+        button.onclick = () => {
+          if (kind === "weapon") this.selectWeapon(name); else this.selectShield(name);
+          this.renderer?.domElement.focus();
+        };
+        bar.appendChild(button);
+      }
+    }
+    const blockButton = document.getElementById("block-button");
+    blockButton.onpointerdown = event => {
+      event.preventDefault();
+      blockButton.setPointerCapture(event.pointerId);
+      this.startBlock();
+    };
+    for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      blockButton.addEventListener(event, () => this.guard.release());
     }
     window.addEventListener("blur", () => {
+      this.guard.release();
       if (this.player) Object.keys(this.player.GetComponent("BasicCharacterControllerInput")._keys)
         .forEach(key => { this.player.GetComponent("BasicCharacterControllerInput")._keys[key] = false; });
     });
     window.addEventListener("storage", event => {
       if (event.key === MARKS_RESET_KEY) {
+        this.syncProgress();
         this.showQuest();
         this.status("Your marks were reset. Press E near a guide to start again.");
+      } else if (event.key === "api_key") {
+        sessionStorage.removeItem(QUEST_KEY);
+        document.getElementById("task-dialog").close();
+        this.syncProgress();
+        this.showQuest();
       }
     });
-    window.addEventListener("wheel", event => {
-      if (!event.target.closest(".v2-ui")) {
-        this.cameraDistance = THREE.MathUtils.clamp(this.cameraDistance + event.deltaY * 0.02, 18, 46);
-      }
-    }, { passive: true });
+    window.addEventListener("wheel", event => this.scrollEquipment(event), { passive: false });
     this.showQuest();
   }
 
   async start() {
+    await this.syncProgress();
     const assets = new Assets();
     THREE.Cache.enabled = true;
     THREE.DefaultLoadingManager.onProgress = (_, loaded, total) => {
@@ -320,13 +914,18 @@ class Game {
     window.addEventListener("resize", () => this.resize());
     this.resize();
     await assets.preload();
-    this.world = new World(this.scene, await assets.templates());
+    this.models = await assets.templates();
+    this.shared = sharedResources(this.models);
+    this.worldRoot = new THREE.Group();
+    this.scene.add(this.worldRoot);
+    this.world = new World(this.worldRoot, this.models, this.map);
     this.cameraBoxes = BUILDINGS.map(b => new THREE.Box3(
       new THREE.Vector3(b.x - 8.5, 0, b.z - 8.5),
       new THREE.Vector3(b.x + 8.5, 16, b.z + 8.5)));
     this.spawnPlayer();
     this.spawnGuides();
     this.spawnEnemies();
+    this.updateAdventure();
     this.loadTimeout = setTimeout(() => {
       if (!this.ready) this.fail(new Error("Character loading took too long. Check your connection and try again."));
     }, 60000);
@@ -362,37 +961,40 @@ class Game {
   }
 
   stats(updateUI = false) {
-    return { health: updateUI ? 100 : 50, maxHealth: updateUI ? 100 : 50,
-      strength: updateUI ? 50 : 2, wisdomness: 5, benchpress: 20, curl: 10,
+    return { health: updateUI ? 100 : 80, maxHealth: updateUI ? 100 : 80,
+      strength: updateUI ? 50 : 6, wisdomness: 5, benchpress: 20, curl: 10,
       experience: 0, level: 1, updateUI, game: this };
   }
 
   spawnPlayer() {
     const params = { camera: this.camera, scene: this.scene, world: this.world, game: this };
     const spawner = new entity.Entity();
-    spawner.AddComponent(new level_up_component.LevelUpComponentSpawner(params));
+    spawner.AddComponent(new level_up_component.LevelUpComponentSpawner({ ...params, scene: this.worldRoot }));
     this.manager.Add(spawner, "level-up-spawner");
-    for (const [name, icon] of [["Sword", "pointy-sword-64.png"], ["Axe", "war-axe-64.png"]]) {
+    for (const [name, weapon] of [...Object.entries(WEAPONS), ...Object.keys(SHIELDS).map(name => [name, { damage: 0 }])]) {
       const item = new entity.Entity();
       item.AddComponent(new inventory_controller.InventoryItem({
-        type: "weapon", damage: 3, renderParams: { name, scale: 0.25, icon },
+        type: "weapon", damage: weapon.damage, renderParams: { name, scale: 0.25 },
       }));
       this.manager.Add(item, name);
     }
     const player = new entity.Entity();
     player.AddComponent(new BasicCharacterControllerInput(params));
     player.AddComponent(new BasicCharacterController(params));
-    player.AddComponent(new EquipWeapon({ anchor: "RightHandIndex1" }));
-    player.AddComponent(new inventory_controller.InventoryController(params));
+    player.AddComponent(new EquipWeapon({ anchor: "RightHandIndex1", game: this }));
+    player.AddComponent(new EquipShield({ anchor: "LeftHand", game: this, shield: true }));
+    player.AddComponent(new InventoryController());
     player.AddComponent(new HealthComponent(this.stats(true)));
     player.AddComponent(new SpatialGridController({ grid: this.grid }));
     player.AddComponent(new attack_controller.AttackController({ timing: 0.7 }));
+    player.AddComponent(new SoundComponent(this.sound, () => this.weapon));
     player.SetPosition(new THREE.Vector3(PLAYER_SPAWN[0], 0, PLAYER_SPAWN[1]));
     player.SetQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
     this.manager.Add(player, "player");
     this.player = player;
-    for (const name of ["Sword", "Axe"]) player.Broadcast({ topic: "inventory.add", value: name });
+    for (const name of [...Object.keys(WEAPONS), ...Object.keys(SHIELDS)]) player.Broadcast({ topic: "inventory.add", value: name });
     player.Broadcast({ topic: "inventory.equip", value: "Sword" });
+    this.selectShield("Shield_Round");
   }
 
   spawnGuides() {
@@ -403,6 +1005,7 @@ class Game {
       npc.AddComponent(new QuestComponent(this));
       npc.SetPosition(new THREE.Vector3(guide.x, 0, guide.z));
       this.manager.Add(npc, guide.name);
+      this.guideActors.push(npc);
       const marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0),
         new THREE.MeshBasicMaterial({ color: 0xffd381 }));
       marker.position.set(guide.x, 9, guide.z);
@@ -420,26 +1023,32 @@ class Game {
   }
 
   spawnEnemies() {
-    const names = ["Ghost", "GreenDemon", "Cyclops", "Skull"];
-    ENEMY_SPAWNS.forEach(([x, z], index) => {
-      const name = names[index % names.length];
+    [...ENEMY_SPAWNS, [BOSS.x, BOSS.z]].forEach(([x, z], index) => {
+      const boss = index === ENEMY_SPAWNS.length;
+      const name = boss ? "Cyclops" : monsterFor("village", index);
       const monster = new entity.Entity();
       monster.AddComponent(new NPCController({
-        camera: this.camera, scene: this.scene, game: this, world: this.world,
+        camera: this.camera, scene: this.scene, game: this, world: this.world, boss,
         resourceName: `${name}.fbx`, resourceTexture: `${name}_Texture.png`,
       }));
-      monster.AddComponent(new HealthComponent(this.stats()));
+      monster.AddComponent(new HealthComponent(boss ? { ...this.stats(), health: 480, maxHealth: 480, strength: 16 } : this.stats()));
       monster.AddComponent(new SpatialGridController({ grid: this.grid }));
-      monster.AddComponent(new attack_controller.AttackController({ timing: 0.35 }));
+      monster.AddComponent(new EnemyAttackController(this, boss));
+      this.scene.add(monster.GetComponent("EnemyAttackController").ring);
       monster.SetPosition(new THREE.Vector3(x, 0, z));
       this.manager.Add(monster);
+      this.enemies.push(monster);
+      if (boss) this.boss = monster;
     });
   }
 
-  respawnEnemy(monster) {
-    const position = findMonsterSpawn({
+  respawnEnemy(monster, destination = null) {
+    const position = destination || findMonsterSpawn({
       canWalk: (x, z) => this.world.canWalk(x, z),
       player: this.player._position,
+      extent: this.map.id === "village" ? 145 : this.map.limit - 20,
+      isSafe: (x, z) => this.map.id === "village" ? Math.abs(x) < 62 && Math.abs(z) < 50 :
+        isSafePosition(this.map, x, z),
       occupied: this.manager.Filter(actor => actor !== monster &&
         (actor.GetComponent("QuestComponent") || actor.GetComponent("HealthComponent")?.IsAlive()))
         .map(actor => actor._position),
@@ -447,15 +1056,167 @@ class Game {
     if (!position) return false;
     const controller = monster.GetComponent("NPCController");
     const health = monster.GetComponent("HealthComponent");
+    health._maxHealth = health._params.maxHealth = health._params.health = controller.profile.health;
+    health._params.strength = controller.profile.damage;
     health._health = health._maxHealth;
     controller._velocity.set(0, 0, 0);
     Object.keys(controller._input._keys).forEach(key => { controller._input._keys[key] = false; });
     controller._mixer.stopAllAction();
+    monster.GetComponent("EnemyAttackController").reset();
     controller._stateMachine.SetState("idle");
+    controller._animations.idle.action.reset().play();
     controller._position.set(position.x, 0, position.z);
     monster.SetPosition(controller._position);
     controller._target.rotation.set(0, Math.random() * Math.PI * 2, 0);
     monster.SetQuaternion(controller._target.quaternion);
+    return true;
+  }
+
+  mapActorsReady() {
+    return this.enemies.every(actor => actor.GetComponent("NPCController")._stateMachine._currentState) &&
+      this.guideActors.every(actor => actor.GetComponent("GuideController").actions);
+  }
+
+  travelStatus(message) {
+    this.status(message);
+    document.getElementById("travel-status").textContent = message;
+  }
+
+  useGate() {
+    if (!this.player) { this.travelStatus("The world is still loading. Try travelling again in a moment."); return false; }
+    const gate = nearbyGate(this.map, this.player._position);
+    if (!gate) { this.travelStatus("Move closer to the glowing ring, then press T to travel."); return false; }
+    return this.switchMap(gate.to);
+  }
+
+  switchMap(id, returning = false) {
+    const map = MAPS[id];
+    if (!map) { this.travelStatus("This gate has no destination."); return false; }
+    if (!this.ready || this.traveling) { this.travelStatus("The world is still loading. Try travelling again in a moment."); return false; }
+    if (!this.mapActorsReady()) { this.travelStatus("Characters are still loading. Try the gate again in a moment."); return false; }
+    if (this.api.grading || this.talking || this.progressChanging) {
+      this.travelStatus("Finish talking or checking your AWS task before travelling.");
+      return false;
+    }
+    if (!returning && !this.player.GetComponent("HealthComponent").IsAlive()) {
+      this.travelStatus("You fell in battle. Click Return to village to recover before travelling.");
+      return false;
+    }
+    const controller = this.player.GetComponent("BasicCharacterController");
+    if (!returning && (controller._stateMachine._currentState.Name === "attack" || this.dodge.active)) {
+      this.travelStatus("Finish your attack or dodge before travelling.");
+      return false;
+    }
+    const kinds = map.enemies.map((_, index) => monsterFor(id, index));
+    if (!this.monsterModels.ready(kinds)) {
+      this.traveling = true;
+      this.travelStatus(`Loading ${map.name} monsters for the first visit...`);
+      this.monsterModels.prepare(kinds).then(() => {
+        this.traveling = false;
+        this.switchMap(id, returning);
+      }).catch(error => {
+        this.traveling = false;
+        this.travelStatus("Monsters could not load. You are still on this map; try the gate again.");
+        console.error(error);
+      });
+      return false;
+    }
+    this.traveling = true;
+    const root = new THREE.Group();
+    let world;
+    try {
+      world = new World(root, this.models, map);
+    } catch (error) {
+      disposeMap(root, this.shared);
+      this.traveling = false;
+      this.travelStatus("This map could not open. You can stay here and try the gate again.");
+      console.error(error);
+      return false;
+    }
+    const previous = this.worldRoot;
+    this.map = map;
+    this.worldRoot = root;
+    this.world = world;
+    this.scene.add(root);
+    this.scene.background.setHex(map.sky);
+    this.scene.fog.color.setHex(map.sky);
+    this.scene.fog.near = map.fogNear;
+    this.scene.fog.far = map.fogFar;
+    this.sun.intensity = map.id === "dungeon" ? 0.6 : 1.1;
+    this.grid = new spatial_hash_grid.SpatialHashGrid(
+      [[-map.limit - 20, -map.limit - 20], [map.limit + 20, map.limit + 20]], [80, 80]);
+    this.respawns.pending.clear();
+    this.spikes.clear();
+    this.feedback.update(10, () => ({ x: 0, y: 0, z: 0 }));
+    this.speakingGuide = null;
+    const register = (actor, active, position) => {
+      const spatial = actor.GetComponent("SpatialGridController");
+      spatial._grid = this.grid;
+      spatial._client = null;
+      actor.SetActive(active);
+      if (!active) return;
+      actor.SetPosition(new THREE.Vector3(position[0], 0, position[1]));
+      spatial._client = this.grid.NewClient(position, [1, 1]);
+      spatial._client.entity = actor;
+    };
+    register(this.player, true, map.spawn);
+    controller._params.world = world;
+    controller._target.position.copy(this.player._position);
+    controller._target.rotation.set(0, Math.PI, 0);
+    controller._velocity.set(0, 0, 0);
+    controller._stateMachine.SetState("idle");
+    this.player.SetQuaternion(controller._target.quaternion);
+    const keys = this.player.GetComponent("BasicCharacterControllerInput")._keys;
+    Object.keys(keys).forEach(key => { keys[key] = false; });
+    this.dodge.remaining = 0;
+    this.guard.release();
+    this.guideActors.forEach((actor, index) => {
+      const guide = map.guides[index], active = Boolean(guide);
+      register(actor, active, guide ? [guide.x, guide.z] : null);
+      const patrol = actor.GetComponent("GuideController");
+      patrol.model.visible = active;
+      this.markers[index].visible = this.markers[index].userData.ring.visible = active;
+      if (guide) {
+        patrol.patrol.home = { x: guide.x, z: guide.z };
+        patrol.patrol.position = { x: guide.x, z: guide.z };
+        patrol.patrol.target = null;
+        patrol.patrol.wait = 1;
+        patrol.syncModel();
+      }
+    });
+    this.enemies.forEach((actor, index) => {
+      const position = index === ENEMY_SPAWNS.length && id === "village" ? [BOSS.x, BOSS.z] : map.enemies[index];
+      const active = Boolean(position);
+      const npc = actor.GetComponent("NPCController");
+      npc._params.world = world;
+      if (active) npc.setMonster(index === ENEMY_SPAWNS.length ? "Cyclops" : monsterFor(id, index));
+      npc._target.visible = active;
+      actor.GetComponent("EnemyAttackController").reset();
+      register(actor, active, position);
+      if (active) this.respawnEnemy(actor, { x: position[0], z: position[1] });
+    });
+    for (const effect of Object.values(this.manager._entitiesMap)) {
+      if (!effect.GetComponent("LevelUpComponent")) continue;
+      effect.SetActive(false);
+      delete this.manager._entitiesMap[effect.Name];
+    }
+    const effects = this.manager.Get("level-up-spawner").GetComponent("LevelUpComponentSpawner");
+    effects._params.scene = root;
+    effects._params.world = world;
+    this.cameraBoxes = map.obstacles.map(b => new THREE.Box3(
+      new THREE.Vector3(b.x - b.width / 2, 0, b.z - b.depth / 2),
+      new THREE.Vector3(b.x + b.width / 2, b.height, b.z + b.depth / 2)));
+    disposeMap(previous, this.shared);
+    this.renderer.renderLists.dispose();
+    this.world.detail.visible = this.quality !== "low";
+    this.updateAdventure();
+    this.camera.position.copy(this.player._position).add(new THREE.Vector3(0, 23, 35));
+    document.getElementById("map").setAttribute("aria-label", "Map of " + map.name);
+    document.getElementById("map-label").textContent = map.name + " / N";
+    this.traveling = false;
+    this.sound.play("portal");
+    this.travelStatus(`Entered ${map.name}. Your AWS task is unchanged. T uses the glowing return gate.`);
+    this.renderer.domElement.focus();
     return true;
   }
 
@@ -479,12 +1240,14 @@ class Game {
   }
 
   showInstructions() {
+    this.guard.release();
     const quest = this.api.quest;
     if (!quest) return;
     this.showReader(quest.name.split(".").pop().replace(/_/g, " "), quest.instruction, "task");
   }
 
   showConversation(message = this.conversation) {
+    this.guard.release();
     if (!message) return;
     this.conversation = message;
     document.getElementById("conversation-button").hidden = false;
@@ -492,6 +1255,7 @@ class Game {
   }
 
   showReader(title, text, kind) {
+    this.dodge.remaining = 0;
     const dialog = document.getElementById("task-dialog");
     const content = document.getElementById("task-instructions");
     if (content.textContent !== text || dialog.dataset.kind !== kind) {
@@ -518,17 +1282,24 @@ class Game {
   }
 
   talkToGuide() {
-    if (this.api.quest) {
+    const quest = this.api.quest;
+    const guide = this.nearbyGuide();
+    if (!quest && !guide) {
+      this.status("Move closer to a character with a golden marker, then press E.");
+      return;
+    }
+    if (!localStorage.getItem("api_key")?.trim()) {
+      const message = "Set your API key first to talk to a guide and receive AWS tasks. You can still explore and fight without a key.";
+      this.status(message);
+      this.showKeyDialog(message);
+      return;
+    }
+    if (quest) {
       this.showInstructions();
       return;
     }
-    const guide = this.nearbyGuide();
-    if (guide) {
-      this.renderer.domElement.focus();
-      guide.Broadcast({ topic: "input.picked" });
-    } else {
-      this.status("Move closer to a character with a golden marker, then press E.");
-    }
+    this.renderer.domElement.focus();
+    guide.Broadcast({ topic: "input.picked" });
   }
 
   async talk(guide = null) {
@@ -543,6 +1314,7 @@ class Game {
         : response.task ? "Task received. Read its instructions, then defeat a monster to check your work."
           : "Your guide has replied. You can reopen the conversation here.");
       if (response.task) {
+        this.sound.play("quest");
         this.showInstructions();
       } else if (response.message && !response.completed) {
         this.showConversation(response.message);
@@ -555,14 +1327,26 @@ class Game {
   }
 
   async grade() {
-    if (!this.api.quest) {
+    const quest = this.api.quest;
+    if (!quest) {
       this.status("Press E near a guide to get an AWS task, complete its instructions, then defeat a monster to grade it.");
       return;
     }
     if (this.api.grading) return;
+    const account = localStorage.getItem("api_key"), reset = localStorage.getItem(MARKS_RESET_KEY);
+    const version = this.progress.version;
     this.status("Grading your AWS quest. You can keep exploring...");
     try {
       const result = await this.api.gradeQuest();
+      if (!result || account !== localStorage.getItem("api_key") || reset !== localStorage.getItem(MARKS_RESET_KEY) ||
+          version !== this.progress.version || this.progressChanging) return;
+      if (result.isSuccess) {
+        const emerald = this.progress.unlocked("verdant");
+        this.progress.pass(quest.filter);
+        if (!emerald && this.progress.data.finish === "plain") this.progress.selectFinish("verdant");
+        this.updateAdventure();
+      }
+      this.sound.play(result.isSuccess ? "success" : "failure");
       this.showQuest();
       this.status(result.isSuccess
         ? "Quest passed! Your marks are saved. Press E near a guide for the next challenge."
@@ -582,6 +1366,11 @@ class Game {
 
   returnHome() {
     if (!this.player || !this.ready) return;
+    const injured = this.player.GetComponent("HealthComponent")._health <
+      this.player.GetComponent("HealthComponent")._maxHealth;
+    if (this.map.id !== "village" && !this.switchMap("village", true)) return;
+    this.dodge.remaining = 0;
+    this.guard.release();
     const controller = this.player.GetComponent("BasicCharacterController");
     controller._target.position.set(PLAYER_SPAWN[0], 0, PLAYER_SPAWN[1]);
     controller._velocity.set(0, 0, 0);
@@ -591,6 +1380,7 @@ class Game {
     this.player.SetQuaternion(controller._target.quaternion);
     const health = this.player.GetComponent("HealthComponent");
     health._health = health._maxHealth;
+    if (injured) this.sound.play("revive");
     health._UpdateUI();
     document.getElementById("health-value").textContent = "100 / 100";
     this.status("Welcome back to Cloudhaven. Your active quest is still saved.");
@@ -617,21 +1407,34 @@ class Game {
 
   drawMap() {
     const ctx = document.getElementById("map").getContext("2d");
-    ctx.fillStyle = "#294940";
+    ctx.fillStyle = this.map.id === "village" ? "#294940" : "#" + this.map.ground.toString(16).padStart(6, "0");
     ctx.fillRect(0, 0, 200, 200);
-    const point = (x, z) => [100 + x * 0.55, 100 + z * 0.55];
-    ctx.strokeStyle = "#a19064";
-    ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(100, 10); ctx.lineTo(100, 190);
-    ctx.moveTo(60, 100); ctx.lineTo(140, 100); ctx.stroke();
-    ctx.fillStyle = "#4c8994";
-    ctx.beginPath(); ctx.ellipse(...point(LAKE.x, LAKE.z), LAKE.rx * 0.55, LAKE.rz * 0.55, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#c9ac79";
-    BUILDINGS.forEach(b => ctx.fillRect(...point(b.x - 8, b.z - 8), 9, 9));
-    ctx.fillStyle = "#83d6cf";
-    ctx.fillRect(...point(83, -96), 13, 13);
+    const scale = 91 / this.map.limit;
+    const point = (x, z) => [100 + x * scale, 100 + z * scale];
+    if (this.map.id === "village") {
+      ctx.strokeStyle = "#a19064";
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(100, 10); ctx.lineTo(100, 190);
+      ctx.moveTo(60, 100); ctx.lineTo(140, 100); ctx.stroke();
+      ctx.fillStyle = "#4c8994";
+      ctx.beginPath(); ctx.ellipse(...point(LAKE.x, LAKE.z), LAKE.rx * scale, LAKE.rz * scale, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#c9ac79";
+      BUILDINGS.forEach(b => ctx.fillRect(...point(b.x - 8, b.z - 8), 17 * scale, 17 * scale));
+      ctx.fillStyle = "#83d6cf";
+      ctx.fillRect(...point(83, -96), 13, 13);
+    } else {
+      ctx.fillStyle = this.map.id === "dungeon" ? "#9aa6bd" : "#786a59";
+      this.map.obstacles.forEach(b => ctx.fillRect(...point(b.x - b.width / 2, b.z - b.depth / 2),
+        b.width * scale, b.depth * scale));
+    }
+    for (const gate of this.map.gates) {
+      ctx.strokeStyle = "#" + gate.color.toString(16).padStart(6, "0");
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(...point(gate.x, gate.z), 4, 0, Math.PI * 2); ctx.stroke();
+    }
     ctx.fillStyle = "#ffda88";
     this.markers.forEach(marker => {
+      if (!marker.visible) return;
       const guide = marker.userData.guide._position;
       ctx.beginPath(); ctx.arc(...point(guide.x, guide.z), 2.5, 0, Math.PI * 2); ctx.fill();
     });
@@ -643,8 +1446,14 @@ class Game {
     if (this.failed) return;
     requestAnimationFrame(() => this.frame());
     const dt = Math.min(this.clock.getDelta(), 1 / 30);
+    this.guard.update(dt);
     const time = this.clock.elapsedTime;
     const controller = this.player.GetComponent("BasicCharacterController");
+    if (localStorage.getItem("api_key") !== this.progressKey || localStorage.getItem(MARKS_RESET_KEY) !== this.progressReset) {
+      sessionStorage.removeItem(QUEST_KEY);
+      this.syncProgress();
+      this.showQuest();
+    }
     if (!this.ready && controller._stateMachine._currentState) {
       this.ready = true;
       controller._target.position.copy(this.player._position);
@@ -653,8 +1462,27 @@ class Game {
       document.getElementById("loading").hidden = true;
       document.body.dataset.ready = "true";
     }
+    const beforeX = this.player._position.x, beforeZ = this.player._position.z;
     this.manager.Update(dt);
+    const dodge = this.dodge.update(dt, this.player._position, (x, z, from) => this.world.canWalk(x, z) &&
+      findMovementBlockers(this.grid, this.player, { x, z }, from).length === 0);
+    if (dodge.x !== this.player._position.x || dodge.z !== this.player._position.z) {
+      controller._target.position.set(dodge.x, 0, dodge.z);
+      this.player.SetPosition(controller._target.position);
+    }
+    this.sound.step(Math.hypot(this.player._position.x - beforeX, this.player._position.z - beforeZ),
+      controller._stateMachine._currentState?.Name === "run");
     this.respawns.update(dt, monster => this.respawnEnemy(monster));
+    if (this.traveling || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive() ||
+        isSafePosition(this.map, this.player._position.x, this.player._position.z)) this.spikes.clear();
+    else this.spikes.update(dt, {
+      player: this.player._position,
+      canWalk: (x, z) => this.world.canWalk(x, z),
+      isSafe: (x, z) => isSafePosition(this.map, x, z),
+      hit: shot => this.player.Broadcast({ topic: "health.damage", value: shot.damage, attacker: shot.attacker,
+        direction: { x: -shot.vx, z: -shot.vz } }),
+    });
+    this.spikes.active.forEach(shot => shot.mesh.position.set(shot.x, 3, shot.z));
     this.world.update(time, this.player._position);
     if (this.quality === "low") this.world.detail.visible = false;
     this.markers.forEach((marker, index) => {
@@ -668,7 +1496,34 @@ class Game {
     const position = this.player._position;
     this.sun.position.set(position.x - 55, 95, position.z + 40);
     this.sun.target.position.copy(position);
-    document.getElementById("region").textContent = regionAt(position.x, position.z);
+    document.getElementById("region").textContent = this.map.id === "village" ? regionAt(position.x, position.z) : this.map.name;
+    const weapon = WEAPONS[this.weapon];
+    document.getElementById("weapon-summary").textContent =
+      `${weapon.label}: ${Math.round(this.player.GetComponent("HealthComponent")._params.strength * weapon.damage)} damage / ${weapon.style} / reach ${weapon.reach || 5}`;
+    document.getElementById("block-button").disabled = !this.guard.equipped;
+    document.getElementById("block-button").setAttribute("aria-pressed", String(this.guard.active));
+    document.getElementById("shield-state").textContent = this.guard.broken > 0
+      ? `Guard broken: ${this.guard.broken.toFixed(1)}s. Release R, then block again.`
+      : this.guard.active ? "Blocking front: slower movement; no attacks. Yeti blows break guard."
+        : this.guard.equipped ? "Hold R or Block: defend the front. Your back is exposed." : "Choose a shield to block melee attacks and spikes.";
+    document.getElementById("dodge-state").textContent = this.dodge.active ? "Dodging: invulnerable" :
+      this.dodge.cooldown > 0 ? `Q: Dodge in ${this.dodge.cooldown.toFixed(1)}s` : "Q: Dodge ready";
+    const chest = this.nearbyChest();
+    const boss = this.boss.GetComponent("HealthComponent"), gate = nearbyGate(this.map, position);
+    const nearbyEnemy = this.enemies.filter(actor => actor.GetComponent("NPCController")._target?.visible &&
+      actor.GetComponent("HealthComponent").IsAlive() && actor._position.distanceTo(position) < 30)
+      .sort((a, b) => a._position.distanceToSquared(position) - b._position.distanceToSquared(position))[0];
+    const enemyHealth = nearbyEnemy?.GetComponent("HealthComponent");
+    document.getElementById("explore-hint").textContent = gate ? `T: Enter ${MAPS[gate.to].name}` :
+      nearbyEnemy ? `${nearbyEnemy.GetComponent("NPCController").profile.label}: ${Math.ceil(enemyHealth._health)} / ${enemyHealth._maxHealth} HP` :
+      this.map.id !== "village" ? "Watch for heavy blows, fast bats and aimed cactus spikes. Q dodges." : chest ? `F: Open ${chest.name}` :
+      this.boss._position.distanceTo(position) < 35 && boss.IsAlive()
+        ? `Optional: ${BOSS.name} ${Math.ceil(boss._health)} / ${boss._maxHealth} HP`
+        : `Caches: ${this.progress.data.chests.length} / ${CHESTS.length} | Warden: ${this.progress.data.boss ? "defeated" : "optional"}`;
+    this.feedback.update(dt, point => {
+      const projected = point.clone().project(this.camera);
+      return { x: (projected.x + 1) * innerWidth / 2, y: (1 - projected.y) * innerHeight / 2, z: projected.z };
+    });
     this.drawMap();
     this.renderer.render(this.scene, this.camera);
   }
