@@ -7,9 +7,11 @@ const MOBILE_KEY = "aws-warrior:voice:mobile";
 const LANGUAGE_KEY = "aws-warrior:voice:language";
 const MAX_ATTEMPTS = 6;
 const SERVICE_SET = new Set(Object.keys(AWS_SERVICES));
+const isQuestionAnswer = session => session?.mode === "graded_question_answer";
+export const isAnswerTranscript = value => typeof value === "string" && /[\p{L}\p{N}]/u.test(value);
 
 export function voiceLanguageOptions(session) {
-  const texts = session?.readingTexts ?? {};
+  const texts = (isQuestionAnswer(session) ? session.questionTexts : session?.readingTexts) ?? {};
   const options = Array.isArray(session?.languages) ? session.languages :
     Object.keys(texts).map(id => {
       let label = id;
@@ -99,13 +101,19 @@ export function voiceResultPassed(data) {
 
 function resultBreakdownText(breakdown) {
   if (!breakdown || typeof breakdown !== "object") return "";
-  const parts = ["coverage", "content"]
+  const parts = ["coverage", "content", "understanding"]
     .filter(key => breakdown[key] !== undefined && breakdown[key] !== null)
-    .map(key => `${key === "coverage" ? "Coverage" : "Content"}: ${breakdown[key]}`);
+    .map(key => `${key[0].toUpperCase() + key.slice(1)}: ${breakdown[key]}`);
   return parts.length ? ` ${parts.join(" · ")}.` : "";
 }
 
-export function voiceStatusMessage(status) {
+export function voiceStatusMessage(status, questionAnswer = false) {
+  if (questionAnswer && ["pairing", "ready", "evaluating", "retry"].includes(status)) return ({
+    pairing: "Scan the QR code to answer this question on your phone.",
+    ready: "The question is ready. Answer in your own words.",
+    evaluating: "Your answer is being graded. The result will appear automatically.",
+    retry: "Try answering the same question again in your own words.",
+  })[status];
   return ({
     pairing: "Scan the QR code with your phone to pair this read-aloud practice.",
     claimed: "Phone connected. Open the passage on your phone and read it aloud.",
@@ -177,8 +185,9 @@ function drawPairing(panel, state) {
     statusParagraph(panel, "This QR is no longer available. Start another practice to get a new QR code.");
   }
   statusParagraph(panel, state.status === "ready" && state.result?.passed === false
-    ? "Try again in the original phone tab: tap Refresh, then read the displayed passage aloud. If that tab is unavailable, start a new QR session."
-    : voiceStatusMessage(state.status), "voice-session-status");
+    ? isQuestionAnswer(state) ? "Retry the question in the original phone tab. Refresh, then answer in your own words."
+      : "Try again in the original phone tab: tap Refresh, then read the displayed passage aloud. If that tab is unavailable, start a new QR session."
+    : voiceStatusMessage(state.status, isQuestionAnswer(state)), "voice-session-status");
 }
 
 function gradeResultText(data) {
@@ -197,6 +206,12 @@ export function bindVoicePractice(game) {
   const transfer = document.getElementById("voice-transfer");
   const pcContent = document.getElementById("pc-practice-content");
   const result = document.getElementById("pc-voice-result");
+  const taskType = document.getElementById("voice-task-type");
+  const questionOption = document.getElementById("voice-question-option");
+  const availability = document.getElementById("voice-question-availability");
+  let selectedType = "read_aloud";
+  let questionActivities = [];
+  let availabilityEpoch = 0;
   let selectedService = null;
   let state = null;
   let owner = null;
@@ -214,6 +229,10 @@ export function bindVoicePractice(game) {
     result.textContent = "";
     state = null;
     owner = null;
+    questionActivities = [];
+    availabilityEpoch++;
+    questionOption.disabled = true;
+    availability.textContent = "";
     try { sessionStorage.removeItem(DESKTOP_KEY); } catch { /* Optional session recovery. */ }
   };
   const currentKey = () => {
@@ -234,6 +253,35 @@ export function bindVoicePractice(game) {
     transfer.disabled = starting || !state || state.status !== "ready" ||
       state.inputDevice === "phone" || speech.isBusy();
     transfer.textContent = "Use phone microphone (QR)";
+    taskType.disabled = starting || speech.isBusy() || state?.status === "evaluating";
+    taskType.value = selectedType;
+    if (!state && selectedType === "question_answer") {
+      start.textContent = "Start Q&A";
+      start.disabled ||= !questionActivities.length;
+    }
+  };
+  const loadQuestionAvailability = async () => {
+    const epoch = ++availabilityEpoch, serviceId = selectedService, current = readOwner();
+    questionActivities = [];
+    questionOption.disabled = true;
+    availability.textContent = "Checking approved questions...";
+    try {
+      if (!current.key) throw new Error("No key");
+      const data = await jsonRequest("voice/completions", { apiKey: current.key });
+      if (epoch !== availabilityEpoch || serviceId !== selectedService || current.fingerprint !== readOwner().fingerprint) return;
+      questionActivities = (data.activities ?? []).filter(activity =>
+        activity.type === "question_answer" && activity.serviceId === serviceId && activity.available === true &&
+        Array.isArray(activity.languages) && activity.languages.length);
+      questionOption.disabled = !questionActivities.length;
+      availability.textContent = questionActivities.length
+        ? `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed.`
+        : "Q&A: Questions coming soon.";
+    } catch {
+      if (epoch !== availabilityEpoch) return;
+      questionActivities = [];
+      availability.textContent = "Q&A availability could not be checked. Reopen this service to retry.";
+    }
+    updateButtons();
   };
   const render = () => {
     sessionError = null;
@@ -241,7 +289,11 @@ export function bindVoicePractice(game) {
     result.textContent = "";
     if (state) {
       document.getElementById("voice-desktop-title").textContent =
-        `Read ${state.serviceLabel || AWS_SERVICES[state.serviceId]?.label || "an AWS service"} aloud`;
+        isQuestionAnswer(state) ? `${state.serviceLabel || "AWS"} Q&A`
+          : `Read ${state.serviceLabel || AWS_SERVICES[state.serviceId]?.label || "an AWS service"} aloud`;
+      document.getElementById("voice-desktop-intro").textContent = isQuestionAnswer(state)
+        ? "Answer in your own words. Scores assess understanding, not pronunciation. First pass earns 10 MP at 60, 20 MP at 75, or 30 MP at 90; wallet cap 100 MP."
+        : "Read the passage aloud. Scores assess recognised content, not pronunciation or comprehension. First pass earns 5 MP at 60, 10 MP at 75, or 15 MP at 90; wallet cap 100 MP.";
       if (state.inputDevice === "phone" || state.status === "pairing") {
         speech.suspend();
         drawPairing(panel, state);
@@ -280,6 +332,12 @@ export function bindVoicePractice(game) {
   };
   const recordCompletion = data => {
     if (data.status !== "completed" || !voiceResultPassed(data) || !SERVICE_SET.has(data.serviceId)) return;
+    if (isQuestionAnswer(data)) {
+      const activity = questionActivities.find(activity => activity.activityId === data.activityId);
+      if (activity) activity.completed = true;
+      availability.textContent = `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed.`;
+      return;
+    }
     game.readServices?.add(data.serviceId);
     try { localStorage.setItem("aws-warrior:v2:read-services", JSON.stringify([...game.readServices])); }
     catch { /* Discovery state is cosmetic, never a source of MP. */ }
@@ -308,29 +366,43 @@ export function bindVoicePractice(game) {
   const open = serviceId => {
     if (!SERVICE_SET.has(serviceId)) return;
     selectedService = serviceId;
+    selectedType = "read_aloud";
+    questionActivities = [];
     document.getElementById("voice-desktop-title").textContent =
       `Read ${AWS_SERVICES[serviceId].label} aloud`;
     const current = readOwner();
     owner = current.fingerprint || null;
     state = current.fingerprint ? readDesktopState(sessionStorage, current.fingerprint, serviceId) : null;
+    if (isQuestionAnswer(state)) {
+      selectedType = "question_answer";
+      if (state.status === "completed") state = null;
+    }
+    if (selectedType === "question_answer" && !state) {
+      document.getElementById("voice-desktop-title").textContent = `${AWS_SERVICES[serviceId].label} Q&A`;
+      document.getElementById("voice-desktop-intro").textContent =
+        "Start another approved question. Completed questions can be practised again without another MP reward.";
+    }
     if (state) render();
     else {
       speech.suspend();
       result.textContent = "";
       panel.replaceChildren();
       statusParagraph(panel, current.key
-        ? "Opening your next voice activity. Your API key stays on this computer."
+        ? selectedType === "question_answer" ? "Choose Start Q&A when approved questions are available."
+          : "Opening your next voice activity. Your API key stays on this computer."
         : "Voice practice needs the API key saved on this computer. Set Key, then reopen this dialog.");
       updateButtons();
     }
     if (!dialog.open) dialog.showModal();
     game.readingService = true;
     (start.hidden ? check : start).focus();
-    if (!state && current.key) startSession();
+    loadQuestionAvailability();
+    if (!state && current.key && selectedType === "read_aloud") startSession();
     else if (state && current.key) checkStatus();
   };
   const startSession = async () => {
     if (starting || speech.isBusy() || ["evaluating", "completed"].includes(state?.status)) return;
+    if (selectedType === "question_answer" && !questionActivities.length) return;
     let current;
     try { current = currentKey(); }
     catch (error) { showError(error.message); return; }
@@ -344,15 +416,23 @@ export function bindVoicePractice(game) {
     statusParagraph(panel, "Preparing your next unfinished voice activity...");
     try {
       const created = await jsonRequest("voice/sessions", {
-        method: "POST", apiKey: current.key, body: { serviceId: selectedService },
+        method: "POST", apiKey: current.key, body: { serviceId: selectedService,
+          ...(selectedType === "question_answer" ? { type: selectedType,
+            language: (() => {
+              const preferred = document.getElementById("pc-voice-language").value || localStorage.getItem(LANGUAGE_KEY);
+              return questionActivities.some(activity => activity.languages.includes(preferred))
+                ? preferred : questionActivities[0].languages[0];
+            })() } : {}) },
       });
       if (epoch !== generation || current.fingerprint !== readOwner().fingerprint) return;
       if (!created || typeof created.id !== "string" || !SERVICE_SET.has(created.serviceId))
         throw new Error("The voice service returned an invalid activity.");
       state = { ...created, owner: current.fingerprint };
+      const serviceChanged = selectedService !== created.serviceId;
       selectedService = created.serviceId;
       saveDesktopState(sessionStorage, state);
       render();
+      if (serviceChanged) loadQuestionAvailability();
     } catch (error) {
       if (epoch !== generation) return;
       showError(error.message.startsWith("The API key changed") ? error.message :
@@ -371,7 +451,7 @@ export function bindVoicePractice(game) {
       if (current.fingerprint !== readOwner().fingerprint) throw new Error("The API key changed.");
       state = { ...state, ...response, id: state.id,
         owner: current.fingerprint, pairingToken: state.pairingToken };
-      if (voiceResultPassed(state) && state.serviceId && game.readServices instanceof Set) {
+      if (voiceResultPassed(state) && !isQuestionAnswer(state) && state.serviceId && game.readServices instanceof Set) {
         const wasRead = game.readServices.has(state.serviceId);
         game.readServices.add(state.serviceId);
         try { localStorage.setItem("aws-warrior:v2:read-services", JSON.stringify([...game.readServices])); }
@@ -380,6 +460,7 @@ export function bindVoicePractice(game) {
           for (const plaque of game.world?.servicePlaques || []) {
             if (plaque.userData.awsService === state.serviceId) plaque.userData.setRead(true);
           }
+          if (isQuestionAnswer(state)) { recordCompletion(state); game.refreshVoiceWallet?.(); }
           game.refreshVoiceWallet?.();
         }
         game.refreshServiceReader?.();
@@ -396,6 +477,27 @@ export function bindVoicePractice(game) {
     }
   };
   explain.onclick = () => open(selectedService);
+  taskType.addEventListener("change", () => {
+    if (starting || speech.isBusy() || state?.status === "evaluating" ||
+        !["read_aloud", "question_answer"].includes(taskType.value) ||
+        (taskType.value === "question_answer" && !questionActivities.length)) {
+      taskType.value = selectedType;
+      return;
+    }
+    selectedType = taskType.value;
+    generation++;
+    speech.suspend();
+    state = null;
+    try { sessionStorage.removeItem(DESKTOP_KEY); } catch { /* Optional session recovery. */ }
+    result.textContent = "";
+    panel.replaceChildren();
+    document.getElementById("voice-desktop-title").textContent = selectedType === "question_answer"
+      ? `${AWS_SERVICES[selectedService].label} Q&A` : `Read ${AWS_SERVICES[selectedService].label} aloud`;
+    document.getElementById("voice-desktop-intro").textContent = selectedType === "question_answer"
+      ? "Answer an approved question in your own words. Passing earns 10, 20 or 30 MP once per question."
+      : "Read a passage aloud. Passing earns 5, 10 or 15 MP once per activity.";
+    updateButtons();
+  });
   start.onclick = async () => {
     const phone = state?.inputDevice === "phone" && state.status !== "completed";
     await startSession();
@@ -422,6 +524,7 @@ export function bindVoicePractice(game) {
   check.onclick = checkStatus;
   document.getElementById("voice-desktop-close").onclick = () => dialog.close();
   dialog.addEventListener("close", () => {
+    if (dialog.open) return;
     speech.suspend();
     game.readingService = Boolean(document.getElementById("service-dialog").open);
     game.refreshServiceReader?.();
@@ -581,12 +684,14 @@ export function bindMobileVoicePractice({
     Number.isInteger(session?.maxAttempts) && session.maxAttempts > 0 ? session.maxAttempts : MAX_ATTEMPTS);
   const attemptsUsed = () => Number.isInteger(session?.attempts) ? session.attempts : 0;
   const isReadAloud = () => ["read_aloud", "graded_read_aloud"].includes(session?.mode);
+  const isSupported = () => isReadAloud() || isQuestionAnswer(session);
+  const taskName = () => isQuestionAnswer(session) ? "answer" : "reading";
   const readingText = () => {
-    const localized = session?.readingTexts?.[language];
+    const localized = (isQuestionAnswer(session) ? session.questionTexts : session?.readingTexts)?.[language];
     if (typeof localized === "string" && localized.trim()) return localized;
     return !isReadAloud() && typeof session?.question === "string" ? session.question : "";
   };
-  const canAnswer = () => isReadAloud() && session?.status === "ready" && Boolean(readingText()) &&
+  const canAnswer = () => isSupported() && session?.status === "ready" && Boolean(readingText()) &&
     attemptsUsed() < attemptLimit() && !pendingTurn;
   const isBusy = () => Boolean(recognition || holding || finishing || submitting);
   const updateControls = () => {
@@ -596,7 +701,7 @@ export function bindMobileVoicePractice({
     startSpeech.textContent = holding ? "Listening... release when finished" : finishing ? "Finishing speech..." : "Hold to speak";
     startSpeech.setAttribute?.("aria-pressed", String(holding));
     sendAnswer.disabled = !ready || !finalSpeechReady;
-    sendAnswer.textContent = submitting ? "Submitting..." : "Submit spoken reading";
+    sendAnswer.textContent = submitting ? "Submitting..." : isQuestionAnswer(session) ? "Submit answer" : "Submit spoken reading";
     if (holding || finishing) submitStatus.textContent = holding
       ? "Release the microphone button before submitting."
       : "Waiting for the browser to finish your speech...";
@@ -605,7 +710,15 @@ export function bindMobileVoicePractice({
   const renderSession = data => {
     session = { ...data, question: data.question ?? session?.question };
     practiceContent.hidden = false;
-    refreshButton.textContent = "Refresh passage or result";
+    refreshButton.textContent = isQuestionAnswer(session) ? "Refresh question or result" : "Refresh passage or result";
+    const heading = get("mobile-question-heading");
+    if (heading) heading.textContent = isQuestionAnswer(session) ? "Question" : "Text to read aloud";
+    if (autoConnect) {
+      get("mobile-voice-title").textContent = isQuestionAnswer(session) ? `${data.serviceLabel || "AWS"} Q&A` : "Read a service passage aloud";
+      get("mobile-voice-intro").textContent = isQuestionAnswer(session)
+        ? "Answer in your own words. Grades assess understanding, not pronunciation. First pass: 10 MP at 60, 20 MP at 75, 30 MP at 90; wallet cap 100 MP."
+        : "Grades assess recognised content, not pronunciation or comprehension. First pass: 5 MP at 60, 10 MP at 75, 15 MP at 90; wallet cap 100 MP.";
+    }
     languageOptions = voiceLanguageOptions(session);
     if (!languageOptions.some(option => option.id === language))
       language = [data.language, data.defaultLanguage, languageOptions[0]?.id]
@@ -618,14 +731,14 @@ export function bindMobileVoicePractice({
     }));
     languageSelect.value = language || "";
     if (pendingTurn && ["ready", "completed", "failed", "expired", "cancelled"].includes(data.status)) pendingTurn = null;
-    const legacy = !isReadAloud();
+    const legacy = !isSupported();
     const passedCompletion = data.status === "completed" && voiceResultPassed(data);
     showStatus(legacy
       ? "This is an older voice session. Return to desktop, start a new QR session, and scan it for read-aloud practice."
       : passedCompletion ? mobileStatus("completed")
         : attemptsUsed() >= attemptLimit() && data.status !== "evaluating"
-        ? "The read-aloud retry limit has been reached. Start a new QR session on desktop to continue."
-        : mobileStatus(data.status));
+        ? `The ${isQuestionAnswer(session) ? "Q&A" : "read-aloud"} retry limit has been reached. Start a new practice on desktop to continue.`
+        : isQuestionAnswer(session) ? voiceStatusMessage(data.status, true) : mobileStatus(data.status));
     result.textContent = gradeResultText(data) || (data.result?.error
         ? "Your reading could not be saved. Please try again or ask your teacher for help."
         : data.result?.passed === false
@@ -633,22 +746,22 @@ export function bindMobileVoicePractice({
         : "");
     result.lang = data.result?.language || data.language || data.defaultLanguage || language || "";
     question.textContent = !["pairing", "claimed", "generating_question", "awaiting_question_approval"].includes(data.status)
-      ? (isReadAloud() ? readingText() : typeof session.question === "string" ? session.question : "")
+      ? (isSupported() ? readingText() : typeof session.question === "string" ? session.question : "")
       : "";
     question.lang = language || "";
-    if (data.status === "ready" && !readingText() && isReadAloud()) {
-      pairingUnavailable("This activity has no available reading language. Start a new practice or ask your teacher to check its configuration.");
+    if (data.status === "ready" && !readingText() && isSupported()) {
+      pairingUnavailable(`This activity has no available ${isQuestionAnswer(session) ? "speaking" : "reading"} language. Start a new practice or ask your teacher to check its configuration.`);
     } else if (data.status === "ready" && !session.question) {
       pairingUnavailable("The saved practice has no reading passage. Refresh once; if it is still missing, choose Start a new QR session on desktop and scan that new code.");
     }
-    attempts.textContent = `${Math.max(0, attemptLimit() - attemptsUsed())} of ${attemptLimit()} read-aloud attempts remaining.`;
+    attempts.textContent = `${Math.max(0, attemptLimit() - attemptsUsed())} of ${attemptLimit()} ${isQuestionAnswer(session) ? "answer" : "read-aloud"} attempts remaining.`;
     updateControls();
-    if (session.mode === "graded_read_aloud") {
+    if (session.mode === "graded_read_aloud" || isQuestionAnswer(session)) {
       if (data.result?.error) result.textContent = "Grading could not finish. No grade or MP was awarded. Please retry.";
       else if (data.result?.feedback && !Number.isInteger(data.result?.score)) result.textContent = data.result.feedback;
       if (passedCompletion) showStatus(autoConnect ? "Voice activity passed. Your grade and MP reward have been saved." : "");
-      else if (data.status === "evaluating") showStatus("Grading your reading. Your result will appear automatically.");
-      else if (data.status === "ready" && readingText()) showStatus("Ready to read aloud.");
+      else if (data.status === "evaluating") showStatus(`Grading your ${taskName()}. Your result will appear automatically.`);
+      else if (data.status === "ready" && readingText()) showStatus(isQuestionAnswer(session) ? "Answer in your own words." : "Ready to read aloud.");
     }
     if (!SpeechRecognitionClass && canAnswer())
       showStatus("Browser speech recognition is unavailable. Try a supported browser or ask your teacher for help.");
@@ -729,7 +842,7 @@ export function bindMobileVoicePractice({
   };
   const setTranscript = text => {
     transcript.textContent = text;
-    finalSpeechReady = isMeaningfulTranscript(text);
+    finalSpeechReady = isQuestionAnswer(session) ? isAnswerTranscript(text) : isMeaningfulTranscript(text);
     transcript.lang = language || "";
     updateControls();
   };
@@ -753,7 +866,7 @@ export function bindMobileVoicePractice({
     finishing = false;
     setTranscript(speechParts.join(" ").trim());
     showStatus(finalSpeechReady
-      ? "Reading captured. Tap Submit spoken reading."
+      ? isQuestionAnswer(session) ? "Answer captured. Tap Submit answer." : "Reading captured. Tap Submit spoken reading."
       : "No clear speech captured. Hold the microphone button and try again.");
     updateControls();
   };
@@ -824,7 +937,9 @@ export function bindMobileVoicePractice({
     holding = true;
     setTranscript("");
     result.textContent = "";
-    showStatus("Listening while you hold. Read the passage, then release the button.");
+    showStatus(isQuestionAnswer(session)
+      ? "Listening while you hold. Answer the question, then release the button."
+      : "Listening while you hold. Read the passage, then release the button.");
     startRecognition();
   };
   const releaseSpeech = () => {
@@ -851,13 +966,13 @@ export function bindMobileVoicePractice({
   const submitTranscript = async () => {
     if (submitting) return;
     if (isBusy()) {
-      showStatus("Release the microphone button and wait for Reading captured before submitting.");
+      showStatus("Release the microphone button and wait for speech capture to finish before submitting.");
       return;
     }
     if (!canAnswer()) {
       showStatus(attemptsUsed() >= attemptLimit()
-        ? "The read-aloud retry limit has been reached. Start a new QR session on desktop to continue."
-        : "This session is not ready to accept a reading. Tap Refresh passage or result to check its status.");
+        ? `The ${isQuestionAnswer(session) ? "Q&A" : "read-aloud"} retry limit has been reached. Start a new practice on desktop to continue.`
+        : "This session is not ready to accept speech. Refresh to check its status.");
       return;
     }
     if (!finalSpeechReady) {
@@ -865,13 +980,13 @@ export function bindMobileVoicePractice({
       return;
     }
     if (transcript.textContent.length > 6000) {
-      showStatus("The transcript exceeds the 6,000-character limit and was not sent. Hold to speak again for a shorter reading.");
+      showStatus("The transcript exceeds the 6,000-character limit and was not sent. Hold to speak again for a shorter response.");
       return;
     }
     const spoken = { transcript: transcript.textContent, language };
     const epoch = sessionEpoch;
     submitting = true;
-    showStatus("Submitting your reading...");
+    showStatus(`Submitting your ${taskName()}...`);
     result.textContent = "";
     updateControls();
     try {
@@ -929,11 +1044,11 @@ export function bindMobileVoicePractice({
     languageSelect.value = language;
     resetPending();
     try { mobileStorage?.setItem(LANGUAGE_KEY, language); } catch { /* Optional preference. */ }
-    if (isReadAloud()) {
+    if (isSupported()) {
       question.textContent = ["pairing", "claimed", "generating_question", "awaiting_question_approval"]
         .includes(session?.status) ? "" : readingText();
       question.lang = language;
-      showStatus("Language changed. The matching passage is shown above. The previous unsent speech was discarded.");
+      showStatus(`Language changed. The matching ${isQuestionAnswer(session) ? "question" : "passage"} is shown above. The previous unsent speech was discarded.`);
     } else {
       showStatus("Language changed. The previous unsent speech was discarded. Start a new QR session for read-aloud practice.");
     }

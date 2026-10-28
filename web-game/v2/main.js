@@ -33,7 +33,7 @@ import { SHIELDS, ShieldGuard } from "./shields.js?v=20261027-equipment-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261028-voice-1";
-import { bindServiceReader } from "./aws-service-reader.js?v=20261029-modal-1";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261029-qa-1";
 import { SPELLS, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261028-voice-mp-1";
 import { MagicEffects } from "./magic-effects.js?v=20261028-magic-2";
 

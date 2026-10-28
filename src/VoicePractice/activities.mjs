@@ -18,4 +18,5 @@ export function validateGrade(value) {
     breakdown: { coverage: breakdown.coverage, content: breakdown.content } };
 }
 
-export const rewardFor = score => score >= 90 ? 15 : score >= 75 ? 10 : score >= 60 ? 5 : 0;
+export const rewardFor = (score, type = "read_aloud") =>
+  (score >= 90 ? 15 : score >= 75 ? 10 : score >= 60 ? 5 : 0) * (type === "question_answer" ? 2 : 1);

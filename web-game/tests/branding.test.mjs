@@ -3,6 +3,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const read = path => readFileSync(new URL(path, import.meta.url));
+test("loading screen shows both existing logos with accessible labels and responsive sizing", () => {
+  const html = read("../game-v2.html").toString();
+  const loading = html.match(/<section id="loading"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(loading);
+  for (const name of ["hkiit", "it114115"]) {
+    assert.equal((loading.match(new RegExp(`src="./resources/branding/${name}-logo.png"`, "g")) ?? []).length, 1);
+    assert.ok(read(`../resources/branding/${name}-logo.png`).length > 0);
+  }
+  assert.match(loading, /alt="HKIIT"/);
+  assert.match(loading, /alt="Cloud and Data Centre Administration programme"/);
+  assert.match(read("../v2/style.css").toString(), /\.loading \.loading-logos img[^}]*clamp\(80px, 18vw, 140px\)/);
+});
 test("app and game use the same HKIIT favicon, not React defaults", () => {
   const app = read("../../web-app/public/favicon.ico"), game = read("../favicon.ico");
   assert.deepEqual(app, game);

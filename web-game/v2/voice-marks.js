@@ -7,6 +7,7 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
   const key = get("voice-marks-key"), button = get("voice-marks-refresh");
   const status = get("voice-marks-status"), results = get("voice-marks-results");
   const search = get("voice-marks-search"), filter = get("voice-marks-filter");
+  const taskType = get("voice-marks-type");
   const count = get("voice-marks-count"), empty = get("voice-marks-empty");
   let revision = 0;
   let cachedActivities = [], loadedKey = null;
@@ -18,7 +19,8 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
     loadedKey = null;
     search.value = "";
     filter.value = "all";
-    search.disabled = filter.disabled = true;
+    taskType.value = "all";
+    search.disabled = filter.disabled = taskType.disabled = true;
     count.textContent = "";
     empty.hidden = true;
     results.hidden = true;
@@ -39,7 +41,8 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
         filter.value === "passed" ? activity.completed :
         filter.value === "needs-retry" ? attempted && !activity.completed :
         filter.value === "not-started" ? !activity.completed && !attempted : true;
-      return matchesFilter && (activity.label.toLowerCase().includes(query) ||
+      return matchesFilter && (taskType.value === "all" || (activity.type ?? "read_aloud") === taskType.value) &&
+        (activity.label.toLowerCase().includes(query) || (activity.title ?? "").toLowerCase().includes(query) ||
         activity.serviceId.toLowerCase().includes(query));
     });
     get("voice-marks-activities").replaceChildren(...shown.map(({ row }) => row));
@@ -52,6 +55,7 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
   clear();
   search.addEventListener("input", renderActivities);
   filter.addEventListener("change", renderActivities);
+  taskType.addEventListener("change", renderActivities);
   key.addEventListener("input", clear);
   eventTarget.addEventListener?.("storage", event => {
     if (event.key === "api_key" || event.key === null) {
@@ -79,6 +83,8 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
       if (!validWallet(data.wallet) || !Array.isArray(data.activities) ||
           data.activities.some(activity => typeof activity.activityId !== "string" ||
             typeof activity.serviceId !== "string" || typeof activity.label !== "string" ||
+            (activity.type !== undefined && !["read_aloud", "question_answer"].includes(activity.type)) ||
+            (activity.title !== undefined && typeof activity.title !== "string") ||
             !Number.isInteger(activity.round) || activity.round < 1 ||
             typeof activity.completed !== "boolean" ||
             !scoreValid(activity.bestScore) || !scoreValid(activity.latestScore) ||
@@ -116,7 +122,7 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
         const reward = activity.mpAwarded != null && graded ? `${activity.mpAwarded} MP` :
           activity.completed && !graded ? "No graded reward recorded" : "-";
         const row = makeRow([
-          activity.label, String(activity.round),
+          `${activity.label} - ${activity.type === "question_answer" ? `Q&A: ${activity.title || activity.questionId || activity.activityId}${activity.available === false ? " (unavailable)" : ""}` : "Read aloud"}`, String(activity.round),
           activity.completed ? "Completed" : graded ? "In progress" : "Not yet completed",
           grades, activity.feedback || "-", reward, activity.completed ? date(activity.completedAt) : "-",
         ], ["Activity", "Round", "Status", "Grade", "Feedback", "MP awarded", "Completed (Hong Kong)"]);
@@ -124,7 +130,7 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
       });
       get("voice-marks-rows").replaceChildren(...rows);
       loadedKey = apiKey;
-      search.disabled = filter.disabled = false;
+      search.disabled = filter.disabled = taskType.disabled = false;
       renderActivities();
       const completed = data.activities.filter(activity => activity.completed).length;
       get("voice-marks-summary").textContent = `${completed} of ${data.activities.length} voice activities completed`;

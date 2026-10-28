@@ -637,7 +637,8 @@ test('desktop ownership fingerprints do not persist API keys and session checks 
   assert.match(source, /saveDesktopState\(storage, state\)/);
 });
 
-function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus = 'completed', unsupported = false } = {}) {
+function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus = 'completed', unsupported = false,
+  questions = [], availabilityGate } = {}) {
   const previous = {
     document: globalThis.document, window: globalThis.window, localStorage: globalThis.localStorage,
     sessionStorage: globalThis.sessionStorage, fetch: globalThis.fetch, location: globalThis.location,
@@ -682,21 +683,33 @@ function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus =
   };
   values.set('api_key', apiKey);
   const requests = [];
+  let activeSession;
   globalThis.fetch = async (url, options) => {
     requests.push({ url: String(url), options });
     if (failStart) return response({ message: 'Missing Authentication Token' }, 403);
+    if (String(url).endsWith('/voice/completions')) {
+      if (availabilityGate) await availabilityGate;
+      return response({ activities: questions });
+    }
     if (String(url).endsWith('/transfer')) {
       return response({ id: 'desktop-session', inputDevice: 'phone', pairingToken: 'qr-secret', status: 'pairing' });
     }
     if (String(url).endsWith('/answer')) {
-      return response({ id: 'desktop-session', status: 'completed', mode: 'graded_read_aloud',
-        result: { passed: true, score: 85, mpAwarded: 10, feedback: 'Good coverage.' } });
+      return response({ ...activeSession, id: 'desktop-session', status: 'completed',
+        result: { passed: true, score: 85, mpAwarded: activeSession.mode === 'graded_question_answer' ? 20 : 10, feedback: 'Good coverage.' } });
     }
     if (options.method === 'POST') {
-      return response({ id: 'desktop-session', pairingToken: 'qr-secret', pairCode: '123456',
+      const body = JSON.parse(options.body);
+      activeSession = { id: 'desktop-session', pairingToken: 'qr-secret', pairCode: '123456',
         serviceId: 's3', serviceLabel: 'Amazon S3', mode: 'graded_read_aloud', inputDevice: 'desktop',
         readingTexts: { 'en-US': EN_PASSAGE, 'zh-HK': ZH_PASSAGE }, question: EN_PASSAGE,
-        status: 'ready', expiresAt: 1793195000, attempts: 0, maxAttempts: 6 });
+        status: 'ready', expiresAt: 1793195000, attempts: 0, maxAttempts: 6 };
+      if (body.type === 'question_answer') Object.assign(activeSession, {
+        mode: 'graded_question_answer', activityId: 'qa:s3:private', questionId: 'private',
+        questionTexts: { 'en-US': 'How do you store private screenshots?', 'zh-HK': '你會點樣儲存私人截圖？' },
+        question: 'How do you store private screenshots?',
+      });
+      return response(activeSession);
     }
     return response({ id: 'desktop-session', status: getStatus, paired: true,
       inputDevice: 'phone', serviceId: 's3', mode: 'graded_read_aloud',
@@ -720,12 +733,12 @@ test('desktop defaults to PC speech without QR and refreshes authoritative walle
   const app = desktopFixture();
   try {
     app.controller.open('s3');
-    assert.equal(app.requests.length, 1);
+    assert.equal(app.requests.length, 2);
     await tick();
-    assert.equal(app.requests.length, 1);
-    assert.match(app.requests[0].url, /voice\/sessions$/);
-    assert.equal(app.requests[0].options.headers['x-api-key'], 'desktop-key');
-    assert.equal(app.requests[0].options.headers.Authorization, undefined);
+    assert.equal(app.requests.length, 2);
+    assert.match(app.requests[1].url, /voice\/sessions$/);
+    assert.equal(app.requests[1].options.headers['x-api-key'], 'desktop-key');
+    assert.equal(app.requests[1].options.headers.Authorization, undefined);
     assert.equal(app.requests.some(request => /voice\/sessions\/desktop-session$/.test(request.url)), false);
     const saved = JSON.parse(app.saved.get('aws-warrior:voice:desktop'));
     assert.equal(saved.owner, voiceOwnerFingerprint('desktop-key'));
@@ -737,7 +750,7 @@ test('desktop defaults to PC speech without QR and refreshes authoritative walle
     assert.equal(app.elements.get('voice-transfer').disabled, false);
     await app.elements.get('voice-check').click();
     await tick();
-    assert.match(app.requests[1].url, /voice\/sessions\/desktop-session$/);
+    assert.match(app.requests[2].url, /voice\/sessions\/desktop-session$/);
     assert.equal(app.game.readServices.has('s3'), true);
     assert.equal(app.values.get('aws-warrior:v2:read-services'), '["s3"]');
     assert.equal(app.game.walletRefreshed, true);
@@ -756,7 +769,7 @@ test('desktop starts voice for services outside the original six-service pilot',
   try {
     app.controller.open('ecs');
     await tick();
-    assert.equal(JSON.parse(app.requests[0].options.body).serviceId, 'ecs');
+    assert.equal(JSON.parse(app.requests[1].options.body).serviceId, 'ecs');
     assert.equal(app.elements.get('pc-speak').disabled, false);
   } finally { app.restore(); }
 });
@@ -768,7 +781,7 @@ test('desktop transfers the same session explicitly and removes consumed QR code
     await tick();
     assert.equal(app.created.some(element => element.tagName === 'canvas'), false);
     await app.elements.get('voice-transfer').click();
-    assert.match(app.requests[1].url, /sessions\/desktop-session\/transfer$/);
+    assert.match(app.requests.at(-1).url, /sessions\/desktop-session\/transfer$/);
     assert.ok(app.elements.get('voice-desktop-panel').children.some(element => element.tagName === 'canvas'));
     assert.equal(app.elements.get('pc-practice-content').hidden, true);
     await app.elements.get('voice-check').click();
@@ -813,9 +826,9 @@ test('PC without speech recognition offers phone transfer without claiming QR au
     assert.equal(app.elements.get('pc-speak').disabled, true);
     assert.match(app.elements.get('pc-voice-status').textContent, /unavailable/);
     assert.equal(app.elements.get('voice-transfer').disabled, false);
-    assert.equal(app.requests.length, 1);
-    await app.elements.get('voice-transfer').click();
     assert.equal(app.requests.length, 2);
+    await app.elements.get('voice-transfer').click();
+    assert.equal(app.requests.length, 3);
     assert.equal(app.requests.some(request => request.url.endsWith('/claim')), false);
   } finally { app.restore(); }
 });
@@ -838,4 +851,103 @@ test('desktop API key changes clear owned session data and disabled endpoints ex
     assert.match(disabled.elements.get('voice-desktop-panel').children[0].textContent, /not enabled/i);
     assert.equal(disabled.documentRef.getElementById('service-dialog').open, undefined);
   } finally { disabled.restore(); }
+});
+
+const approvedQuestion = { activityId: 'qa:s3:private', serviceId: 's3', type: 'question_answer',
+  title: 'Private screenshots', questionId: 'private', available: true, completed: false, languages: ['en-US', 'zh-HK'] };
+
+test('a delayed close event from an old dialog does not suspend newly reopened speech', async () => {
+  const app = desktopFixture();
+  try {
+    app.controller.open('s3');
+    await tick();
+    app.elements.get('voice-desktop-dialog').events.get('close')();
+    assert.equal(app.elements.get('pc-practice-content').hidden, false);
+    assert.equal(app.elements.get('pc-speak').disabled, false);
+  } finally { app.restore(); }
+});
+
+test('desktop enables Q&A only from approved database availability and submits a separate task type', async () => {
+  const app = desktopFixture({ questions: [approvedQuestion] });
+  try {
+    app.controller.open('s3');
+    assert.equal(app.elements.get('voice-question-option').disabled, true);
+    await tick();
+    assert.equal(app.elements.get('voice-question-option').disabled, false);
+    assert.match(app.elements.get('voice-question-availability').textContent, /0 of 1/);
+    const select = app.elements.get('voice-task-type');
+    select.value = 'question_answer';
+    select.change();
+    assert.equal(app.elements.get('pc-practice-content').hidden, true);
+    assert.equal(app.elements.get('voice-start').textContent, 'Start Q&A');
+    await app.elements.get('voice-start').click();
+    const created = app.requests.filter(request => request.url.endsWith('/voice/sessions')).at(-1);
+    assert.deepEqual(JSON.parse(created.options.body), { serviceId: 's3', type: 'question_answer', language: 'en-US' });
+    assert.equal(app.elements.get('pc-question-heading').textContent, 'Question');
+    assert.equal(app.elements.get('pc-voice-question').textContent, 'How do you store private screenshots?');
+    assert.equal(app.elements.get('pc-send-answer').textContent, 'Submit answer');
+    assert.match(app.elements.get('voice-desktop-intro').textContent, /understanding.*30 MP/);
+    app.controller.speech.speak();
+    app.recognition.instance.onresult({ results: [Object.assign([{ transcript: 'S3' }], { isFinal: true })] });
+    app.controller.speech.releaseSpeech();
+    assert.equal(app.elements.get('pc-send-answer').disabled, false);
+    await app.controller.speech.submitTranscript();
+    assert.match(app.elements.get('pc-voice-result').textContent, /MP earned: 20/);
+    assert.equal(app.elements.get('pc-voice-status').textContent, '');
+    assert.equal(app.elements.get('voice-start').hidden, true);
+    assert.equal(app.elements.get('voice-desktop-panel').children.length, 0);
+    assert.equal(app.game.readServices.has('s3'), false, 'Comprehension is not a read-aloud badge');
+    assert.match(app.elements.get('voice-question-availability').textContent, /1 of 1/);
+  } finally { app.restore(); }
+});
+
+test('missing, retired or other-service questions cannot enable Q&A, and stale availability ignores account changes', async () => {
+  const app = desktopFixture({ questions: [{ ...approvedQuestion, available: false },
+    { ...approvedQuestion, serviceId: 'ec2' }] });
+  try {
+    app.controller.open('s3');
+    await tick();
+    assert.equal(app.elements.get('voice-question-option').disabled, true);
+    assert.match(app.elements.get('voice-question-availability').textContent, /coming soon/);
+    const select = app.elements.get('voice-task-type');
+    select.value = 'question_answer'; select.change();
+    assert.equal(select.value, 'read_aloud');
+  } finally { app.restore(); }
+  let resolve;
+  const stale = desktopFixture({ questions: [approvedQuestion], availabilityGate: new Promise(done => { resolve = done; }) });
+  try {
+    stale.controller.open('s3');
+    stale.values.set('api_key', 'another-owner');
+    stale.windowEvents.get('storage')({ key: 'api_key' });
+    resolve();
+    await tick();
+    assert.equal(stale.elements.get('voice-question-option').disabled, true);
+    assert.equal(stale.elements.get('voice-question-availability').textContent, '');
+  } finally { stale.restore(); }
+});
+
+test('phone Q&A uses translated questions, accepts short answers, and renders a single comprehension result', async () => {
+  const app = mobileFixture({
+    recognition: {}, claimStatus: 'ready',
+    serverData: { mode: 'graded_question_answer', serviceLabel: 'Amazon S3',
+      questionTexts: { 'en-US': 'Where can you store a screenshot?', 'zh-HK': '你可以喺邊度儲存截圖？' } },
+    gradeResult: { score: 100, passed: true, breakdown: { understanding: 100 }, mpAwarded: 30, feedback: 'Correct service.' },
+  });
+  await tick();
+  assert.equal(app.elements.get('mobile-voice-title').textContent, 'Amazon S3 Q&A');
+  assert.equal(app.elements.get('mobile-question-heading').textContent, 'Question');
+  assert.equal(app.elements.get('mobile-voice-question').textContent, 'Where can you store a screenshot?');
+  const language = app.elements.get('mobile-voice-language');
+  language.value = 'zh-HK'; language.change();
+  assert.equal(app.elements.get('mobile-voice-question').textContent, '你可以喺邊度儲存截圖？');
+  assert.match(app.elements.get('mobile-voice-status').textContent, /matching question/);
+  app.api.speak();
+  app.recognition.instance.onresult({ results: [Object.assign([{ transcript: 'S3' }], { isFinal: true })] });
+  app.api.releaseSpeech();
+  assert.equal(app.elements.get('mobile-send-answer').disabled, false);
+  assert.equal(app.elements.get('mobile-send-answer').textContent, 'Submit answer');
+  await app.api.submitTranscript();
+  assert.equal(app.requests.filter(request => request.url.endsWith('/answer')).length, 1);
+  assert.match(app.elements.get('mobile-voice-result').textContent, /Understanding: 100.*MP earned: 30/);
+  assert.equal(app.elements.get('mobile-speak').disabled, true);
 });

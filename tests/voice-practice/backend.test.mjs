@@ -8,15 +8,28 @@ import { activities, validateGrade, rewardFor } from "../../src/VoicePractice/ac
 import { walletKey, activityKey, gradeKey, castKey } from "../../src/VoicePractice/economy.mjs";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { questionKey, questionActivityId } from "../../src/VoicePractice/questions.mjs";
+import { createQuestionAdmin } from "../../src/VoicePractice/question-bank.mjs";
+import { readFileSync } from "node:fs";
 
 const require = createRequire(new URL("../../src/VoicePractice/package.json", import.meta.url));
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+const qaDrafts = JSON.parse(readFileSync(new URL("../../src/VoicePractice/questions.json", import.meta.url), "utf8"))
+  .map(question => ({ ...question, status: "draft" }));
+const approvedQuestions = () => qaDrafts.slice(0, 2).map(question => ({ ...question, status: "approved" }));
+const createAnswer = async (f, serviceId = "s3", language = "en-US") => {
+  const response = await f.req("/voice/sessions", { serviceId, type: "question_answer", language });
+  assert.equal(response.statusCode, 200, response.body);
+  return response.data;
+};
 
-function fixture({ readAloud = false, graded = false, catalog, languages } = {}) {
+function fixture({ readAloud = false, graded = false, catalog, languages, questions = [] } = {}) {
   const rows = new Map(), jobs = [], calls = [];
   let time = 1700000000000;
   const key = item => `${item.PK}/${item.SK}`;
+  for (const question of questions) rows.set(key(questionKey(question.serviceId, question.id)),
+    { ...question, ...questionKey(question.serviceId, question.id), revision: 0 });
   const conflict = () => Object.assign(new Error("conflict"), { conflict: true });
   const deps = {
     ...(catalog ? { activities: catalog } : {}),
@@ -24,6 +37,13 @@ function fixture({ readAloud = false, graded = false, catalog, languages } = {})
     now: () => time,
     store: {
       async get(k) { return structuredClone(rows.get(key(k))); },
+      async listQuestions(serviceId) {
+        return structuredClone([...rows.values()].filter(row => row.PK === "QUESTION_BANK" &&
+          (!serviceId || row.serviceId === serviceId)));
+      },
+      async listActivities(owner) {
+        return structuredClone([...rows.values()].filter(row => row.PK === `PLAYER#${owner}` && row.SK.startsWith("ACTIVITY#")));
+      },
       isConflict: e => Boolean(e.conflict),
       async atomic(writes) {
         for (const w of writes) {
@@ -45,6 +65,9 @@ function fixture({ readAloud = false, graded = false, catalog, languages } = {})
         requiredConcepts: ["objects", "buckets", "private access"], misconceptions: ["public by default"] }] };
       if (deps.evaluate) return deps.evaluate(input);
       if (operation === "grade_reading") return { score: 80, breakdown: { coverage: 55, content: 25 }, feedback: "Good reading coverage." };
+      if (operation === "grade_answer") return { concepts: input.question.concepts.map(concept => ({
+        id: concept.id, verdict: "met", evidence: input.transcript,
+      })), feedback: "You explained the required ideas." };
       return { passed: input.transcript.includes("correct"), feedback: "Explain buckets and private objects." };
     },
   };
@@ -105,6 +128,224 @@ test("completion summary uses authenticated owner, survives session expiry and n
   assert.equal((await f.req("/voice/completions", undefined, { owner: "other" })).data.completed, 0);
   assert.deepEqual(Object.keys(result.data.services[0]).sort(), ["completed", "completedAt", "label", "serviceId"]);
   assert.equal((await f.req("/voice/completions", undefined, { query: { token: p.token } })).statusCode, 400);
+});
+
+test("Q&A is enabled only for valid approved questions in the requested service and language", async () => {
+  const f = fixture({ graded: true, questions: [
+    ...qaDrafts,
+    { ...qaDrafts[0], id: "retired", status: "retired" },
+    { ...qaDrafts[0], id: "invalid", status: "approved", concepts: [] },
+  ] });
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "question_answer" })).statusCode, 409);
+  assert.equal(f.jobs.length, 0);
+  const admin = createQuestionAdmin(f.deps.store);
+  await admin.setStatus("approve", "s3", qaDrafts[0].id, 0);
+  const session = await createAnswer(f, "s3", "zh-HK");
+  assert.equal(session.mode, "graded_question_answer");
+  assert.equal(session.question, qaDrafts[0].prompts["zh-HK"]);
+  assert.equal(session.readingTexts, undefined);
+  assert.equal(session.paired, false);
+  assert.equal(session.inputDevice, "desktop");
+  assert.equal(session.activityId, questionActivityId("s3", qaDrafts[0].id));
+  assert.equal((await f.req("/voice/sessions", { serviceId: "ec2", type: "question_answer" })).statusCode, 409);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "question_answer", language: "fr-FR" })).statusCode, 400);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "unknown" })).statusCode, 400);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3" })).data.mode, "graded_read_aloud");
+  const summary = await f.req("/voice/completions");
+  assert.equal(summary.data.activities.filter(activity => activity.type === "question_answer").length, 1);
+  for (const response of [session, summary.data, (await f.req(`/voice/sessions/${session.id}`)).data]) {
+    const json = JSON.stringify(response);
+    for (const field of ["referenceAnswer", "acceptableAnswers", "concepts", "questionSnapshot", "expectedRevision"])
+      assert.equal(json.includes(`"${field}"`), false, field);
+    assert.equal(json.includes(qaDrafts[0].referenceAnswer), false);
+  }
+});
+
+test("Q&A rotates questions within the selected service and never requires completed reading rounds", async () => {
+  const f = fixture({ graded: true, questions: approvedQuestions() });
+  const first = await createAnswer(f);
+  await f.req(`/voice/sessions/${first.id}/answer`, spoken("S3"));
+  await f.run();
+  const result = (await f.req(`/voice/sessions/${first.id}`)).data.result;
+  assert.equal(result.score, 100);
+  assert.equal(result.mpAwarded, 30);
+  assert.equal(result.breakdown.understanding, 100);
+  assert.equal(result.breakdown.coverage, undefined);
+  assert.equal(f.calls[0].operation, "grade_answer");
+  assert.equal(f.calls[0].input.history, undefined);
+  assert.equal((await f.req("/voice/completions")).data.completed, 0, "Q&A does not rewrite reading participation");
+  const next = await createAnswer(f);
+  assert.notEqual(next.questionId, first.questionId);
+  assert.equal(next.serviceId, "s3");
+  await f.req(`/voice/sessions/${next.id}/answer`, spoken("S3"));
+  await f.run();
+  const repeat = await createAnswer(f);
+  assert.equal(repeat.questionId, first.questionId);
+  await f.req(`/voice/sessions/${repeat.id}/answer`, spoken("S three"));
+  await f.run();
+  assert.equal((await f.req(`/voice/sessions/${repeat.id}`)).data.result.mpAwarded, 0);
+  assert.equal((await f.req("/voice/wallet")).data.balance, 60);
+  const reading = await createReading(f);
+  assert.equal(reading.serviceId, "s3");
+});
+
+test("Q&A first-pass credits are atomic across tabs, languages and question versions", async () => {
+  const question = approvedQuestions()[0];
+  const f = fixture({ graded: true, questions: [question] });
+  const a = await createAnswer(f), b = await createAnswer(f, "s3", "zh-HK");
+  for (const session of [a, b])
+    await f.req(`/voice/sessions/${session.id}/answer`, spoken("S3", session.language));
+  await Promise.all([f.run(), f.run()]);
+  const results = await Promise.all([a, b].map(async s => (await f.req(`/voice/sessions/${s.id}`)).data.result));
+  assert.deepEqual(results.map(result => result.mpAwarded).sort((a, b) => a - b), [0, 30]);
+  const admin = createQuestionAdmin(f.deps.store);
+  await admin.importDrafts([{ ...question, status: "draft", version: 2, expectedRevision: 0 }]);
+  await admin.setStatus("approve", "s3", question.id, 1);
+  const revised = await createAnswer(f);
+  assert.equal(revised.activityId, a.activityId);
+  await f.req(`/voice/sessions/${revised.id}/answer`, spoken("S3"));
+  await f.run();
+  assert.equal((await f.req(`/voice/sessions/${revised.id}`)).data.result.mpAwarded, 0);
+  assert.equal((await f.req("/voice/wallet")).data.balance, 30);
+});
+
+test("Q&A snapshots survive edits and retirement; marks remain visible without leaking rubrics", async () => {
+  const question = approvedQuestions()[0];
+  const f = fixture({ graded: true, questions: [question] }), s = await createAnswer(f);
+  const admin = createQuestionAdmin(f.deps.store);
+  await admin.importDrafts([{ ...question, status: "draft", version: 2, expectedRevision: 0,
+    prompts: { "en-US": "Changed question?" } }]);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "question_answer" })).statusCode, 409);
+  await f.req(`/voice/sessions/${s.id}/answer`, spoken("S3"));
+  await f.run();
+  assert.equal(f.calls[0].input.question.prompt, question.prompts["en-US"]);
+  assert.deepEqual(f.calls[0].input.question.concepts, question.concepts);
+  const summary = (await f.req("/voice/completions")).data;
+  const saved = summary.activities.find(activity => activity.activityId === s.activityId);
+  assert.equal(saved.available, false);
+  assert.equal(saved.bestScore, 100);
+  assert.equal(saved.title, question.title);
+  assert.equal(summary.wallet.balance, 30);
+  assert.equal((await f.req(`/voice/sessions/${s.id}`, undefined, { owner: "bob" })).statusCode, 404);
+  const other = (await f.req("/voice/completions", undefined, { owner: "bob" })).data;
+  assert.equal(other.activities.some(activity => activity.type === "question_answer"), false);
+});
+
+test("Q&A mobile transfer shares question, keeps rubric private and accepts short spoken answers", async () => {
+  const f = fixture({ graded: true, questions: approvedQuestions() }), s = await createAnswer(f);
+  assert.equal((await f.req("/voice/mobile/claim", { id: s.id, pairingToken: s.pairingToken })).statusCode, 409);
+  const transfer = (await f.req(`/voice/sessions/${s.id}/transfer`, {})).data;
+  const claim = (await f.req("/voice/mobile/claim", { id: s.id, pairingToken: transfer.pairingToken })).data;
+  assert.equal(claim.questionId, s.questionId);
+  assert.deepEqual(claim.questionTexts, s.questionTexts);
+  assert.equal(claim.questionSnapshot, undefined);
+  assert.equal(claim.conversation, undefined);
+  assert.equal((await f.req(`/voice/sessions/${s.id}/answer`, spoken("S3"))).statusCode, 409);
+  for (const transcript of ["", " ", "..."]) {
+    assert.equal((await f.req("/voice/mobile/answer", spoken(transcript), { token: claim.mobileToken })).statusCode, 400);
+    assert.equal((await f.deps.store.get(sessionKey(s.id))).attempts, 0);
+  }
+  assert.equal((await f.req("/voice/mobile/answer", spoken("S3"), { token: claim.mobileToken })).data.status, "evaluating");
+  const job = f.jobs[0];
+  await f.run();
+  await f.handler(job);
+  const result = (await f.req("/voice/mobile/session", undefined, { token: claim.mobileToken })).data;
+  assert.equal(result.result.mpAwarded, 30);
+  assert.equal(result.questionSnapshot, undefined);
+  assert.equal(f.calls.length, 1);
+});
+
+test("Q&A grading failures are retryable, saved grades recover without rerunning AI, and wallet cap consumes rewards", async () => {
+  const f = fixture({ graded: true, questions: [approvedQuestions()[0]] }), s = await createAnswer(f);
+  f.deps.agentError = true;
+  const body = spoken("S3");
+  await f.req(`/voice/sessions/${s.id}/answer`, body);
+  await f.run();
+  assert.equal((await f.req(`/voice/sessions/${s.id}`)).data.result.error, "processing_failed");
+  assert.equal((await f.req("/voice/wallet")).data.balance, 0);
+  f.deps.agentError = false;
+  const atomic = f.deps.store.atomic;
+  f.deps.store.atomic = writes => {
+    if (writes.some(write => write.item.SK.startsWith("GRADE#"))) throw Object.assign(new Error("busy"), { conflict: true });
+    return atomic(writes);
+  };
+  await f.req(`/voice/sessions/${s.id}/answer`, body);
+  const job = f.jobs.shift();
+  await assert.rejects(() => f.handler(job), /Voice worker failed/);
+  f.deps.store.atomic = atomic;
+  const owner = digest("alice@example.com");
+  await atomic([{ item: { ...walletKey(owner), balance: 95, earned: 95, spent: 0, revision: 1 } }]);
+  await f.handler(job);
+  const result = (await f.req(`/voice/sessions/${s.id}`)).data;
+  assert.equal(result.attempts, 1);
+  assert.equal(result.result.mpAwarded, 5);
+  assert.equal(f.calls.length, 2, "one failed call and one saved grade, no model rerun for credit");
+  const again = await createAnswer(f);
+  await f.req(`/voice/sessions/${again.id}/answer`, body);
+  await f.run();
+  assert.equal((await f.req(`/voice/sessions/${again.id}`)).data.result.mpAwarded, 0);
+  assert.equal((await f.req("/voice/wallet")).data.balance, 100);
+});
+
+test("Q&A computes weighted points server-side and rejects fabricated evidence", async () => {
+  const question = { ...approvedQuestions()[0], concepts: [
+    { id: "storage", description: "Stores objects.", weight: 75 },
+    { id: "private", description: "Keeps access private.", weight: 25 },
+  ] };
+  const f = fixture({ graded: true, questions: [question] }), s = await createAnswer(f);
+  f.deps.evaluate = () => ({ score: 100, passed: true, mpAwarded: 1000, feedback: "Explain storage.",
+    concepts: [{ id: "storage", verdict: "met", evidence: "not actually spoken" }, { id: "private", verdict: "missing", evidence: "" }] });
+  await f.req(`/voice/sessions/${s.id}/answer`, spoken("S3"));
+  await f.run();
+  assert.equal((await f.req(`/voice/sessions/${s.id}`)).data.result.error, "processing_failed");
+  f.deps.evaluate = () => ({ score: 100, passed: true, mpAwarded: 1000, feedback: "Explain private access.",
+    concepts: [{ id: "storage", verdict: "met", evidence: "S3" }, { id: "private", verdict: "missing", evidence: "" }] });
+  await f.req(`/voice/sessions/${s.id}/answer`, spoken("S3"));
+  await f.run();
+  const result = (await f.req(`/voice/sessions/${s.id}`)).data.result;
+  assert.equal(result.score, 75);
+  assert.equal(result.mpAwarded, 20);
+});
+
+test("question catalog queries consume every page with service boundaries and consistent reads", async () => {
+  const database = DynamoDBDocumentClient.from(new DynamoDBClient({ region: "us-east-1" }));
+  const requests = [];
+  database.send = async command => {
+    requests.push(command.input);
+    return requests.length === 1 ? { Items: [{ id: "a" }],
+      LastEvaluatedKey: { PK: "QUESTION_BANK", SK: "SERVICE#s3#QUESTION#a" } } : { Items: [{ id: "b" }] };
+  };
+  const { store } = awsDependencies({ VOICE_TABLE: "voice" }, { dynamo: database });
+  assert.deepEqual(await store.listQuestions("s3"), [{ id: "a" }, { id: "b" }]);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].ConsistentRead, true);
+  assert.deepEqual(requests[0].ExpressionAttributeValues, { ":bank": "QUESTION_BANK", ":prefix": "SERVICE#s3#QUESTION#" });
+  assert.equal(requests[1].ExclusiveStartKey.SK, "SERVICE#s3#QUESTION#a");
+});
+
+test("Q&A uses the shared attempt budget and rejects untranslated or expired sessions", async () => {
+  const question = { ...approvedQuestions()[0], prompts: { "en-US": "Where do you store screenshots?" } };
+  const f = fixture({ graded: true, questions: [question] });
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "question_answer", language: "zh-HK" })).statusCode, 409);
+  const s = await createAnswer(f);
+  assert.equal((await f.req(`/voice/sessions/${s.id}/answer`, spoken("S3", "zh-HK"))).statusCode, 400);
+  f.deps.evaluate = input => ({ feedback: "Explain how the storage works.",
+    concepts: input.question.concepts.map(concept => ({ id: concept.id, verdict: "missing", evidence: "" })) });
+  for (let i = 0; i < 6; i++) {
+    assert.equal((await f.req(`/voice/sessions/${s.id}/answer`, spoken(`wrong ${i}`))).statusCode, 200);
+    await f.run();
+  }
+  assert.equal((await f.req(`/voice/sessions/${s.id}`)).data.status, "failed");
+  assert.equal((await f.req(`/voice/sessions/${s.id}/answer`, spoken("wrong again"))).statusCode, 409);
+  assert.equal(f.calls.length, 6);
+  assert.equal((await f.req("/voice/wallet")).data.balance, 0);
+  const fresh = await createAnswer(f);
+  const key = budgetKey(digest("alice@example.com"), 1700000000);
+  const budget = await f.deps.store.get(key);
+  await f.deps.store.atomic([{ item: { ...budget, count: 100, revision: budget.revision + 1 }, previous: budget.revision }]);
+  assert.equal((await f.req(`/voice/sessions/${fresh.id}/answer`, spoken("S3"))).statusCode, 429);
+  f.advance(1201);
+  assert.equal((await f.req(`/voice/sessions/${fresh.id}`)).statusCode, 410);
 });
 
 test("owner binding, hashed capabilities, one conditional scan-to-answer claim and cancellation", async () => {

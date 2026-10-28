@@ -1,0 +1,182 @@
+[
+  {
+    "id": "private-screenshots", "serviceId": "s3", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Store private screenshots",
+    "prompts": {
+      "en-US": "Your game saves player screenshots in Amazon S3. How are the screenshots organised, and how would you prevent everyone on the internet from reading them?",
+      "zh-HK": "你嘅遊戲用 Amazon S3 儲存玩家截圖。截圖會點樣組織？你會點樣防止所有網民都讀到佢哋？"
+    },
+    "concepts": [
+      { "id": "storage", "description": "Screenshots are stored as objects in a bucket.", "weight": 50 },
+      { "id": "private-access", "description": "Keep public access blocked and permit only authorised access using access policies or a limited presigned URL.", "weight": 50 }
+    ],
+    "misconceptions": ["All S3 objects are automatically public."],
+    "acceptableAnswers": ["Files in a bucket with public access blocked and permission for the game's role."],
+    "referenceAnswer": "Store screenshots as objects inside a bucket. Keep the bucket private with public access blocked and grant only the required access."
+  },
+  {
+    "id": "asset-storage", "serviceId": "s3", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Store game assets",
+    "prompts": {
+      "en-US": "Why would you use Amazon S3 for game images and sound files? Give one example of an object you would store.",
+      "zh-HK": "點解你會用 Amazon S3 儲存遊戲圖片同音效檔案？請舉一個你會儲存嘅物件例子。"
+    },
+    "concepts": [
+      { "id": "purpose", "description": "S3 provides object storage for files rather than running the game server.", "weight": 60 },
+      { "id": "example", "description": "Gives a concrete file example such as a character image, screenshot or sound effect.", "weight": 40 }
+    ],
+    "misconceptions": ["S3 runs the game's server program."],
+    "acceptableAnswers": ["Keep the dragon image as a file in S3 so the game can retrieve it."],
+    "referenceAnswer": "S3 stores files as objects. I could store the dragon image or a spell sound effect there for the game to retrieve."
+  },
+  {
+    "id": "game-server", "serviceId": "ec2", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Run a game server",
+    "prompts": {
+      "en-US": "You want to run your own game server on Amazon EC2. What does EC2 provide, and give an example of software you can control on it?",
+      "zh-HK": "你想用 Amazon EC2 運行自己嘅遊戲伺服器。EC2 提供啲乜？請舉例說明你可以控制邊啲軟件。"
+    },
+    "concepts": [
+      { "id": "compute", "description": "EC2 provides a virtual server or computer for running applications.", "weight": 60 },
+      { "id": "control", "description": "Can choose or configure an operating system, install the game server, or update its software.", "weight": 40 }
+    ],
+    "misconceptions": ["EC2 is only a bucket for storing files."],
+    "acceptableAnswers": ["A cloud computer where I can install and update a Linux game server."],
+    "referenceAnswer": "EC2 gives me a virtual server. I can choose Linux, install the game server software and manage its updates."
+  },
+  {
+    "id": "server-access", "serviceId": "ec2", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Limit server traffic",
+    "prompts": {
+      "en-US": "Your EC2 game server needs one game port. How could a security group limit access, and why should you avoid allowing every inbound port?",
+      "zh-HK": "你嘅 EC2 遊戲伺服器只需要一個遊戲連接埠。安全群組可以點樣限制存取？點解唔應該開放所有入站連接埠？"
+    },
+    "concepts": [
+      { "id": "rules", "description": "Allow the required game port and restrict sources or administrative access through security group rules.", "weight": 60 },
+      { "id": "exposure", "description": "Unnecessary open ports expose services that players do not need and increase unwanted access risk.", "weight": 40 }
+    ],
+    "misconceptions": ["Every inbound port must be open for one game port to work."],
+    "acceptableAnswers": ["Allow only the game's port for players and keep SSH limited to administrators."],
+    "referenceAnswer": "Allow the game port and only the needed sources. Restrict administrative ports because unnecessary open services increase exposure."
+  },
+  {
+    "id": "least-privilege", "serviceId": "iam", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Give only needed permissions",
+    "prompts": {
+      "en-US": "A game component only reads images from one S3 bucket. What permissions should its IAM role have, and why not give it administrator access?",
+      "zh-HK": "一個遊戲元件只需要讀取一個 S3 儲存桶入面嘅圖片。佢嘅 IAM 角色應該有咩權限？點解唔畀佢管理員權限？"
+    },
+    "concepts": [
+      { "id": "scope", "description": "Limit the role to reading the needed objects in that bucket, not writing or unrelated resources.", "weight": 60 },
+      { "id": "risk", "description": "Least privilege limits accidental changes or damage if the component is compromised.", "weight": 40 }
+    ],
+    "misconceptions": ["Administrator access is necessary to read an S3 image."],
+    "acceptableAnswers": ["Read-only permission for that bucket so a mistake cannot delete other resources."],
+    "referenceAnswer": "Grant only the required object read permissions on that bucket. Avoid administrator access to limit accidental or malicious changes."
+  },
+  {
+    "id": "role-credentials", "serviceId": "iam", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Use a role for an application",
+    "prompts": {
+      "en-US": "Why should a game application on EC2 use an IAM role instead of putting permanent AWS access keys in its source code?",
+      "zh-HK": "點解 EC2 上嘅遊戲應用程式應該用 IAM 角色，而唔係將永久 AWS 存取金鑰寫入原始碼？"
+    },
+    "concepts": [
+      { "id": "temporary", "description": "An IAM role provides temporary credentials to the application.", "weight": 50 },
+      { "id": "secrets", "description": "Avoids embedding long-lived keys that can leak through source code or copies of the application.", "weight": 50 }
+    ],
+    "misconceptions": ["Source code is always a safe place for permanent access keys."],
+    "acceptableAnswers": ["The role supplies temporary credentials so leaked code does not expose a permanent key."],
+    "referenceAnswer": "The role supplies temporary credentials. I do not need to embed a permanent key that might leak with the code."
+  },
+  {
+    "id": "network-boundary", "serviceId": "vpc", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Organise a game network",
+    "prompts": {
+      "en-US": "What does an Amazon VPC give your game infrastructure, and name one network setting you can control?",
+      "zh-HK": "Amazon VPC 為你嘅遊戲基礎設施提供啲乜？請講出一個你可以控制嘅網絡設定。"
+    },
+    "concepts": [
+      { "id": "network", "description": "A logically isolated virtual network for AWS resources.", "weight": 60 },
+      { "id": "control", "description": "Names a controllable setting such as subnets, IP ranges, routing or network access rules.", "weight": 40 }
+    ],
+    "misconceptions": ["A VPC is just a database table."],
+    "acceptableAnswers": ["My own virtual network where I choose subnets and routes."],
+    "referenceAnswer": "A VPC is a logically isolated virtual network for my resources. I can choose subnets, address ranges and routes."
+  },
+  {
+    "id": "private-database", "serviceId": "vpc", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Keep a database off the public internet",
+    "prompts": {
+      "en-US": "Your game has a public web server and a database used only by that server. How would you separate their network access?",
+      "zh-HK": "你嘅遊戲有一個公開網頁伺服器，同一個只供佢使用嘅資料庫。你會點樣分開佢哋嘅網絡存取？"
+    },
+    "concepts": [
+      { "id": "placement", "description": "Keep the database in a private subnet without direct public internet access.", "weight": 50 },
+      { "id": "access", "description": "Allow database traffic only from the application server using restrictive network rules.", "weight": 50 }
+    ],
+    "misconceptions": ["The database must be open to everyone because the web server is public."],
+    "acceptableAnswers": ["A private database subnet with a security group allowing only the web server."],
+    "referenceAnswer": "Keep the database private and allow its required port only from the web application, not all internet clients."
+  },
+  {
+    "id": "event-processing", "serviceId": "lambda", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "React to a screenshot upload",
+    "prompts": {
+      "en-US": "When a screenshot is uploaded to S3, your game should create a thumbnail. How could AWS Lambda help, and what starts the work?",
+      "zh-HK": "當截圖上載到 S3，遊戲需要建立縮圖。AWS Lambda 可以點樣幫手？由咩觸發呢項工作？"
+    },
+    "concepts": [
+      { "id": "code", "description": "Lambda executes the thumbnail processing function without managing a continuously running server.", "weight": 60 },
+      { "id": "event", "description": "An S3 object-created/upload event can trigger the function.", "weight": 40 }
+    ],
+    "misconceptions": ["Lambda automatically knows to process every upload without a configured trigger."],
+    "acceptableAnswers": ["Configure an S3 upload event to run thumbnail code in Lambda."],
+    "referenceAnswer": "Configure an S3 upload event to invoke a Lambda function that creates the thumbnail, without maintaining a dedicated server."
+  },
+  {
+    "id": "short-task", "serviceId": "lambda", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Choose event-driven compute",
+    "prompts": {
+      "en-US": "A game occasionally needs a short function to validate a submitted score. Why might Lambda fit better than keeping a dedicated server running for that task?",
+      "zh-HK": "遊戲間中需要用一個短函數驗證提交嘅分數。點解 Lambda 可能比一直開住專用伺服器更適合呢項工作？"
+    },
+    "concepts": [
+      { "id": "on-demand", "description": "Runs the function when a submission or event arrives rather than keeping an idle dedicated server.", "weight": 60 },
+      { "id": "management", "description": "AWS manages the underlying servers and capacity for the function.", "weight": 40 }
+    ],
+    "misconceptions": ["Using Lambda means there are no servers anywhere."],
+    "acceptableAnswers": ["Run on each submission and let AWS manage the machines instead of maintaining an idle server."],
+    "referenceAnswer": "Lambda runs when a score submission invokes it. AWS manages the underlying servers, so I need not maintain an idle dedicated server for this short task."
+  },
+  {
+    "id": "player-record", "serviceId": "dynamodb", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Store player progress",
+    "prompts": {
+      "en-US": "How could a DynamoDB table store each player's level and completed missions? What key would you use to find one player's record?",
+      "zh-HK": "你可以點樣用 DynamoDB 資料表儲存每位玩家嘅等級同已完成任務？你會用咩鍵搵返某位玩家嘅記錄？"
+    },
+    "concepts": [
+      { "id": "item", "description": "Store a player's progress as an item with level and mission attributes in a table.", "weight": 50 },
+      { "id": "key", "description": "Use a unique player identifier as a key to retrieve the correct player's item.", "weight": 50 }
+    ],
+    "misconceptions": ["All players should share the same primary key and overwrite the same item."],
+    "acceptableAnswers": ["An item per player with player ID as key and level and missions as attributes."],
+    "referenceAnswer": "Store an item for each player containing level and missions. Use the unique player ID as the key to retrieve that player's progress."
+  },
+  {
+    "id": "safe-progress-update", "serviceId": "dynamodb", "version": 1, "status": "approved", "expectedRevision": null,
+    "title": "Avoid overwriting a newer save",
+    "prompts": {
+      "en-US": "Two devices load the same saved game. One saves new progress first. How could a DynamoDB conditional write stop the other device from overwriting that newer save?",
+      "zh-HK": "兩部裝置載入同一個遊戲存檔，其中一部先儲存咗新進度。DynamoDB 條件式寫入可以點樣防止另一部覆蓋較新嘅存檔？"
+    },
+    "concepts": [
+      { "id": "condition", "description": "Write only if the stored revision or version still matches the revision that the device loaded.", "weight": 60 },
+      { "id": "conflict", "description": "If the version changed, reject the stale write and reload or resolve the newer save instead of silently overwriting it.", "weight": 40 }
+    ],
+    "misconceptions": ["A stale save should always overwrite the latest version."],
+    "acceptableAnswers": ["Compare the saved revision and refuse the write if another device already increased it."],
+    "referenceAnswer": "Require the stored revision to match the loaded revision. If it has changed, reject the stale write and reload or resolve the conflict."
+  }
+]

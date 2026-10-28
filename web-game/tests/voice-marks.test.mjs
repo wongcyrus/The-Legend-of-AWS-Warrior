@@ -12,7 +12,7 @@ function fixture(fetcher, saved = "") {
     append(child) { this.children.push(child); },
   });
   const nodes = Object.fromEntries(["key", "refresh", "status", "results", "rows", "summary", "form", "activities", "wallet",
-    "search", "filter", "count", "empty"]
+    "search", "filter", "type", "count", "empty"]
     .map(id => [`voice-marks-${id}`, element()]));
   const events = {};
   bindVoiceMarks({
@@ -25,6 +25,7 @@ function fixture(fetcher, saved = "") {
     clearStorage() { saved = ""; events.storage({ key: null }); },
     search(value) { nodes["voice-marks-search"].value = value; nodes["voice-marks-search"].events.input(); },
     filter(value) { nodes["voice-marks-filter"].value = value; nodes["voice-marks-filter"].events.change(); },
+    type(value) { nodes["voice-marks-type"].value = value; nodes["voice-marks-type"].events.change(); },
     submit: () => nodes["voice-marks-form"].events.submit({ preventDefault() {} }) };
 }
 const services = () => ["S3", "EC2", "IAM", "VPC", "Lambda", "DynamoDB"].map((label, index) => ({
@@ -53,6 +54,33 @@ test("marks open separately without replacing the active game tab", () => {
   assert.match(link, /rel="noopener noreferrer"/);
   assert.match(link, /aria-label="Voice marks \(opens in a new tab\)"/);
   assert.match(marks, /close this tab or switch back to your game tab/);
+});
+
+test("marks distinguish multiple Q&A questions and combine task-type, status and title filters", async () => {
+  let calls = 0;
+  const data = marks();
+  data.activities.push({ ...data.activities[0], activityId: "qa:s3:private", type: "question_answer",
+    title: "Private screenshots", mpAwarded: 20, available: true });
+  data.activities.push({ ...data.activities[1], activityId: "qa:s3:assets", type: "question_answer",
+    title: "Store assets", available: true });
+  const f = fixture(async () => { calls++; return { ok: true, json: async () => data }; });
+  f.get("key").value = "key";
+  await f.submit();
+  f.type("question_answer");
+  assert.equal(f.get("activities").children.length, 2);
+  assert.match(f.get("activities").children[0].children[0].textContent, /Q&A: Private screenshots/);
+  assert.equal(f.get("activities").children[0].children[5].textContent, "20 MP");
+  f.filter("passed");
+  assert.equal(f.get("activities").children.length, 1);
+  f.search("assets");
+  assert.equal(f.get("activities").children.length, 0);
+  f.filter("all");
+  assert.equal(f.get("activities").children.length, 1);
+  assert.match(f.get("activities").children[0].children[0].textContent, /Store assets/);
+  assert.equal(calls, 1);
+  f.storageKey("other");
+  assert.equal(f.get("type").disabled, true);
+  assert.equal(f.get("type").value, "all");
 });
 
 test("marks require a key and show grades, feedback, MP and ungraded history without transcripts", async () => {
@@ -225,7 +253,7 @@ test("all completion/score combinations have deterministic categories, intersect
     ]) {
       f.search(query);
       assert.deepEqual(f.get("activities").children.map(row => row.children[0].textContent),
-        matches.map(index => `Service ${index}`), `${category}: ${query}`);
+        matches.map(index => `Service ${index} - Read aloud`), `${category}: ${query}`);
       assert.equal(f.get("count").textContent, `Showing ${matches.length} of 8 voice activities`);
       assert.equal(f.get("empty").hidden, matches.length > 0);
       assert.equal(f.get("summary").textContent, summary);
@@ -346,6 +374,6 @@ test("late JSON cannot replace cached results after switching accounts, even bac
   f.filter("all");
   f.search("");
   assert.equal(f.get("count").textContent, "Showing 1 of 1 voice activities");
-  assert.equal(f.get("activities").children[0].children[0].textContent, "Current account activity");
+  assert.equal(f.get("activities").children[0].children[0].textContent, "Current account activity - Read aloud");
   assert.equal(requests, 2);
 });

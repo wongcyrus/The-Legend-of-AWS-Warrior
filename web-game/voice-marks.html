@@ -28,6 +28,13 @@
         <label for="voice-marks-search">Search services
           <input id="voice-marks-search" type="search" placeholder="Service name or ID" aria-controls="voice-marks-activities" disabled>
         </label>
+        <label for="voice-marks-type">Task type
+          <select id="voice-marks-type" aria-controls="voice-marks-activities" disabled>
+            <option value="all">All task types</option>
+            <option value="read_aloud">Read aloud</option>
+            <option value="question_answer">Q&amp;A</option>
+          </select>
+        </label>
         <label for="voice-marks-filter">Activity status
           <select id="voice-marks-filter" aria-controls="voice-marks-activities" disabled>
             <option value="all">All</option>
@@ -42,7 +49,7 @@
       <p id="voice-marks-empty" hidden></p>
       <div class="manual-table voice-activity-table">
         <table role="table">
-          <caption>Graded read-aloud activities. Completion times are shown in Hong Kong time. No raw transcripts are displayed.</caption>
+          <caption>Graded voice activities. Completion times are shown in Hong Kong time. No raw transcripts are displayed.</caption>
           <colgroup><col class="marks-service"><col class="marks-round"><col class="marks-status"><col class="marks-grade"><col class="marks-feedback"><col class="marks-mp"><col class="marks-date"></colgroup>
           <thead><tr><th scope="col">Activity</th><th scope="col">Round</th><th scope="col">Status</th><th scope="col">Grade</th><th scope="col">Feedback</th><th scope="col">MP awarded</th><th scope="col">Completed (Hong Kong)</th></tr></thead>
           <tbody id="voice-marks-activities"></tbody>
@@ -60,6 +67,6 @@
     <p>If you opened marks from the game, close this tab or switch back to your game tab to continue playing.</p>
     <a href="./game-v2.html">Open AWS Warrior</a>
   </main>
-  <script type="module" src="./v2/voice-marks.js?v=20261028-marks-filter-1"></script>
+  <script type="module" src="./v2/voice-marks.js?v=20261029-qa-1"></script>
 </body>
 </html>

@@ -4,6 +4,7 @@ import { activities, validateGrade } from "./activities.mjs";
 import { activityLanguages, defaultActivityLanguage, languageConfig } from "./content.mjs";
 import { createEconomy } from "./economy.mjs";
 import { createGameSaves } from "./game-save.mjs";
+import { createQuestions, gradeAnswer, isAnswerTranscript, questionActivityId, questionRubric, validateAnswerGrade } from "./questions.mjs";
 
 export const lessons = JSON.parse(readFileSync(new URL("./lessons.json", import.meta.url), "utf8"));
 export const digest = value => createHash("sha256").update(value).digest("hex");
@@ -20,6 +21,8 @@ export const isMeaningfulTranscript = value => {
   return words.length >= 2 && words.join("").length >= 8;
 };
 const MAX_ATTEMPTS = 6;
+const gradedSession = s => ["graded_read_aloud", "graded_question_answer"].includes(s.mode);
+const currentSession = s => s.mode === "read_aloud" || gradedSession(s);
 const activeStates = new Set(["ready", "awaiting_question_approval", "generating_question"]);
 const uuid = value => typeof value === "string" && /^[a-f0-9-]{36}$/.test(value);
 export class HttpError extends Error {
@@ -63,11 +66,12 @@ export function createService(deps) {
   const config = deps.languageConfig ?? languageConfig;
   const catalog = deps.activities ?? activities;
   const services = new Map(catalog.map(activity => [activity.serviceId, activity.label]));
-  const speakingLanguages = s => s.languages ?? activityLanguages(s.readingTexts, config);
-  const defaultLanguage = s => s.defaultLanguage ?? defaultActivityLanguage(s.readingTexts, config) ?? config.defaultLanguage;
+  const speakingLanguages = s => s.languages ?? activityLanguages(s.questionTexts ?? s.readingTexts, config);
+  const defaultLanguage = s => s.defaultLanguage ?? defaultActivityLanguage(s.questionTexts ?? s.readingTexts, config) ?? config.defaultLanguage;
   const serviceLabel = s => s.serviceLabel ?? services.get(s.serviceId) ?? lessons[s.serviceId]?.label ?? s.serviceId;
   const now = () => Math.floor((deps.now?.() ?? Date.now()) / 1000);
   const economy = createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey, activities: catalog });
+  const questions = createQuestions({ store, config, services, fail });
   const gameSaves = createGameSaves({ store, now, fail, passedTestsFor: deps.passedTestsFor });
   const load = async id => {
     if (!uuid(id)) fail(404, "Session not found");
@@ -98,12 +102,14 @@ export function createService(deps) {
   };
   const completion = s => store.get(completionKey(s.owner, s.serviceId));
   const view = async (s, mobile = false) => ({
-    id: s.id, status: s.status, paired: Boolean(s.mobileHash || (s.mode !== "graded_read_aloud" && s.approvedAt)), serviceId: s.serviceId,
-    ...(["read_aloud", "graded_read_aloud"].includes(s.mode) ? {
-      mode: s.mode, readingTexts: s.readingTexts, defaultLanguage: defaultLanguage(s),
+    id: s.id, status: s.status, paired: Boolean(s.mobileHash || (!gradedSession(s) && s.approvedAt)), serviceId: s.serviceId,
+    ...(currentSession(s) ? {
+      mode: s.mode, ...(s.mode === "graded_question_answer" ? {
+        type: "question_answer", questionTexts: s.questionTexts, questionId: s.questionId, questionTitle: s.questionTitle,
+      } : { type: "read_aloud", readingTexts: s.readingTexts }), defaultLanguage: defaultLanguage(s),
       languages: speakingLanguages(s).map(({ id, label, speechLocale }) => ({ id, label, speechLocale })),
     } : {}),
-    ...(s.mode === "graded_read_aloud" ? {
+    ...(gradedSession(s) ? {
       activityId: s.activityId, round: s.round, inputDevice: s.inputDevice,
       serviceLabel: serviceLabel(s), expiresAt: s.expiresAt,
       attempts: s.attempts, maxAttempts: MAX_ATTEMPTS,
@@ -112,14 +118,14 @@ export function createService(deps) {
         path: "/voice/completions" },
     } : {}),
     ...(mobile ? { serviceLabel: serviceLabel(s), expiresAt: s.expiresAt,
-      ...(s.mode === "graded_read_aloud" ? {} : { conversation: s.conversation ?? [] }), language: s.language ?? defaultLanguage(s),
+      ...(gradedSession(s) ? {} : { conversation: s.conversation ?? [] }), language: s.language ?? defaultLanguage(s),
       attempts: s.attempts, maxAttempts: MAX_ATTEMPTS } : { pairCode: s.pairCode }),
     ...(s.question ? { question: s.question } : {}), ...(s.result ? { result: s.result } : {}),
-    completed: (await completion(s))?.verified === true,
+    completed: s.mode === "graded_question_answer" ? s.status === "completed" : (await completion(s))?.verified === true,
   });
   const ensureQuestion = async s => {
     if (!activeStates.has(s.status) || !s.approvedAt) return s;
-    if (["read_aloud", "graded_read_aloud"].includes(s.mode)) {
+    if (currentSession(s)) {
       return s.status === "ready" ? s : save(s, { status: "ready" });
     }
     const lesson = lessons[s.serviceId];
@@ -162,18 +168,20 @@ export function createService(deps) {
     }
   };
   const submit = async (s, transcript, language = defaultLanguage(s)) => {
-    if (s.mode !== "graded_read_aloud" && !s.approvedAt) fail(403, "Desktop approval required");
-    const available = ["read_aloud", "graded_read_aloud"].includes(s.mode)
+    if (!gradedSession(s) && !s.approvedAt) fail(403, "Desktop approval required");
+    const available = currentSession(s)
       ? speakingLanguages(s) : config.languages;
     if (!available.some(option => option.id === language) ||
-        (["read_aloud", "graded_read_aloud"].includes(s.mode) && !s.readingTexts?.[language]))
+        (currentSession(s) && !(s.questionTexts ?? s.readingTexts)?.[language]))
       fail(400, "Unsupported speaking language for this activity");
     if (s.mode === "graded_read_aloud" && !isMeaningfulTranscript(transcript))
       fail(400, "A meaningful spoken transcript is required");
+    if (s.mode === "graded_question_answer" && !isAnswerTranscript(transcript))
+      fail(400, "A spoken answer is required");
     const hash = digest(`browser:${transcript}${language !== "en-US" ? `:${language}` : ""}`);
     const old = await store.get(attemptKey(s.id, hash));
-    if (s.mode === "graded_read_aloud" && old?.state === "failed" && s.status === "ready") {
-      if ((old.processingRetries ?? 0) >= 3) fail(503, "Reading assessment is unavailable; start a new practice later");
+    if (gradedSession(s) && old?.state === "failed" && s.status === "ready") {
+      if ((old.processingRetries ?? 0) >= 3) fail(503, "Voice assessment is unavailable; start a new practice later");
       const retry = { ...old, state: "pending", evaluationStarted: false, leaseUntil: 0,
         processingRetries: (old.processingRetries ?? 0) + 1, revision: old.revision + 1 };
       const next = await save(s, { status: "evaluating", attemptHash: hash, result: null,
@@ -207,8 +215,8 @@ export function createService(deps) {
     if (fresh.attemptHash !== a.hash || !["evaluating", "transcribing"].includes(fresh.status)) return;
     const current = await store.get(attemptKey(s.id, a.hash));
     if (current?.grade) return;
-    await save(fresh, { status: fresh.mode !== "graded_read_aloud" && fresh.attempts >= MAX_ATTEMPTS ? "failed" : "ready",
-      result: { passed: false, error: "processing_failed", feedback: "Processing failed. Please read aloud again using browser speech recognition." } },
+    await save(fresh, { status: !gradedSession(fresh) && fresh.attempts >= MAX_ATTEMPTS ? "failed" : "ready",
+      result: { passed: false, error: "processing_failed", feedback: "Processing failed. Please retry using browser speech recognition." } },
     [{ item: { ...current, state: "failed", revision: current.revision + 1 }, previous: current.revision }]);
   };
   async function worker(job) {
@@ -236,8 +244,8 @@ export function createService(deps) {
       a = await store.get(attemptKey(s.id, job.attemptHash));
       if (!a || s.attemptHash !== a.hash || !["evaluating", "transcribing"].includes(s.status) ||
           ["done", "failed"].includes(a.state) || (!a.grade && (a.leaseUntil ?? 0) > now())) return;
-      if (s.mode === "graded_read_aloud" && a.grade) {
-        await economy.finish(s, a, validateGrade(a.grade)); return;
+      if (gradedSession(s) && a.grade) {
+        await economy.finish(s, a, s.mode === "graded_question_answer" ? validateAnswerGrade(a.grade) : validateGrade(a.grade)); return;
       }
       if (a.source !== "browser" || a.evaluationStarted) { await failAttempt(s, a); return; }
       const next = { ...a, state: "processing", leaseUntil: now() + 120, revision: a.revision + 1 };
@@ -246,11 +254,16 @@ export function createService(deps) {
       if (typeof transcript !== "string" || !transcript.trim() || transcript.length > 6000) throw new Error("Invalid transcript");
       const started = { ...a, evaluationStarted: true, revision: a.revision + 1 };
       await store.atomic([{ item: started, previous: a.revision }]); a = started;
-      if (s.mode === "graded_read_aloud") {
-        const grade = validateGrade(await agent("grade_reading", {
+      if (gradedSession(s)) {
+        const language = a.language ?? defaultLanguage(s);
+        const feedbackLanguage = speakingLanguages(s).find(option => option.id === language)?.feedbackLanguage;
+        const grade = s.mode === "graded_question_answer"
+          ? gradeAnswer(await agent("grade_answer", {
+            question: questionRubric(s.questionSnapshot, language), transcript, language, feedbackLanguage,
+          }), s.questionSnapshot, transcript)
+          : validateGrade(await agent("grade_reading", {
           activityId: s.activityId, serviceId: s.serviceId, readingTexts: s.readingTexts,
-          transcript, language: a.language ?? defaultLanguage(s),
-          feedbackLanguage: speakingLanguages(s).find(option => option.id === (a.language ?? defaultLanguage(s)))?.feedbackLanguage,
+          transcript, language, feedbackLanguage,
         }));
         const graded = { ...a, grade, revision: a.revision + 1 };
         await store.atomic([{ item: graded, previous: a.revision }]); a = graded;
@@ -328,21 +341,33 @@ export function createService(deps) {
             feedback: saved.feedback, mpAwarded: saved.mpAwarded } : {}) };
       }));
       return { services, completed: services.filter(service => service.completed).length, total: services.length,
-        wallet: await economy.wallet(owner), activities: await economy.summaries(owner) };
+        wallet: await economy.wallet(owner), activities: await economy.summaries(owner, await questions.activities()) };
     }
     if (method === "GET" && path === "/voice/wallet") return economy.wallet(await ownerFor(event));
     if (method === "POST" && path === "/voice/casts") return economy.cast(await ownerFor(event), body);
     if (method === "POST" && path === "/voice/sessions") {
       const owner = await ownerFor(event);
       if (typeof body.serviceId !== "string" || !services.has(body.serviceId)) fail(422, "Lesson unavailable");
-      const activity = await economy.choose(owner, body.serviceId);
+      const type = body.type ?? "read_aloud";
+      if (!["read_aloud", "question_answer"].includes(type)) fail(400, "Unsupported voice activity type");
+      const language = body.language ?? config.defaultLanguage;
+      if (type === "question_answer" && !config.languages.some(option => option.id === language))
+        fail(400, "Unsupported speaking language");
+      const question = type === "question_answer" ? await questions.choose(owner, body.serviceId, language) : null;
+      const activity = question ? {
+        activityId: questionActivityId(question.serviceId, question.id), serviceId: question.serviceId,
+        label: services.get(question.serviceId), round: 1, version: question.version,
+      } : await economy.choose(owner, body.serviceId);
+      const texts = question?.prompts ?? activity.readingTexts;
+      const selectedLanguage = question ? language : defaultActivityLanguage(texts, config);
       const id = randomUUID(), pairingToken = secret();
       const s = { ...sessionKey(id), id, owner, serviceId: activity.serviceId, status: "ready",
-        mode: "graded_read_aloud", activityId: activity.activityId, round: activity.round, inputDevice: "desktop",
-        serviceLabel: activity.label, readingTexts: activity.readingTexts,
-        languages: activityLanguages(activity.readingTexts, config),
-        defaultLanguage: defaultActivityLanguage(activity.readingTexts, config),
-        question: activity.readingTexts[defaultActivityLanguage(activity.readingTexts, config)], bankVersion: activity.version,
+        mode: question ? "graded_question_answer" : "graded_read_aloud", activityId: activity.activityId, round: activity.round, inputDevice: "desktop",
+        serviceLabel: activity.label,
+        ...(question ? { questionId: question.id, questionTitle: question.title,
+          questionTexts: texts, questionSnapshot: question, language } : { readingTexts: texts }),
+        languages: activityLanguages(texts, config), defaultLanguage: selectedLanguage,
+        question: texts[selectedLanguage], bankVersion: activity.version,
         pairingHash: digest(pairingToken), pairCode: String(randomInt(100000, 1000000)),
         expiresAt: now() + 1200, pairingExpiresAt: now() + 300, attempts: 0, revision: 0 };
       await store.atomic([{ item: s }]);
@@ -352,11 +377,11 @@ export function createService(deps) {
       const s = await load(body.id);
       if (!equal(body.pairingToken, s.pairingHash)) fail(401, "Invalid pairing capability");
       if (s.status !== "pairing") fail(409, "Session already claimed");
-      if (s.mode === "graded_read_aloud" && (s.inputDevice !== "phone" || s.pairingExpiresAt <= now()))
+      if (gradedSession(s) && (s.inputDevice !== "phone" || s.pairingExpiresAt <= now()))
         fail(410, "Pairing expired; start a new practice");
       const token = secret();
-      const next = await ensureQuestion(await save(s, { status: s.mode === "graded_read_aloud" ? "ready" : "generating_question",
-        ...(s.mode === "graded_read_aloud" ? { inputDevice: "phone" } : {}),
+      const next = await ensureQuestion(await save(s, { status: gradedSession(s) ? "ready" : "generating_question",
+        ...(gradedSession(s) ? { inputDevice: "phone" } : {}),
         mobileHash: digest(token), pairingHash: null, approvedAt: now(), expiresAt: now() + 1200 }));
       return { ...await view(next, true), mobileToken: `${s.id}.${token}` };
     }
@@ -365,12 +390,12 @@ export function createService(deps) {
       const s = await ownerSession(event, desktop[1]);
       if (method === "GET" && !desktop[2]) return view(await poll(s));
       if (method === "POST" && desktop[2] === "answer") {
-        if (s.mode !== "graded_read_aloud" || s.inputDevice !== "desktop") fail(409, "This session is not accepting desktop speech");
+        if (!gradedSession(s) || s.inputDevice !== "desktop") fail(409, "This session is not accepting desktop speech");
         validateSpeech(body);
         return submit(s, body.transcript.trim(), body.language ?? defaultLanguage(s));
       }
       if (method === "POST" && desktop[2] === "transfer") {
-        if (s.mode !== "graded_read_aloud" || s.status !== "ready" || s.inputDevice !== "desktop")
+        if (!gradedSession(s) || s.status !== "ready" || s.inputDevice !== "desktop")
           fail(409, "Only a ready desktop practice can transfer to a phone");
         const pairingToken = secret();
         const next = await save(s, { status: "pairing", inputDevice: "phone", mobileHash: null,
@@ -391,7 +416,7 @@ export function createService(deps) {
         return view(s, true);
       }
       if (method === "POST" && path === "/voice/mobile/answer") {
-        if (s.mode === "graded_read_aloud" && s.inputDevice !== "phone") fail(409, "This session is not accepting phone speech");
+        if (gradedSession(s) && s.inputDevice !== "phone") fail(409, "This session is not accepting phone speech");
         validateSpeech(body);
         if (s.mode === "read_aloud" && !isMeaningfulTranscript(body.transcript))
           fail(400, "A meaningful spoken transcript is required");

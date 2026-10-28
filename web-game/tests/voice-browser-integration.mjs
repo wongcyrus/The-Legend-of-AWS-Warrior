@@ -59,7 +59,13 @@ function fakeApi(path, method, body, authorization) {
         bestScore: round === 1 && service.completed ? 85 : null,
         latestScore: round === 1 && service.completed ? 85 : null,
         feedback: round === 1 && service.completed ? "Good coverage." : "",
-        mpAwarded: round === 1 && service.completed ? 10 : 0 }))),
+        mpAwarded: round === 1 && service.completed ? 10 : 0 }))).concat(backend.qaEnabled ? [1, 2].map(number => ({
+          activityId: `qa:s3:q${number}`, serviceId: "s3", label: "Amazon S3", type: "question_answer",
+          questionId: `q${number}`, title: `Private screenshots ${number}`, available: true,
+          languages: ["en-US", "zh-HK"], round: 1,
+          completed: number === 1 && [...backend.sessions.values()].some(session => session.mode === "graded_question_answer" && session.completed),
+          bestScore: null, latestScore: null, feedback: null, mpAwarded: 0, completedAt: 1793191336,
+        })) : []),
       completed: services.filter(service => service.completed).length, total: services.length };
   }
   if (path.endsWith("/voice/sessions") && method === "POST") {
@@ -73,6 +79,12 @@ function fakeApi(path, method, body, authorization) {
         "zh-HK": "Amazon S3 以物件形式將資料儲存在儲存桶內。", "fr-FR": frenchPassage },
       languages, defaultLanguage: "en-US",
       language: "en-US", attempts: 0, maxAttempts: 6 };
+    if (body.type === "question_answer") Object.assign(session, {
+      mode: "graded_question_answer", type: "question_answer", activityId: "qa:s3:q1", questionId: "q1",
+      questionTitle: "Private screenshots", languages: languages.slice(0, 2),
+      questionTexts: { "en-US": "How would you store private screenshots?", "zh-HK": "你會點樣儲存私人截圖？" },
+      question: "How would you store private screenshots?", readingTexts: undefined,
+    });
     backend.sessions.set(id, session);
     return { ...session, expiresAt: 1793195000 };
   }
@@ -102,7 +114,8 @@ function fakeApi(path, method, body, authorization) {
     return { id: session.id, serviceId: session.serviceId, pairCode: session.pairCode,
       status: session.status, paired: session.paired, completed: session.completed,
       question: session.status === "ready" ? session.question : undefined,
-      mode: session.mode, readingTexts: session.readingTexts, languages: session.languages,
+      mode: session.mode, readingTexts: session.readingTexts, questionTexts: session.questionTexts,
+      activityId: session.activityId, questionId: session.questionId, languages: session.languages,
       defaultLanguage: session.defaultLanguage, result: session.result };
   }
   if (path.endsWith("/voice/mobile/claim") && method === "POST") {
@@ -118,7 +131,9 @@ function fakeApi(path, method, body, authorization) {
     const token = `mobile-${body.id}-${backend.mobileTokens.size}`;
     backend.mobileTokens.set(token, session.id);
     return { mobileToken: token, status: session.status, question: session.question, mode: session.mode,
-      readingTexts: session.readingTexts, languages: session.languages, defaultLanguage: session.defaultLanguage,
+      readingTexts: session.readingTexts, questionTexts: session.questionTexts,
+      activityId: session.activityId, questionId: session.questionId,
+      languages: session.languages, defaultLanguage: session.defaultLanguage,
       completed: session.completed,
       language: session.language, attempts: session.attempts, maxAttempts: 6 };
   }
@@ -129,7 +144,9 @@ function fakeApi(path, method, body, authorization) {
       serviceId: session.serviceId, serviceLabel: session.serviceLabel,
       expiresAt: "2026-10-28T16:00:00Z", question: session.question,
       result: session.result, completed: session.completed, language: session.language,
-      mode: session.mode, readingTexts: session.readingTexts, languages: session.languages, defaultLanguage: session.defaultLanguage,
+      mode: session.mode, readingTexts: session.readingTexts, questionTexts: session.questionTexts,
+      activityId: session.activityId, questionId: session.questionId,
+      languages: session.languages, defaultLanguage: session.defaultLanguage,
       attempts: session.attempts, maxAttempts: 6 };
   }
   if (path.endsWith("/voice/mobile/answer") && method === "POST") {
@@ -139,7 +156,11 @@ function fakeApi(path, method, body, authorization) {
     session.completed = true;
     session.status = "completed";
     session.result = { passed: true, score: 85, mpAwarded: 10, feedback: "Good coverage." };
-    backend.wallet = { ...backend.wallet, balance: 10, earned: 10, revision: 1 };
+    if (session.mode === "graded_question_answer") session.result = {
+      passed: true, score: 100, mpAwarded: 30, feedback: "Good understanding.", breakdown: { understanding: 100 },
+    };
+    backend.wallet = { ...backend.wallet, balance: backend.wallet.balance + session.result.mpAwarded,
+      earned: backend.wallet.earned + session.result.mpAwarded, revision: backend.wallet.revision + 1 };
     return { status: 200, body: { status: "completed", completed: true, result: session.result, attempts: session.attempts } };
   }
   return { status: 404, body: { error: "Route not found" } };
@@ -247,6 +268,10 @@ const waitFor = async (browser, expression, timeout = 90000) => {
   const diagnostics = await browser.evaluate(`({
     loading: document.getElementById('loading-message')?.textContent,
     save: document.getElementById('game-save-status')?.textContent,
+    voice: { title: document.getElementById('voice-desktop-title')?.textContent,
+      panel: document.getElementById('voice-desktop-panel')?.textContent,
+      status: document.getElementById('pc-voice-status')?.textContent,
+      calls: globalThis.__apiCalls?.slice(-5).map(call => ({path:call.path,method:call.method})) },
     game: globalThis.__game ? { ready: __game.ready, resume: !!__game.resumeSave,
       changing: __game.progressChanging, travel: __game.traveling, reading: __game.readingService,
       talking: __game.talking, actorsReady: __game.mapActorsReady(), hidden: document.hidden } : null
@@ -408,7 +433,7 @@ try {
     position:[__game.player._position.x,__game.player._position.z]
   })`);
   assert.equal(pause.signOpen, true);
-  assert.equal(pause.readLabel, "Read aloud");
+  assert.equal(pause.readLabel, "Voice practice");
   assert.equal(pause.readDisabled, false);
   assert.equal(pause.reading, true);
   await desktop.evaluate(`__game.player.GetComponent('BasicCharacterControllerInput')._keys.forward=true`);
@@ -626,13 +651,13 @@ try {
   await marks.evaluate(`{ const search = document.querySelector('input[type="search"]');
     search.value = '  s3  '; search.dispatchEvent(new Event('input')); }`);
   assert.equal(await marks.evaluate(`document.querySelectorAll('#voice-marks-activities tr').length`), 2);
-  await marks.evaluate(`{ const filter = document.querySelector('select');
+  await marks.evaluate(`{ const filter = document.querySelector('#voice-marks-filter');
     filter.value = [...filter.options].find(option => option.textContent === 'Passed').value;
     filter.dispatchEvent(new Event('change')); }`);
   assert.equal(await marks.evaluate(`document.querySelectorAll('#voice-marks-activities tr').length`), 1);
   await marks.evaluate(`{ const search = document.querySelector('input[type="search"]');
     search.value = ''; search.dispatchEvent(new Event('input'));
-    const filter = document.querySelector('select');
+    const filter = document.querySelector('#voice-marks-filter');
     filter.value = [...filter.options].find(option => option.textContent === 'All').value;
     filter.dispatchEvent(new Event('change')); }`);
   assert.equal(backend.calls.filter(call => call.path.endsWith("/voice/completions")).length, marksRequests);
@@ -708,11 +733,59 @@ try {
   assert.equal(await desktop.evaluate("__game.infinitiveMagic"), false);
   assert.ok(await desktop.evaluate(`document.querySelector('link[rel="icon"]').href.includes('favicon.ico?v=hkiit-1')`));
 
+  backend.qaEnabled = true;
+  await desktop.evaluate(`{ const mission = document.createElement('button'); mission.dataset.awsService = 's3';
+    document.querySelector('#mission-services').appendChild(mission); mission.click(); mission.remove(); }
+    document.querySelector('#service-explain').click();`);
+  await waitFor(desktop, `document.querySelector('#voice-question-option').disabled === false`);
+  await desktop.evaluate(`{ const type = document.querySelector('#voice-task-type'); type.value='question_answer';
+    type.dispatchEvent(new Event('change')); } document.querySelector('#voice-start').click();`);
+  await waitFor(desktop, `document.querySelector('#pc-question-heading').textContent === 'Question' &&
+    document.querySelector('#pc-speak').disabled === false`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-voice-question').textContent`), "How would you store private screenshots?");
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-send-answer').textContent`), "Submit answer");
+  await desktop.evaluate(`document.querySelector('#pc-speak').dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:1}));
+    window.__speechInstances.at(-1).onresult({results:[Object.assign([{transcript:'S3'}],{isFinal:true})]});
+    document.querySelector('#pc-speak').dispatchEvent(new PointerEvent('pointerup',{pointerId:1}));`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-send-answer').disabled`), false);
+  await desktop.evaluate(`document.querySelector('#pc-send-answer').click()`);
+  await waitFor(desktop, `document.querySelector('#pc-voice-result').textContent.includes('55/100')`);
+  const qaSession = [...backend.sessions.values()].find(session => session.mode === "graded_question_answer");
+  await desktop.evaluate(`document.querySelector('#voice-transfer').click()`);
+  await waitFor(desktop, `!!document.querySelector('#voice-desktop-panel canvas')`);
+  const qaPhone = await makeTarget(`/voice-practice.html#id=${qaSession.id}&token=pair-${qaSession.id}`, { mobile: true });
+  mobileBrowsers.push(qaPhone);
+  await waitFor(qaPhone, `document.querySelector('#mobile-question-heading')?.textContent === 'Question'`);
+  await qaPhone.evaluate(`document.querySelector('#mobile-voice-language').value='zh-HK';
+    document.querySelector('#mobile-voice-language').dispatchEvent(new Event('change'));`);
+  assert.equal(await qaPhone.evaluate(`document.querySelector('#mobile-voice-question').textContent`), "你會點樣儲存私人截圖？");
+  await qaPhone.evaluate(`document.querySelector('#mobile-speak').dispatchEvent(new KeyboardEvent('keydown',{key:' '}));
+    window.__speechInstances.at(-1).onresult({results:[Object.assign([{transcript:'S3'}],{isFinal:true})]});
+    document.querySelector('#mobile-speak').dispatchEvent(new KeyboardEvent('keyup',{key:' '}));
+    document.querySelector('#mobile-send-answer').click();`);
+  await waitFor(qaPhone, `document.querySelector('#mobile-voice-result').textContent.includes('MP earned: 30')`);
+  assert.equal(await qaPhone.evaluate(`(document.body.innerText.match(/Grade: 100\\/100/g) || []).length`), 1);
+  await desktop.evaluate(`document.querySelector('#voice-check').click()`);
+  await waitFor(desktop, `document.querySelector('#pc-voice-result').textContent.includes('MP earned: 30')`);
+  assert.equal(await desktop.evaluate(`(document.querySelector('#voice-desktop-dialog').innerText.match(/Grade: 100\\/100/g) || []).length`), 1);
+  assert.equal(await desktop.evaluate(`document.querySelector('#voice-start').hidden`), true);
+  await marks.evaluate(`document.querySelector('#voice-marks-key').value='mock-desktop-key';
+    document.querySelector('#voice-marks-form').dispatchEvent(new Event('submit',{cancelable:true}));`);
+  await waitFor(marks, `document.querySelectorAll('#voice-marks-activities tr').length === 14`);
+  await marks.evaluate(`document.querySelector('#voice-marks-type').value='question_answer';
+    document.querySelector('#voice-marks-type').dispatchEvent(new Event('change'));`);
+  assert.equal(await marks.evaluate(`document.querySelectorAll('#voice-marks-activities tr').length`), 2);
+  assert.match(await marks.evaluate(`document.querySelector('#voice-marks-activities').textContent`), /Q&A: Private screenshots/);
+  await desktop.evaluate(`document.querySelector('#voice-desktop-close').click(); document.querySelector('#service-explain').click();`);
+  await waitFor(desktop, `document.querySelector('#voice-start').textContent === 'Start Q&A' &&
+    document.querySelector('#voice-start').disabled === false`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-voice-result').textContent`), "");
+
   const evidence = [
     "Local served-page browser integration: PASS",
     `Game booted from http://127.0.0.1:${port}/game-v2.html; mobile page from same served origin.`,
     "Mock API only; no AWS requests, student records, or task grading endpoints called.",
-    "Actual S3 3D sign click opened the service modal; Read aloud is the only practice action and the modal pauses player movement.",
+    "Actual S3 3D sign click opened the service modal; Voice practice is the only practice action and the modal pauses player movement.",
     "Desktop QR generated locally; scanning opens the question immediately without a pairing-code check or desktop approval.",
     "Desktop polling: zero session GET requests before manual Check; one after explicit click.",
     "Mobile transcript: no editable text controls; interim speech cannot submit; final speech sends required flags.",
@@ -724,6 +797,7 @@ try {
     "Voice marks page loads saved game key, renders twelve graded activity rows and Hong Kong time, and clears results on key changes.",
     "Voice marks uses desktop width and stacks long feedback on 390px and 320px phones without page overflow or clipping.",
     "Marks search and status filters run locally without extra API calls.",
+    "Q&A is database-gated, supports short PC answers and same-question phone transfer, displays bilingual questions and one result, and filters marks by task type.",
     "Game saves restore safe spawn/equipment on another tab, reject stale writes, explicitly resolve conflicts, and recover offline changes after reload without changing MP.",
     `Browser runtime exceptions: ${desktop.exceptions.length + mobileBrowsers.reduce((sum, item) => sum + item.exceptions.length, 0)}.`,
   ].join("\n");

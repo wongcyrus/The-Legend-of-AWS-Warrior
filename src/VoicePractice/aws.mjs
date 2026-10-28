@@ -62,6 +62,16 @@ export function awsDependencies(env = process.env, clients = {}) {
       })) rows.push(...(page.Items ?? []));
       return rows;
     },
+    async listQuestions(serviceId) {
+      const rows = [];
+      for await (const page of paginateQuery({ client: database }, {
+        TableName, KeyConditionExpression: "PK = :bank AND begins_with(SK, :prefix)",
+        ExpressionAttributeValues: { ":bank": "QUESTION_BANK",
+          ":prefix": serviceId ? `SERVICE#${serviceId}#QUESTION#` : "SERVICE#" },
+        ConsistentRead: true,
+      })) rows.push(...(page.Items ?? []));
+      return rows;
+    },
     isConflict(e) {
       return ["ConditionalCheckFailedException", "TransactionInProgressException"].includes(e.name) ||
         (e.name === "TransactionCanceledException" &&
@@ -122,6 +132,9 @@ export function awsDependencies(env = process.env, clients = {}) {
           readingTexts: Object.fromEntries(Object.entries(input.readingTexts ?? {}).sort(([a], [b]) => a.localeCompare(b))),
           transcript: input.transcript, language: input.language ?? "en-US",
           ...(input.feedbackLanguage ? { feedbackLanguage: input.feedbackLanguage } : {}),
+        } : operation === "grade_answer" ? {
+          question: input.question, transcript: input.transcript, language: input.language ?? "en-US",
+          ...(input.feedbackLanguage ? { feedbackLanguage: input.feedbackLanguage } : {}),
         } : operation === "generate" ? input : {
           question, transcript: input.transcript, history: input.history ?? [], language: input.language ?? "en-US",
           ...(input.feedbackLanguage ? { feedbackLanguage: input.feedbackLanguage } : {}),
@@ -130,6 +143,7 @@ export function awsDependencies(env = process.env, clients = {}) {
       const value = await parseAgentResponse(response);
       if (operation === "generate") return value;
       if (operation === "grade_reading") return validateGrade(value);
+      if (operation === "grade_answer") return value;
       if (!["pass", "retry", "review"].includes(value.verdict)) throw new Error("Invalid verdict");
       return { passed: value.verdict === "pass", feedback: value.feedback };
     },

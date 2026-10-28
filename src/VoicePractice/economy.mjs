@@ -14,13 +14,22 @@ const uuid = value => typeof value === "string" &&
 
 export function createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey, activities = authoredActivities }) {
   const wallet = async owner => walletView(await store.get(walletKey(owner)));
-  const summaries = async owner => {
+  const summaries = async (owner, extraActivities = []) => {
+    const catalog = [...activities, ...extraActivities];
     const savedRows = store.listActivities ? await store.listActivities(owner) :
-      await Promise.all(activities.map(activity => store.get(activityKey(owner, activity.activityId))));
+      await Promise.all(catalog.map(activity => store.get(activityKey(owner, activity.activityId))));
     const rows = new Map(savedRows.filter(Boolean).map(row => [row.activityId, row]));
-    return activities.map(activity => {
+    const ids = new Set(catalog.map(activity => activity.activityId));
+    for (const row of rows.values()) {
+      if (row.type === "question_answer" && !ids.has(row.activityId))
+        catalog.push({ ...row, available: false });
+    }
+    return catalog.map(activity => {
       const saved = rows.get(activity.activityId);
       return { activityId: activity.activityId, serviceId: activity.serviceId, label: activity.label,
+        type: activity.type ?? "read_aloud",
+        ...(activity.type === "question_answer" ? { title: activity.title, questionId: activity.questionId,
+          languages: activity.languages ?? [], available: activity.available !== false } : {}),
         round: activity.round, completed: saved?.completed === true,
         bestScore: saved?.bestScore ?? null, latestScore: saved?.latestScore ?? null,
         feedback: saved?.feedback ?? null, mpAwarded: saved?.mpAwarded ?? 0,
@@ -28,7 +37,7 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     });
   };
   const choose = async (owner, requested) => {
-    const unfinished = (await summaries(owner)).filter(a => !a.completed);
+    const unfinished = (await summaries(owner)).filter(a => a.type === "read_aloud" && !a.completed);
     if (!unfinished.length) fail(409, "All authored reading activities are complete. No further MP rewards are available.");
     const round = Math.min(...unfinished.map(a => a.round));
     const eligible = unfinished.filter(a => a.round === round);
@@ -76,9 +85,13 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
       const beforeWallet = await store.get(walletKey(s.owner));
       const w = walletView(beforeWallet);
       const firstPass = grade.passed && !before?.completed;
-      const credited = firstPass ? Math.min(rewardFor(grade.score), 100 - w.balance) : 0;
-      const result = { ...grade, activityId: s.activityId, mpAwarded: credited };
+      const type = s.mode === "graded_question_answer" ? "question_answer" : "read_aloud";
+      const credited = firstPass ? Math.min(rewardFor(grade.score, type), 100 - w.balance) : 0;
+      const result = { ...grade, activityId: s.activityId, ...(type === "question_answer" ? { type } : {}), mpAwarded: credited };
       const activity = { ...before, ...key, activityId: s.activityId, serviceId: s.serviceId,
+        type, label: s.serviceLabel ?? s.serviceId,
+        ...(type === "question_answer" ? { title: s.questionTitle, questionId: s.questionId, version: s.bankVersion,
+          languages: s.languages.map(language => language.id) } : {}),
         round: s.round, revision: (before?.revision ?? -1) + 1,
         completed: Boolean(before?.completed || grade.passed),
         bestScore: Math.max(before?.bestScore ?? 0, grade.score), latestScore: grade.score,
@@ -90,14 +103,14 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
         { item: { ...a, state: "done", result, revision: a.revision + 1 }, previous: a.revision },
         { item: activity, previous: before?.revision },
         { item: { ...gradeKey(s.owner, s.id, a.hash), activityId: s.activityId, serviceId: s.serviceId,
-          result, createdAt: now() } },
+          type, version: s.bankVersion, result, createdAt: now() } },
       ];
       if (firstPass) writes.push({ item: { ...beforeWallet, ...walletKey(s.owner), ...w,
         balance: w.balance + credited, earned: w.earned + credited, revision: w.revision + 1 },
       previous: beforeWallet?.revision });
       const completion = await store.get(completionKey(s.owner, s.serviceId));
       // Existing ungraded completions are deliberately not rewritten or converted.
-      if ((!completion && grade.passed) || completion?.mode === "graded_read_aloud") {
+      if (type === "read_aloud" && ((!completion && grade.passed) || completion?.mode === "graded_read_aloud")) {
         writes.push({ item: { ...completion, ...completionKey(s.owner, s.serviceId),
           revision: (completion?.revision ?? -1) + 1, mode: "graded_read_aloud",
           serviceId: s.serviceId, verified: Boolean(completion?.verified || grade.passed),

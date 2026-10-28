@@ -10,6 +10,134 @@ The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. 
 ## Tech Blog
 [The Legend of AWS Warrior: A Free Opensource 3D RPG Adventure Game with Generative AI for learning AWS](https://community.aws/content/2ftYEIAT0IlnPwAhvKhlD4PL52h/behind-the-scene-of-the-legend-of-aws-warrior)
 
+## Architecture
+
+The application is deployed with AWS SAM. The current deployment uses the
+`CloudProjectMarker` stack in `us-east-1`. Solid arrows below show requests and
+data access; dashed arrows show optional paths or supporting configuration.
+
+```mermaid
+flowchart TB
+    PC["PC browser<br/>React account app, Three.js game, voice and marks"]
+    Phone["Phone browser<br/>Optional voice input"]
+    CDN["CloudFront"]
+    Web["Private S3 bucket<br/>Web apps, icons and 3D assets"]
+    API["API Gateway<br/>PC: API key<br/>Phone: session capability validated by Lambda"]
+
+    PC -->|Load frontend| CDN
+    Phone -->|Load frontend| CDN
+    CDN -->|Origin Access Control| Web
+    PC -.->|Short-lived QR transfer| Phone
+    PC -->|HTTPS API requests / recognised speech text| API
+    Phone -->|Recognised speech text| API
+
+    subgraph Missions["Accounts, AWS missions and assessment"]
+        Core[".NET 8 Lambda functions<br/>Accounts, quests, grading and marks"]
+        Student["Student AWS account<br/>Resources validated by NUnit tests"]
+        CoreDB["DynamoDB<br/>Accounts, passed/failed tests, instruction cache"]
+        Reports["S3<br/>Test reports"]
+        NPC["Amazon Bedrock<br/>NPC dialogue / instruction rewriting"]
+        Scheduler["EventBridge Scheduler"]
+        Workflow["Step Functions<br/>Bulk grading"]
+        API --> Core
+        Core --> Student
+        Core --> CoreDB
+        Core --> Reports
+        Core --> NPC
+        Scheduler -.->|Optional scheduled grading| Workflow
+        Workflow --> Core
+    end
+
+    Identity["DynamoDB API-key lookup<br/>Canonical player identity"]
+    Core --> Identity
+
+    subgraph VoiceAndSaves["Voice grading, MP and V2 checkpoint saves"]
+        Voice["Node.js 22 Lambda<br/>Voice sessions, wallet, casts and game saves"]
+        Worker["Same Lambda, asynchronous invocation<br/>Grading worker"]
+        Agent["Amazon Bedrock AgentCore Runtime"]
+        Model["Amazon Bedrock Nova Lite<br/>Read-aloud and Q&A transcript grading"]
+        VoiceDB["DynamoDB VoicePracticeTable<br/>Approved question bank, sessions, attempts, grades<br/>Activity progress, MP wallets, casts, game saves"]
+        Failure["SQS<br/>Failed async invocation destination"]
+        Config["Bundled JSON configuration<br/>activities.json, languages.json, game-save.json"]
+        API --> Voice
+        Voice --> Identity
+        Voice -->|Read-only passed-test verification| CoreDB
+        Voice --> VoiceDB
+        Voice -->|Enqueue grading| Worker
+        Worker --> Agent
+        Agent --> Model
+        Worker -->|Validated grades and atomic MP rewards| VoiceDB
+        Worker -.->|Failed invocation| Failure
+        Config -.-> Voice
+    end
+
+    Logs["CloudWatch logs<br/>KMS-encrypted voice logs"]
+    Core -.-> Logs
+    Voice -.-> Logs
+    Worker -.-> Logs
+    Agent -.-> Logs
+```
+
+Browser speech recognition runs on the PC or phone and may use the browser
+provider's speech service. The application backend receives text, not audio;
+there is no active recording upload or Amazon Transcribe path. The retained
+legacy audio bucket is not used by this flow.
+
+AWS assessment marks, voice grades/MP and cosmetic game progress are separate.
+Normal magic casts reserve server MP; Infinitive Magic Mode is local-only and
+does not modify the wallet. Checkpoint saves use conditional revisions and an
+account-scoped local recovery cache; saved mission claims are checked against
+passed AWS tests. The marks page loads server results and filters them locally.
+
+Reading configuration covers 302 services and 308 activities. Q&A additionally
+supports many database-backed questions per service, available after explicit
+batch publication. `question-bank.mjs publish` imports ready questions directly;
+`export` downloads the private bank for editing. No draft-review step is required.
+The supplied bank contains 12 bilingual questions across six services.
+Q&A earns 10/20/30 MP for scores of 60/75/90, once per question, sharing the
+existing 100 MP wallet cap. Reading remains at 5/10/15 MP.
+Bundled reading configuration changes require deployment; approved question-bank
+updates do not. Voice and checkpoint routes share the
+optional voice backend. See [backend operations](src/VoicePractice/OPERATIONS.md)
+for contracts, persistence and rollout details. The current deployment has no
+CloudTrail trail configured for durable audit retention.
+
+## Managing Q&A questions
+
+Q&A is deployed with 12 English/Cantonese questions across S3, EC2, IAM, VPC,
+Lambda and DynamoDB. Each service can have many questions. Publish new questions
+directly to the database; no draft-review step or application redeployment is
+required for existing services and configured languages.
+
+Run from the repository root with authorised AWS operator credentials:
+
+```sh
+export AWS_REGION=us-east-1
+export VOICE_TABLE="$(aws cloudformation describe-stack-resource \
+  --stack-name CloudProjectMarker --logical-resource-id VoicePracticeTable \
+  --query 'StackResourceDetail.PhysicalResourceId' --output text --no-cli-pager)"
+
+# Export all questions, or add a service ID (for example s3) after the filename.
+node src/VoicePractice/question-bank.mjs export questions-export.json
+
+# Edit the file, then validate and publish only new or changed questions.
+node src/VoicePractice/question-bank.mjs validate questions-export.json
+node src/VoicePractice/question-bank.mjs publish questions-export.json
+```
+
+For **new questions**, use a unique ID, `status:"approved"`, `version:1` and
+`expectedRevision:null`. For **existing questions**, keep the exported ID and
+`expectedRevision`, increment `version`, and remove unchanged rows from the
+publication file. Updating wording or translations does not award MP again.
+
+Each publication supports 1-100 questions in an all-or-nothing transaction.
+Exports contain **private answer rubrics**: do not publish them to the website
+or commit ad-hoc exports. The export command refuses to overwrite an existing
+file. Reopen the game's voice dialog after publication to refresh availability.
+
+See [question-bank operations](src/VoicePractice/OPERATIONS.md#batch-publishing-and-exporting-questions)
+for the content fields, service-specific exports, retirement and conflict handling.
+
 
 ## Deploy the updated application.
 For the first time, install AWS SAM CLI and the .NET 8 SDK (x86_64 Linux).

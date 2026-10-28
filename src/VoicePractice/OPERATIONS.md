@@ -4,7 +4,7 @@ Node.js 22 Lambda: `index.handler`. Package this directory including production 
 
 ## Authored reading and grading
 
-New sessions always use server-owned `mode:"graded_read_aloud"`. `activities.json` contains 308 immutable versioned activities covering all 302 discoverable services, initially in English and Cantonese. Every service has round one; s3, ec2, iam, vpc, lambda and dynamodb retain their existing second round. The twelve original identifiers and passages are unchanged. No questions are generated for these sessions.
+New sessions default to server-owned `mode:"graded_read_aloud"`. `activities.json` contains 308 immutable versioned activities covering all 302 discoverable services, initially in English and Cantonese. Every service has round one; s3, ec2, iam, vpc, lambda and dynamodb retain their existing second round. The twelve original identifiers and passages are unchanged. No questions are generated for these sessions.
 
 The server selects unfinished round-one activities before round two. A requested service is preferred only within the eligible round's unfinished services. Thus requesting an already-passed service can return another service. Once all authored activities pass, creation returns 409 with a safe exhaustion message; no unlimited reward generation is available.
 
@@ -14,7 +14,154 @@ The adapter and agent sort language-map keys before invocation, because DynamoDB
 
 Speech recognition runs in the browser, which may send audio to its own provider. The backend receives final text only: no recording, audio upload, presigning or Amazon Transcribe integration. Transcript maximum is 6,000 characters. Client-supplied scores, passage text, history, owner identities and reward claims are ignored.
 
-Desktop and phone graded submissions reject silence, punctuation and insufficient speech with 400 before reserving attempts or daily budget or queuing model work. Meaningful speech requires two word groups totaling at least eight letters/digits, or six non-Latin letters with at least three distinct characters, allowing scripts that do not separate words with spaces. This is only an input-quality gate, not a reading grade.
+Desktop and phone graded reading submissions reject silence, punctuation and insufficient speech with 400 before reserving attempts or daily budget or queuing model work. Meaningful reading speech requires two word groups totaling at least eight letters/digits, or six non-Latin letters with at least three distinct characters, allowing scripts that do not separate words with spaces. This is only an input-quality gate, not a reading grade.
+
+## Database-backed Q&A
+
+Q&A uses the same Lambda, AgentCore runtime, table, authentication, transfer and
+retry paths. No additional agent or public authoring endpoint is required.
+One service has many independently rewarded questions. The server enables this
+type only when a valid `approved` question exists for the requested service and
+language. An empty bank, draft or retired record cannot start a new session;
+there is no runtime question generation or read-aloud fallback.
+
+POST `/voice/sessions` with
+`{"serviceId":"s3","type":"question_answer","language":"en-US"}` returns
+`mode:"graded_question_answer"`, `questionId`, `questionTitle`, translated
+`questionTexts` and the usual session/device/attempt fields. The server chooses
+an unfinished approved question in that service/language independently of reading
+rounds. When all are passed, it allows practice again without additional rewards.
+PC task selection uses authenticated `/voice/completions` availability; the server
+rechecks availability on creation. Selecting Q&A discards unsent reading speech.
+After completion, close and reopen the service's voice dialog to start another
+question; there is no duplicated result or next-activity button.
+
+Questions are individual items with `PK:QUESTION_BANK` and
+`SK:SERVICE#serviceId#QUESTION#questionId`. Prefix queries group one service's
+questions; a paginated catalog query supports availability and marks without
+a table scan or a new index. Draft/retired/invalid items are excluded server-side.
+This shared partition is intended for the educational question bank, not a
+high-volume multi-tenant content platform.
+
+Each record has a stable ID, increasing integer version, revision, title,
+language-to-prompt map, weighted concepts, misconceptions, acceptable answers and
+a reference answer. Concept weights must be positive integers summing to 100.
+Rubrics and reference answers are never returned in session/marks/availability
+responses. A session snapshots the full approved question and language metadata;
+later edits/retirement do not change an already-started attempt.
+
+`grade_answer` makes one bounded model call for the **current answer only**.
+The model returns each approved concept as met, missing or contradicted, with
+verbatim transcript evidence for met/contradicted concepts and short feedback.
+Both layers validate the concept partition; evidence must occur in the submitted
+transcript after case, Unicode and whitespace normalization. Lambda sums only met
+concept weights; the model cannot choose scores, pass status or rewards.
+This is a meaning assessment, not pronunciation, word-count or passage coverage.
+Short answers such as `S3` are accepted for assessment, not automatically passed.
+Empty/punctuation-only answers are rejected before reserving an attempt.
+
+The result uses `breakdown:{understanding:score}`. First-pass Q&A rewards are
+**10 MP at 60, 20 MP at 75, 30 MP at 90**, versus 5/10/15 for reading. Both use
+the same 100 MP wallet cap, six attempts and 100 daily submissions. Credit is
+atomic and once-only, including when the wallet is full. Progress is keyed by
+`ACTIVITY#qa:serviceId:questionId`, independent of reading and shared across
+languages/versions. Editing a question does **not** reset its reward. Do not
+rename IDs to refresh rewards. Old grade records retain their assessed version;
+question edits cannot regrade history.
+
+Marks include type, public title/ID and available languages, with a task-type
+filter. Saved marks for retired or temporarily unapproved questions remain
+visible with `available:false`. Q&A does not rewrite legacy service participation
+or give a cosmetic read-aloud badge.
+
+### Batch publishing and exporting questions
+
+`questions.json` contains **12 bilingual questions** across six services. Use
+`publish` to import a batch directly as available questions, without a separate
+draft or approval step. Publishing still validates wording bounds, languages,
+rubric weights, stable IDs and revisions. Deployment does not implicitly import
+this file: content publication is an explicit operator command.
+
+From the repository root, use authorised AWS operator credentials (for example
+your configured AWS profile). Student game API keys cannot run these commands.
+Select the deployment and resolve its actual table name:
+
+```sh
+export AWS_REGION=us-east-1
+export VOICE_TABLE="$(aws cloudformation describe-stack-resource \
+  --stack-name CloudProjectMarker --logical-resource-id VoicePracticeTable \
+  --query 'StackResourceDetail.PhysicalResourceId' --output text --no-cli-pager)"
+```
+
+Change the region and stack name for a different deployment. Then:
+
+```sh
+# Offline validation, no AWS calls:
+node src/VoicePractice/question-bank.mjs validate src/VoicePractice/questions.json
+
+# Authenticated operator commands; set AWS_REGION and VOICE_TABLE first.
+# First publication only: the bundled file has expectedRevision:null.
+# Do not rerun it against existing questions; export before editing instead.
+node src/VoicePractice/question-bank.mjs publish src/VoicePractice/questions.json
+
+# Export all questions, or just one service, to a NEW private JSON file:
+node src/VoicePractice/question-bank.mjs export questions-export.json
+node src/VoicePractice/question-bank.mjs export s3-export.json s3
+
+# After editing an export (increment version on each changed row), publish it:
+node src/VoicePractice/question-bank.mjs validate s3-export.json
+node src/VoicePractice/question-bank.mjs publish s3-export.json
+
+# Retirement takes the CURRENT revision (a new publication starts at 0):
+node src/VoicePractice/question-bank.mjs retire s3 private-screenshots 0
+```
+
+Exports include private concepts, acceptable answers and reference answers, **not
+student attempts, grades or wallets**. They use owner-only file permissions and
+refuse to overwrite an existing file. Never put exports under `web-game`, the
+public web bucket, or a shared public location.
+
+For a new question, copy an example and set a new `id`, known `serviceId`,
+`status:"approved"`, `version:1`, and `expectedRevision:null`. Supply its title,
+translated `prompts`, `concepts` (weights sum to 100), `misconceptions`,
+`acceptableAnswers`, and `referenceAnswer`. Empty arrays for the two optional
+guidance lists are allowed. No game-code change or frontend deployment is needed
+for questions on an existing service and configured language.
+
+For edits, export first, keep each ID and `expectedRevision`, and increment
+`version`. Remove unchanged rows from the publication file; every supplied
+existing row requires a higher version. A stale revision fails the entire batch
+instead of overwriting someone else's update. Publication accepts 1-100 questions
+per atomic batch; exports can contain more, so split larger imports into batches.
+Repeating a fresh-file publication safely fails rather than overwriting records.
+If a revision conflict occurs, export to a new filename, reapply the intended
+edits to the current version, and publish again. Do not reset `expectedRevision`
+to null or delete database items to bypass the conflict.
+
+After publishing, reopen the service's voice dialog to refresh its question
+availability. Export again to a new filename if you need to verify the saved
+content and updated revisions. Existing sessions keep their snapshotted question;
+new sessions receive the published content. Services with no available questions
+continue to show "Questions coming soon."
+
+The optional `import`/`approve` commands remain for anyone who wants a draft
+workflow, but are not required by `publish`. Run these commands
+with an authorised operator role, never student API keys or browser credentials.
+Question items have no TTL; do not delete student activity, grade or wallet rows
+when editing or retiring content.
+
+For grading quality, calibrate the deployed model against teacher-labelled
+correct, partial, wrong, off-topic, short, code-switched, STT-variant and
+prompt-injection answers. Mocked unit tests verify contracts and accounting, not
+grading quality. The previously observed repeated 65/100 reading grades remain a
+separate unresolved calibration issue; this feature does not change that rubric
+or regrade historical attempts.
+
+Deploy the updated agent operation first, then Lambda, then the frontend modules
+and HTML (HTML last). The existing table/routes/permissions suffice. Publish or
+approve question records only after this rollout is ready. No Q&A data migration,
+new AWS resource, automatic approval or live-model calibration is performed by
+the local test suite.
 
 ## Editing services, passages and languages
 
