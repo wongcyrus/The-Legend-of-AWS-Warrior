@@ -1,4 +1,4 @@
-import { activities, rewardFor } from "./activities.mjs";
+import { activities as authoredActivities, rewardFor } from "./activities.mjs";
 
 export const walletKey = owner => ({ PK: `PLAYER#${owner}`, SK: "WALLET" });
 export const activityKey = (owner, id) => ({ PK: `PLAYER#${owner}`, SK: `ACTIVITY#${id}` });
@@ -12,16 +12,21 @@ const cooldowns = { lightning: 6, fireball: 5, frost: 4, storm: 9, shockwave: 2 
 const uuid = value => typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-export function createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey }) {
+export function createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey, activities = authoredActivities }) {
   const wallet = async owner => walletView(await store.get(walletKey(owner)));
-  const summaries = async owner => Promise.all(activities.map(async activity => {
-    const saved = await store.get(activityKey(owner, activity.activityId));
-    return { activityId: activity.activityId, serviceId: activity.serviceId, label: activity.label,
-      round: activity.round, completed: saved?.completed === true,
-      bestScore: saved?.bestScore ?? null, latestScore: saved?.latestScore ?? null,
-      feedback: saved?.feedback ?? null, mpAwarded: saved?.mpAwarded ?? 0,
-      completedAt: saved?.completedAt ?? null };
-  }));
+  const summaries = async owner => {
+    const savedRows = store.listActivities ? await store.listActivities(owner) :
+      await Promise.all(activities.map(activity => store.get(activityKey(owner, activity.activityId))));
+    const rows = new Map(savedRows.filter(Boolean).map(row => [row.activityId, row]));
+    return activities.map(activity => {
+      const saved = rows.get(activity.activityId);
+      return { activityId: activity.activityId, serviceId: activity.serviceId, label: activity.label,
+        round: activity.round, completed: saved?.completed === true,
+        bestScore: saved?.bestScore ?? null, latestScore: saved?.latestScore ?? null,
+        feedback: saved?.feedback ?? null, mpAwarded: saved?.mpAwarded ?? 0,
+        completedAt: saved?.completedAt ?? null };
+    });
+  };
   const choose = async (owner, requested) => {
     const unfinished = (await summaries(owner)).filter(a => !a.completed);
     if (!unfinished.length) fail(409, "All authored reading activities are complete. No further MP rewards are available.");

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from "@aws-sdk/client-bedrock-agentcore";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, paginateQuery, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { digest, HttpError } from "./domain.mjs";
 import { validateGrade } from "./activities.mjs";
@@ -50,15 +50,25 @@ export async function resolveOwner(event, lookup) {
 export function awsDependencies(env = process.env, clients = {}) {
   const TableName = env.VOICE_TABLE;
   const agentClient = clients.runtime ?? runtime;
+  const database = clients.dynamo ?? dynamo;
   const store = {
-    async get(Key) { return (await dynamo.send(new GetCommand({ TableName, Key, ConsistentRead: true }))).Item; },
+    async get(Key) { return (await database.send(new GetCommand({ TableName, Key, ConsistentRead: true }))).Item; },
+    async listActivities(owner) {
+      const rows = [];
+      for await (const page of paginateQuery({ client: database }, {
+        TableName, KeyConditionExpression: "PK = :owner AND begins_with(SK, :prefix)",
+        ExpressionAttributeValues: { ":owner": `PLAYER#${owner}`, ":prefix": "ACTIVITY#" },
+        ConsistentRead: true,
+      })) rows.push(...(page.Items ?? []));
+      return rows;
+    },
     isConflict(e) {
       return ["ConditionalCheckFailedException", "TransactionInProgressException"].includes(e.name) ||
         (e.name === "TransactionCanceledException" &&
           e.CancellationReasons?.some(r => ["ConditionalCheckFailed", "TransactionConflict"].includes(r.Code)));
     },
     async atomic(writes) {
-      await dynamo.send(new TransactWriteCommand({
+      await database.send(new TransactWriteCommand({
         TransactItems: writes.map(({ item, previous }) => ({ Put: {
           TableName, Item: item,
           ConditionExpression: previous === undefined ? "attribute_not_exists(PK)" : "revision = :revision",
@@ -69,6 +79,23 @@ export function awsDependencies(env = process.env, clients = {}) {
   };
   return {
     store,
+    async passedTestsFor(event) {
+      let email;
+      await resolveOwner(event, async key => {
+        const mapping = (await database.send(new GetCommand({
+          TableName: env.API_KEY_LOOKUP_TABLE, Key: { ApiKey: key }, ConsistentRead: true,
+        }))).Item;
+        email = mapping?.Email;
+        return mapping;
+      });
+      const tests = [];
+      for await (const page of paginateQuery({ client: database }, {
+        TableName: env.PASSED_TEST_TABLE, KeyConditionExpression: "#user = :user",
+        ProjectionExpression: "#test, #marks", ExpressionAttributeNames: { "#user": "User", "#test": "Test", "#marks": "Marks" },
+        ExpressionAttributeValues: { ":user": email }, ConsistentRead: true,
+      })) for (const row of page.Items ?? []) if (Number(row.Marks) > 0 && typeof row.Test === "string") tests.push(row.Test);
+      return tests;
+    },
     async ownerFor(event) {
       return resolveOwner(event, async key => (await dynamo.send(new GetCommand({
         TableName: env.API_KEY_LOOKUP_TABLE, Key: { ApiKey: key }, ConsistentRead: true,
@@ -92,10 +119,12 @@ export function awsDependencies(env = process.env, clients = {}) {
         contentType: "application/json", accept: "application/json",
         payload: Buffer.from(JSON.stringify({ operation, ...(operation === "grade_reading" ? {
           activityId: input.activityId, serviceId: input.serviceId,
-          readingTexts: { "en-US": input.readingTexts?.["en-US"], "zh-HK": input.readingTexts?.["zh-HK"] },
+          readingTexts: Object.fromEntries(Object.entries(input.readingTexts ?? {}).sort(([a], [b]) => a.localeCompare(b))),
           transcript: input.transcript, language: input.language ?? "en-US",
+          ...(input.feedbackLanguage ? { feedbackLanguage: input.feedbackLanguage } : {}),
         } : operation === "generate" ? input : {
           question, transcript: input.transcript, history: input.history ?? [], language: input.language ?? "en-US",
+          ...(input.feedbackLanguage ? { feedbackLanguage: input.feedbackLanguage } : {}),
         }) })),
       }), { abortSignal: AbortSignal.timeout(90000) });
       const value = await parseAgentResponse(response);

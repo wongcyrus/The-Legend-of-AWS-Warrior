@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { validateGrade } from "./activities.mjs";
+import { activities, validateGrade } from "./activities.mjs";
+import { activityLanguages, defaultActivityLanguage, languageConfig } from "./content.mjs";
 import { createEconomy } from "./economy.mjs";
+import { createGameSaves } from "./game-save.mjs";
 
 export const lessons = JSON.parse(readFileSync(new URL("./lessons.json", import.meta.url), "utf8"));
 export const digest = value => createHash("sha256").update(value).digest("hex");
@@ -13,11 +15,10 @@ export const budgetKey = (owner, seconds) => ({ PK: `PLAYER#${owner}`, SK: `VOIC
 export const isMeaningfulTranscript = value => {
   if (typeof value !== "string") return false;
   const words = value.match(/[\p{L}\p{N}]+/gu) ?? [];
-  const cjk = value.match(/\p{Script=Han}/gu) ?? [];
-  if (cjk.length >= 6 && new Set(cjk).size >= 3) return true;
+  const unspaced = (value.match(/\p{L}/gu) ?? []).filter(letter => !/\p{Script=Latin}/u.test(letter));
+  if (unspaced.length >= 6 && new Set(unspaced).size >= 3) return true;
   return words.length >= 2 && words.join("").length >= 8;
 };
-const languages = new Set(["en-US", "zh-HK"]);
 const MAX_ATTEMPTS = 6;
 const activeStates = new Set(["ready", "awaiting_question_approval", "generating_question"]);
 const uuid = value => typeof value === "string" && /^[a-f0-9-]{36}$/.test(value);
@@ -59,8 +60,15 @@ export function validateResult(value) {
 }
 export function createService(deps) {
   const { store, ownerFor, enqueue, agent } = deps;
+  const config = deps.languageConfig ?? languageConfig;
+  const catalog = deps.activities ?? activities;
+  const services = new Map(catalog.map(activity => [activity.serviceId, activity.label]));
+  const speakingLanguages = s => s.languages ?? activityLanguages(s.readingTexts, config);
+  const defaultLanguage = s => s.defaultLanguage ?? defaultActivityLanguage(s.readingTexts, config) ?? config.defaultLanguage;
+  const serviceLabel = s => s.serviceLabel ?? services.get(s.serviceId) ?? lessons[s.serviceId]?.label ?? s.serviceId;
   const now = () => Math.floor((deps.now?.() ?? Date.now()) / 1000);
-  const economy = createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey });
+  const economy = createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey, activities: catalog });
+  const gameSaves = createGameSaves({ store, now, fail, passedTestsFor: deps.passedTestsFor });
   const load = async id => {
     if (!uuid(id)) fail(404, "Session not found");
     const s = await store.get(sessionKey(id));
@@ -91,17 +99,20 @@ export function createService(deps) {
   const completion = s => store.get(completionKey(s.owner, s.serviceId));
   const view = async (s, mobile = false) => ({
     id: s.id, status: s.status, paired: Boolean(s.mobileHash || (s.mode !== "graded_read_aloud" && s.approvedAt)), serviceId: s.serviceId,
-    ...(["read_aloud", "graded_read_aloud"].includes(s.mode) ? { mode: s.mode, readingTexts: s.readingTexts } : {}),
+    ...(["read_aloud", "graded_read_aloud"].includes(s.mode) ? {
+      mode: s.mode, readingTexts: s.readingTexts, defaultLanguage: defaultLanguage(s),
+      languages: speakingLanguages(s).map(({ id, label, speechLocale }) => ({ id, label, speechLocale })),
+    } : {}),
     ...(s.mode === "graded_read_aloud" ? {
       activityId: s.activityId, round: s.round, inputDevice: s.inputDevice,
-      serviceLabel: lessons[s.serviceId].label, expiresAt: s.expiresAt,
+      serviceLabel: serviceLabel(s), expiresAt: s.expiresAt,
       attempts: s.attempts, maxAttempts: MAX_ATTEMPTS,
-      language: s.language ?? "en-US", wallet: await economy.wallet(s.owner),
+      language: s.language ?? defaultLanguage(s), wallet: await economy.wallet(s.owner),
       resultActivity: { activityId: s.activityId, serviceId: s.serviceId, round: s.round,
         path: "/voice/completions" },
     } : {}),
-    ...(mobile ? { serviceLabel: lessons[s.serviceId].label, expiresAt: s.expiresAt,
-      ...(s.mode === "graded_read_aloud" ? {} : { conversation: s.conversation ?? [] }), language: s.language ?? "en-US",
+    ...(mobile ? { serviceLabel: serviceLabel(s), expiresAt: s.expiresAt,
+      ...(s.mode === "graded_read_aloud" ? {} : { conversation: s.conversation ?? [] }), language: s.language ?? defaultLanguage(s),
       attempts: s.attempts, maxAttempts: MAX_ATTEMPTS } : { pairCode: s.pairCode }),
     ...(s.question ? { question: s.question } : {}), ...(s.result ? { result: s.result } : {}),
     completed: (await completion(s))?.verified === true,
@@ -150,9 +161,13 @@ export function createService(deps) {
       fail(503, "Worker unavailable; please check the result and retry");
     }
   };
-  const submit = async (s, transcript, language = "en-US") => {
+  const submit = async (s, transcript, language = defaultLanguage(s)) => {
     if (s.mode !== "graded_read_aloud" && !s.approvedAt) fail(403, "Desktop approval required");
-    if (!languages.has(language)) fail(400, "Unsupported speaking language");
+    const available = ["read_aloud", "graded_read_aloud"].includes(s.mode)
+      ? speakingLanguages(s) : config.languages;
+    if (!available.some(option => option.id === language) ||
+        (["read_aloud", "graded_read_aloud"].includes(s.mode) && !s.readingTexts?.[language]))
+      fail(400, "Unsupported speaking language for this activity");
     if (s.mode === "graded_read_aloud" && !isMeaningfulTranscript(transcript))
       fail(400, "A meaningful spoken transcript is required");
     const hash = digest(`browser:${transcript}${language !== "en-US" ? `:${language}` : ""}`);
@@ -234,7 +249,8 @@ export function createService(deps) {
       if (s.mode === "graded_read_aloud") {
         const grade = validateGrade(await agent("grade_reading", {
           activityId: s.activityId, serviceId: s.serviceId, readingTexts: s.readingTexts,
-          transcript, language: a.language ?? "en-US",
+          transcript, language: a.language ?? defaultLanguage(s),
+          feedbackLanguage: speakingLanguages(s).find(option => option.id === (a.language ?? defaultLanguage(s)))?.feedbackLanguage,
         }));
         const graded = { ...a, grade, revision: a.revision + 1 };
         await store.atomic([{ item: graded, previous: a.revision }]); a = graded;
@@ -252,7 +268,8 @@ export function createService(deps) {
             ? "未聽到足夠清楚嘅說話，請再朗讀一次。唔使逐字比對。"
             : "Not enough speech was detected. Please read aloud again. No exact text match is required.",
       } : validateResult(await agent("evaluate", { question: s.question,
-        selectedQuestion: s.selectedQuestion, language: a.language ?? "en-US",
+        selectedQuestion: s.selectedQuestion, language: a.language ?? defaultLanguage(s),
+        feedbackLanguage: config.languages.find(option => option.id === (a.language ?? defaultLanguage(s)))?.feedbackLanguage,
         history: s.conversation ?? [],
         rubric: { requiredConcepts: s.requiredConcepts, misconceptions: s.misconceptions }, transcript }));
       if (!result.passed && s.attempts >= MAX_ATTEMPTS) {
@@ -293,9 +310,13 @@ export function createService(deps) {
     if (Object.keys(event.queryStringParameters ?? {}).some(k => /key|token/i.test(k))) fail(400, "Credentials are not accepted in URLs");
     let body = {};
     if (event.body) {
-      if (event.isBase64Encoded || event.body.length > 10000) fail(400, "Invalid body");
+      if (event.isBase64Encoded || event.body.length > (path === "/game/save" ? 65536 : 10000)) fail(400, "Invalid body");
       try { body = JSON.parse(event.body); } catch { fail(400, "Invalid JSON"); }
       if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "Invalid body");
+    }
+    if (path === "/game/save" && ["GET", "POST"].includes(method)) {
+      const owner = await ownerFor(event);
+      return method === "GET" ? gameSaves.get(owner, event) : gameSaves.put(owner, body, event);
     }
     if (method === "GET" && path === "/voice/completions") {
       const owner = await ownerFor(event);
@@ -313,13 +334,15 @@ export function createService(deps) {
     if (method === "POST" && path === "/voice/casts") return economy.cast(await ownerFor(event), body);
     if (method === "POST" && path === "/voice/sessions") {
       const owner = await ownerFor(event);
-      if (typeof body.serviceId !== "string" || !Object.hasOwn(lessons, body.serviceId)) fail(422, "Lesson unavailable");
+      if (typeof body.serviceId !== "string" || !services.has(body.serviceId)) fail(422, "Lesson unavailable");
       const activity = await economy.choose(owner, body.serviceId);
       const id = randomUUID(), pairingToken = secret();
       const s = { ...sessionKey(id), id, owner, serviceId: activity.serviceId, status: "ready",
         mode: "graded_read_aloud", activityId: activity.activityId, round: activity.round, inputDevice: "desktop",
-        readingTexts: activity.readingTexts,
-        question: activity.readingTexts["en-US"], bankVersion: activity.version,
+        serviceLabel: activity.label, readingTexts: activity.readingTexts,
+        languages: activityLanguages(activity.readingTexts, config),
+        defaultLanguage: defaultActivityLanguage(activity.readingTexts, config),
+        question: activity.readingTexts[defaultActivityLanguage(activity.readingTexts, config)], bankVersion: activity.version,
         pairingHash: digest(pairingToken), pairCode: String(randomInt(100000, 1000000)),
         expiresAt: now() + 1200, pairingExpiresAt: now() + 300, attempts: 0, revision: 0 };
       await store.atomic([{ item: s }]);
@@ -344,7 +367,7 @@ export function createService(deps) {
       if (method === "POST" && desktop[2] === "answer") {
         if (s.mode !== "graded_read_aloud" || s.inputDevice !== "desktop") fail(409, "This session is not accepting desktop speech");
         validateSpeech(body);
-        return submit(s, body.transcript.trim(), body.language ?? "en-US");
+        return submit(s, body.transcript.trim(), body.language ?? defaultLanguage(s));
       }
       if (method === "POST" && desktop[2] === "transfer") {
         if (s.mode !== "graded_read_aloud" || s.status !== "ready" || s.inputDevice !== "desktop")
@@ -372,7 +395,7 @@ export function createService(deps) {
         validateSpeech(body);
         if (s.mode === "read_aloud" && !isMeaningfulTranscript(body.transcript))
           fail(400, "A meaningful spoken transcript is required");
-        return submit(s, body.transcript.trim(), body.language ?? "en-US");
+        return submit(s, body.transcript.trim(), body.language ?? defaultLanguage(s));
       }
     }
     fail(404, "Route not found");

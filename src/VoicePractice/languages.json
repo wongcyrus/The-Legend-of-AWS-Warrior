@@ -1,0 +1,17 @@
+{
+  "defaultLanguage": "en-US",
+  "languages": [
+    {
+      "id": "en-US",
+      "label": "English",
+      "speechLocale": "en-US",
+      "feedbackLanguage": "English"
+    },
+    {
+      "id": "zh-HK",
+      "label": "廣東話（香港） · Cantonese (Hong Kong)",
+      "speechLocale": "zh-HK",
+      "feedbackLanguage": "natural Hong Kong Cantonese using Traditional Chinese characters, not Mandarin. Keep AWS service names in English"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "maps": ["village", "mountains", "desert", "dungeon"],
+  "weapons": ["Sword", "Axe", "Unarmed", "Sword_2", "Sword_Golden", "Sword_Big", "Claymore", "Dagger", "Dagger_2", "Axe_Small", "Axe_Double", "Hammer_Small", "Hammer_Double", "Spear", "Scythe"],
+  "shields": ["None", "Shield_Round", "Shield_Round_2", "Shield_Heater", "Shield_Heater_2", "Shield_Celtic_Golden"],
+  "finishes": ["plain", "verdant", "gold", "crystal"],
+  "spells": ["lightning", "fireball", "frost", "storm", "shockwave"],
+  "chests": ["forest-cache", "lake-cache", "ruins-cache"]
+}

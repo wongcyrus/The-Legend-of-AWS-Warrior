@@ -10,6 +10,23 @@ spec.loader.exec_module(module)
 
 
 class VoiceDeploymentTests(unittest.TestCase):
+    def test_game_saves_require_api_keys_and_only_read_existing_marks(self):
+        root = Path(__file__).resolve().parents[1]
+        source = module.yaml.load((root / "template.yaml").read_text(), Loader=module.CfnLoader)
+        function = source["Resources"]["VoicePracticeFunction"]["Properties"]
+        for event, method in [("GameSaveGet", "GET"), ("GameSavePost", "POST")]:
+            route = function["Events"][event]["Properties"]
+            self.assertEqual(route["Path"], "/game/save")
+            self.assertEqual(route["Method"], method)
+            self.assertNotIn("Auth", route)
+        self.assertEqual(function["Environment"]["Variables"]["PASSED_TEST_TABLE"], {"Ref": "PassedTestTable"})
+        permissions = [statement for statement in function["Policies"][0]["Statement"]
+                       if statement["Resource"] == {"Fn::GetAtt": ["PassedTestTable", "Arn"]}]
+        self.assertEqual([statement["Action"] for statement in permissions], ["dynamodb:Query"])
+        table = source["Resources"]["VoicePracticeTable"]
+        self.assertEqual(table["DeletionPolicy"], "Retain")
+        self.assertEqual(table["UpdateReplacePolicy"], "Retain")
+
     def test_wallet_and_cast_routes_use_existing_auth_and_scoped_permissions(self):
         root = Path(__file__).resolve().parents[1]
         source = module.yaml.load((root / "template.yaml").read_text(), Loader=module.CfnLoader)

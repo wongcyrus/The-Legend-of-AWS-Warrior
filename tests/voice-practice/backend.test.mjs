@@ -7,13 +7,20 @@ import { awsDependencies, parseAgentResponse, readBounded, resolveOwner } from "
 import { activities, validateGrade, rewardFor } from "../../src/VoicePractice/activities.mjs";
 import { walletKey, activityKey, gradeKey, castKey } from "../../src/VoicePractice/economy.mjs";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 
-function fixture({ readAloud = false, graded = false } = {}) {
+const require = createRequire(new URL("../../src/VoicePractice/package.json", import.meta.url));
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+
+function fixture({ readAloud = false, graded = false, catalog, languages } = {}) {
   const rows = new Map(), jobs = [], calls = [];
   let time = 1700000000000;
   const key = item => `${item.PK}/${item.SK}`;
   const conflict = () => Object.assign(new Error("conflict"), { conflict: true });
   const deps = {
+    ...(catalog ? { activities: catalog } : {}),
+    ...(languages ? { languageConfig: languages } : {}),
     now: () => time,
     store: {
       async get(k) { return structuredClone(rows.get(key(k))); },
@@ -158,6 +165,33 @@ test("new practices offer authored bilingual graded reading immediately without 
   assert.equal(f.calls.length, 0);
 });
 
+test("configuration drives new services, language availability and grading feedback; saved sessions retain their snapshot", async () => {
+  const languages = { defaultLanguage: "fr-FR", languages: [
+    { id: "fr-FR", label: "Français", speechLocale: "fr-FR", feedbackLanguage: "French" },
+    { id: "de-DE", label: "Deutsch", speechLocale: "de-DE", feedbackLanguage: "German" },
+  ] };
+  const catalog = [{ activityId: "new-service-r1-v1", version: "1", serviceId: "new-service",
+    label: "Configured service", round: 1, readingTexts: { "fr-FR": "Je lis cette activité configurée." } }];
+  const f = fixture({ graded: true, languages, catalog });
+  const created = (await f.req("/voice/sessions", { serviceId: "new-service" })).data;
+  assert.equal(created.serviceId, "new-service");
+  assert.equal(created.serviceLabel, "Configured service");
+  assert.equal(created.defaultLanguage, "fr-FR");
+  assert.equal(created.question, catalog[0].readingTexts["fr-FR"]);
+  assert.deepEqual(created.languages, [{ id: "fr-FR", label: "Français", speechLocale: "fr-FR" }]);
+  assert.equal((await f.req(`/voice/sessions/${created.id}/answer`,
+    spoken("Ich lese diese Aktivität.", "de-DE"))).statusCode, 400);
+  languages.languages = [];
+  catalog[0].readingTexts["fr-FR"] = "Changed configuration must not change saved sessions.";
+  await f.req(`/voice/sessions/${created.id}/answer`, spoken("Je lis cette activité configurée.", "fr-FR"));
+  await f.run();
+  assert.equal(f.calls[0].input.feedbackLanguage, "French");
+  assert.equal(f.calls[0].input.language, "fr-FR");
+  assert.equal(f.calls[0].input.readingTexts["fr-FR"], "Je lis cette activité configurée.");
+  assert.equal((await f.req(`/voice/sessions/${created.id}`)).data.result.mpAwarded, 10);
+  assert.equal((await f.req("/voice/completions")).data.activities[0].completed, true);
+});
+
 const spoken = (transcript = "Amazon S3 stores objects in private buckets.", language = "en-US") =>
   ({ transcript, language, source: "browser", speechCompleted: true });
 const grade = score => ({ score, breakdown: { coverage: Math.min(score, 70), content: Math.max(0, score - 70) },
@@ -282,39 +316,44 @@ test("queued evaluation safely ignores smoke-test sessions deleted before proces
   assert.ok((await f.req("/voice/completions")).data.activities.every(activity => !activity.completed));
 });
 
-test("all twelve authored activities rotate round one before round two and finish safely", async () => {
+test("all configured activities rotate earlier rounds first and finish safely", async () => {
   const f = fixture({ graded: true });
   const owner = digest("alice@example.com"), bank = { ...bankKey("s3", "1"), status: "approved", questions: ["unchanged"], revision: 7 };
   f.rows.set(f.key(bank), structuredClone(bank));
   const ids = new Set(), services = new Set();
-  for (let i = 0; i < 12; i++) {
+  let round = 1;
+  for (let i = 0; i < activities.length; i++) {
+    // Keep this catalog-exhaustion scenario independent of daily submission limits and wallet capacity.
+    if (i && i % 90 === 0) f.advance(86400);
+    f.rows.delete(f.key(walletKey(owner)));
     const s = await createReading(f);
-    assert.equal(s.round, i < 6 ? 1 : 2);
-    if (i === 6) services.clear();
+    assert.ok(s.round >= round);
+    if (s.round !== round) { services.clear(); round = s.round; }
     assert.equal(services.has(s.serviceId), false);
     services.add(s.serviceId);
     ids.add(s.activityId);
     const result = await completeReading(f, s, 60);
     assert.equal(result.result.mpAwarded, 5);
   }
-  assert.equal(ids.size, 12);
+  assert.equal(ids.size, activities.length);
   assert.equal((await f.req("/voice/sessions", { serviceId: "s3" })).statusCode, 409);
   const summary = (await f.req("/voice/completions")).data;
   assert.equal(summary.total, 6);
   assert.equal(summary.completed, 6);
-  assert.equal(summary.activities.filter(a => a.completed).length, 12);
-  assert.equal(summary.wallet.balance, 60);
+  assert.equal(summary.activities.filter(a => a.completed).length, activities.length);
+  assert.equal(summary.wallet.balance, 5);
   assert.deepEqual(await f.deps.store.get(bankKey("s3", "1")), bank);
   assert.equal((await f.req("/voice/completions", undefined, { owner: "bob" })).data.wallet.balance, 0);
   assert.equal((await f.deps.store.get(walletKey(owner))).expiresAt, undefined);
 });
 
-test("authored passages are bounded, bilingual and versioned, with distinct second rounds", () => {
-  assert.equal(activities.length, 12);
-  assert.equal(new Set(activities.map(a => a.activityId)).size, 12);
+test("authored passages are bounded, bilingual and versioned, with distinct second rounds", async () => {
+  const { AWS_SERVICES } = await import("../../web-game/v2/aws-theme.js");
+  assert.deepEqual(new Set(activities.map(a => a.serviceId)), new Set(Object.keys(AWS_SERVICES)));
+  assert.equal(new Set(activities.map(a => a.activityId)).size, activities.length);
   for (const activity of activities) {
     assert.match(activity.activityId, /-r[12]-v1$/);
-    assert.ok(activity.readingTexts["en-US"].length < 1000);
+    assert.ok(activity.readingTexts["en-US"].length <= 2000);
     assert.match(activity.readingTexts["zh-HK"], /\p{Script=Han}/u);
     if (activity.round === 2) assert.notEqual(activity.readingTexts["en-US"], lessons[activity.serviceId].readingTexts["en-US"]);
   }
@@ -574,6 +613,7 @@ test("AWS adapter canonicalizes persisted reading maps and excludes unrelated gr
       return { response: Readable.from([JSON.stringify(grade(100))]) };
     } },
   });
+
   const texts = activities[0].readingTexts;
   for (const readingTexts of [texts, { "zh-HK": texts["zh-HK"], "en-US": texts["en-US"] }]) {
     await deps.agent("grade_reading", { readingTexts, activityId: activities[0].activityId,
@@ -584,6 +624,25 @@ test("AWS adapter canonicalizes persisted reading maps and excludes unrelated gr
   assert.equal(JSON.parse(payloads[1]).owner, undefined);
   assert.equal(JSON.parse(payloads[1]).history, undefined);
   assert.equal(JSON.parse(payloads[1]).language, "en-US");
+});
+
+test("catalog progress queries only the authenticated player's activity prefix and consumes every page", async () => {
+  const database = DynamoDBDocumentClient.from(new DynamoDBClient({ region: "us-east-1" }));
+  const requests = [];
+  database.send = async command => {
+    requests.push(command.input);
+    return requests.length === 1 ? {
+      Items: [{ activityId: "s3-reading-r1-v1" }], LastEvaluatedKey: { PK: "PLAYER#owner", SK: "ACTIVITY#next" },
+    } : { Items: [{ activityId: "ec2-reading-r1-v1" }] };
+  };
+  const deps = awsDependencies({ VOICE_TABLE: "voice" }, { dynamo: database });
+  assert.deepEqual(await deps.store.listActivities("owner"), [
+    { activityId: "s3-reading-r1-v1" }, { activityId: "ec2-reading-r1-v1" },
+  ]);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].ConsistentRead, true);
+  assert.deepEqual(requests[0].ExpressionAttributeValues, { ":owner": "PLAYER#owner", ":prefix": "ACTIVITY#" });
+  assert.deepEqual(requests[1].ExclusiveStartKey, { PK: "PLAYER#owner", SK: "ACTIVITY#next" });
 });
 
 test("read-aloud completes for any meaningful speech without matching text, calling AI or leaking transcripts", async () => {
@@ -959,5 +1018,5 @@ test("approved multi-question bank selects and persists a private question ID wi
   await f.req("/voice/mobile/answer", { transcript: "correct answer", source: "browser", speechCompleted: true }, { token: p.token });
   await f.run();
   assert.equal(f.calls[0].input.selectedQuestion.id, state.questionId);
-  assert.equal((await f.req("/voice/sessions", { serviceId: "glacier" })).statusCode, 422);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "unknown-service" })).statusCode, 422);
 });

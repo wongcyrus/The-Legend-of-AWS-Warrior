@@ -208,8 +208,8 @@ Resources:
     DependsOn: VoiceAgentLogGroup
     Metadata:
       com.aws.cloudformation.Context:
-        why: Capability-scoped phone input and authenticated desktop reading, wallet and cast routes; async grading avoids API timeouts.
-        must: [Browser STT only with no recording or Transcribe access, Server validates reading grades and rewards, Do not alter AWS task marks or historical participation, Atomic idempotent activity rewards and wallet casts with capacity 100, Completion summaries use authenticated owner only and exclude speech and capabilities]
+        why: Capability-scoped voice and authenticated game saves; async grading avoids API timeouts; checkpoint saves reuse retained player storage.
+        must: [Browser STT only with no recording or Transcribe access, Server validates reading grades and rewards, Do not alter AWS task marks or historical participation, Atomic idempotent activity rewards and wallet casts with capacity 100, Completion summaries use authenticated owner only and exclude speech and capabilities, Game saves use conditional revisions and never grant MP or marks, Mission completion is verified against read-only passed tests]
     Properties:
       CodeUri: ./src/VoicePractice
       Handler: index.handler
@@ -231,6 +231,7 @@ Resources:
           VOICE_AGENT_QUALIFIER: live
           VOICE_MODEL_ID: !Ref VoiceModelId
           API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
+          PASSED_TEST_TABLE: !Ref PassedTestTable
           VOICE_WEB_ORIGIN: !Sub "https://${CloudFrontDistribution.DomainName}"
       Policies:
         - Statement:
@@ -240,6 +241,9 @@ Resources:
             - Effect: Allow
               Action: dynamodb:GetItem
               Resource: !GetAtt ApiKeyLookupTable.Arn
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt PassedTestTable.Arn
             - Effect: Allow
               Action: [kms:DescribeKey, kms:Encrypt, kms:Decrypt, kms:GenerateDataKey, kms:ReEncryptFrom, kms:ReEncryptTo]
               Resource: !GetAtt VoiceLogKey.Arn
@@ -251,6 +255,12 @@ Resources:
               Action: lambda:InvokeFunction
               Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-VoicePracticeFunction-*"
       Events:
+        GameSaveGet:
+          Type: Api
+          Properties: {Path: /game/save, Method: GET, RestApiId: !Ref ApiGatewayApi}
+        GameSavePost:
+          Type: Api
+          Properties: {Path: /game/save, Method: POST, RestApiId: !Ref ApiGatewayApi}
         DesktopWallet:
           Type: Api
           Properties: {Path: /voice/wallet, Method: GET, RestApiId: !Ref ApiGatewayApi}
