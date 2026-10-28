@@ -566,6 +566,70 @@ test('game casts are server-reserved even when old testing flags are supplied', 
   assert.equal(requests, 2);
 });
 
+test('hidden Control+Alt/Option+M toggles free cooldown-free casts without changing the wallet', async () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  let dialog = false;
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+    document: { querySelector: () => dialog }, SPELLS,
+    THREE: { Vector3: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } applyQuaternion() { return this; } } },
+  });
+  const combat = harness(), notices = [];
+  let requests = 0, prevented = 0;
+  const game = {
+    infinitiveMagic: false, ready: true, magic: combat.magic, dodge: { active: false },
+    spell: 'lightning', magicLevel: 3, map: {},
+    player: { _position: { clone: () => ({ x: 0, z: 0 }) }, GetComponent: () => ({
+      IsAlive: () => true, _stateMachine: { _currentState: { Name: 'idle' } },
+    }) },
+    voiceWallet: { wallet: walletData(0), cast: async () => { requests++; return false; } },
+    canCastMagic: Game.prototype.canCastMagic,
+    guard: { release() {} }, sound: { play() {} }, updateMagicUI() {}, magicStatus: message => notices.push(message),
+  };
+  const event = { code: 'KeyM', ctrlKey: true, altKey: true, preventDefault() { prevented++; } };
+  for (const overrides of [{ repeat: true }, { isComposing: true }, { metaKey: true }, { shiftKey: true },
+    { ctrlKey: false }, { altKey: false }, { code: 'KeyX' }, { target: { closest: () => true } }]) {
+    Game.prototype.toggleInfinitiveMagic.call(game, { ...event, ...overrides });
+    assert.equal(game.infinitiveMagic, false);
+  }
+  dialog = true;
+  Game.prototype.toggleInfinitiveMagic.call(game, event);
+  assert.equal(game.infinitiveMagic, false);
+  dialog = false;
+  for (const field of ['busy', 'pending']) {
+    game.voiceWallet[field] = true;
+    Game.prototype.toggleInfinitiveMagic.call(game, event);
+    assert.equal(game.infinitiveMagic, false);
+    game.voiceWallet[field] = false;
+  }
+  game.magic.cooldown = 6;
+  Game.prototype.toggleInfinitiveMagic.call(game, event);
+  assert.equal(game.infinitiveMagic, true);
+  assert.equal(game.magic.cooldown, 0);
+  assert.match(notices.at(-1), /Infinitive Magic Mode enabled/);
+  const wallet = JSON.stringify(game.voiceWallet.wallet);
+  for (const spell of Object.keys(SPELLS)) {
+    game.spell = spell;
+    assert.equal(await Game.prototype.castMagic.call(game), true);
+    assert.equal(game.magic.cooldown, 0);
+  }
+  assert.equal(requests, 0);
+  assert.equal(JSON.stringify(game.voiceWallet.wallet), wallet);
+  game.dodge.active = true;
+  assert.equal(await Game.prototype.castMagic.call(game), false);
+  game.dodge.active = false;
+  game.traveling = true;
+  assert.equal(await Game.prototype.castMagic.call(game), false);
+  game.traveling = false;
+  Game.prototype.toggleInfinitiveMagic.call(game, event);
+  assert.equal(game.infinitiveMagic, false);
+  assert.equal(await Game.prototype.castMagic.call(game), false);
+  assert.equal(requests, 1);
+  assert.ok(prevented >= 2);
+  assert.match(main, /this\.infinitiveMagic = false/);
+  const save = main.match(/  saveCheckpoint\(\) \{[\s\S]*?(?=\n  restoreCheckpoint)/)[0];
+  assert.doesNotMatch(save, /infinitiveMagic/);
+});
+
 test('super monster nameplates show name and health, reuse textures and hide for ordinary or dead monsters', () => {
   const text = [], sprites = [];
   const ctx = { clearRect() {}, fillRect() {}, strokeRect() {}, fillText(value) { text.push(value); } };

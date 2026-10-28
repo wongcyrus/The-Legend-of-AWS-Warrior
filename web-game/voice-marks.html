@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#182e30">
   <title>AWS Warrior - Voice Marks</title>
-  <link rel="icon" type="image/png" href="./resources/branding/hkiit-logo.png">
-  <link rel="stylesheet" href="./v2/style.css?v=20261028-mp-1">
+  <link rel="icon" type="image/x-icon" href="./favicon.ico?v=hkiit-1">
+  <link rel="stylesheet" href="./v2/style.css?v=20261028-marks-layout-1">
+  <link rel="stylesheet" href="./v2/voice-marks.css?v=20261028-marks-filter-1">
 </head>
-<body class="voice-mobile-page">
-  <main class="voice-mobile-card" aria-labelledby="marks-title">
+<body class="voice-mobile-page voice-marks-page">
+  <main class="voice-mobile-card voice-marks-layout" aria-labelledby="marks-title">
     <span class="eyebrow">AWS WARRIOR</span>
     <h1 id="marks-title">My voice-practice marks</h1>
-    <p>Check your graded read-aloud activities, feedback and MP rewards. Voice-practice grades are separate from project assessment marks. Older participation records remain ungraded and do not receive invented grades or MP.</p>
+    <p>Check your voice grades, feedback and MP rewards. These are separate from project assessment marks.</p>
     <form id="voice-marks-form">
       <label for="voice-marks-key">Your API key</label>
       <input id="voice-marks-key" type="password" autocomplete="off" required>
@@ -23,9 +24,26 @@
     <section id="voice-marks-results" aria-label="Saved voice completions" hidden>
       <h2 id="voice-marks-summary"></h2>
       <p id="voice-marks-wallet"></p>
-      <div class="manual-table">
-        <table>
+      <div class="voice-marks-controls">
+        <label for="voice-marks-search">Search services
+          <input id="voice-marks-search" type="search" placeholder="Service name or ID" aria-controls="voice-marks-activities" disabled>
+        </label>
+        <label for="voice-marks-filter">Activity status
+          <select id="voice-marks-filter" aria-controls="voice-marks-activities" disabled>
+            <option value="all">All</option>
+            <option value="attempted">Attempted</option>
+            <option value="passed">Passed</option>
+            <option value="needs-retry">Needs retry</option>
+            <option value="not-started">Not started</option>
+          </select>
+        </label>
+      </div>
+      <p id="voice-marks-count" role="status" aria-live="polite" aria-atomic="true"></p>
+      <p id="voice-marks-empty" hidden></p>
+      <div class="manual-table voice-activity-table">
+        <table role="table">
           <caption>Graded read-aloud activities. Completion times are shown in Hong Kong time. No raw transcripts are displayed.</caption>
+          <colgroup><col class="marks-service"><col class="marks-round"><col class="marks-status"><col class="marks-grade"><col class="marks-feedback"><col class="marks-mp"><col class="marks-date"></colgroup>
           <thead><tr><th scope="col">Activity</th><th scope="col">Round</th><th scope="col">Status</th><th scope="col">Grade</th><th scope="col">Feedback</th><th scope="col">MP awarded</th><th scope="col">Completed (Hong Kong)</th></tr></thead>
           <tbody id="voice-marks-activities"></tbody>
         </table>
@@ -39,9 +57,9 @@
         </table>
       </div>
     </section>
-    <p>Finished a reading on your phone? Check again here to see the saved result.</p>
-    <a href="./game-v2.html">Return to AWS Warrior</a>
+    <p>If you opened marks from the game, close this tab or switch back to your game tab to continue playing.</p>
+    <a href="./game-v2.html">Open AWS Warrior</a>
   </main>
-  <script type="module" src="./v2/voice-marks.js?v=20261028-mp-1"></script>
+  <script type="module" src="./v2/voice-marks.js?v=20261028-marks-filter-1"></script>
 </body>
 </html>

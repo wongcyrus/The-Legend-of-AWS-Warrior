@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { AWS_SERVICES, BUILDING_SERVICES } from '../v2/aws-theme.js';
-import { bindServiceReader, loadReadServices, READ_SERVICES_KEY } from '../v2/aws-service-reader.js';
+import { bindServiceReader, loadReadServices } from '../v2/aws-service-reader.js';
 
 test('individual service descriptions include practical examples and official links, without a catalog', () => {
   for (const service of Object.values(AWS_SERVICES)) {
@@ -22,7 +22,8 @@ test('individual service descriptions include practical examples and official li
   assert.doesNotMatch(main + world, /AWS_GALLERIES|loadGalleryImages|galleryImagesReady|bindCatalog|hologram/);
   assert.doesNotMatch(world, /RingGeometry/);
   assert.match(html, /id="service-example"/);
-  assert.match(html, /id="service-read"[^>]+disabled/);
+  assert.doesNotMatch(html, /id="service-read"|Mark as read/);
+  assert.match(html, /id="service-explain"/);
   assert.match(main, /if \(this\.readingService(?:\s*\|\||\))/);
   for (const name of ['aws-catalog.js', 'aws-catalog-data.js', 'aws-service-info.js']) {
     assert.equal(existsSync(new URL('../v2/' + name, import.meta.url)), false);
@@ -37,7 +38,7 @@ test('read badges recover from corrupt or unavailable browser storage and reject
   assert.deepEqual([...load('["s3","ecs","cloudfront","rds","ecs","unknown"]')], ['s3', 'ecs', 'cloudfront', 'rds']);
 });
 
-test('reading requires reaching the end and explicit confirmation; clicks and closing alone never count', () => {
+test('reading and scrolling never mark completion; every service keeps its voice action', () => {
   const previous = { document: globalThis.document, window: globalThis.window,
     localStorage: globalThis.localStorage, requestAnimationFrame: globalThis.requestAnimationFrame };
   const elements = new Map(), listeners = new Map(), values = new Map(), frames = [];
@@ -91,24 +92,30 @@ test('reading requires reaching the end and explicit confirmation; clicks and cl
     assert.deepEqual(keys, { forward: false, space: false });
     assert.equal(get('service-title').textContent, 'Amazon ECS');
     assert.equal(get('service-example').textContent, AWS_SERVICES.ecs.example);
-    assert.equal(get('service-read').disabled, true);
-    get('service-read').onclick();
+    assert.equal(get('service-explain').hidden, false);
+    get('service-explain').onclick();
+    assert.deepEqual(voiceRequests, ['ecs']);
+    voiceRequests.length = 0;
+    assert.equal(elements.has('service-read'), false);
     assert.equal(game.readServices.size, 0);
     get('service-close').onclick();
     assert.equal(game.readingService, false);
     assert.equal(values.size, 0);
     click();
     get('service-content').scrollTop = 200;
-    get('service-content').events.get('scroll')();
-    assert.equal(get('service-read').disabled, false);
+    get('service-content').events.get('scroll')?.();
     assert.equal(game.readServices.size, 0);
-    get('service-read').onclick();
+    get('service-close').onclick();
     assert.equal(game.readingService, false);
-    assert.equal(plaque.userData.serviceRead, true);
-    assert.deepEqual(JSON.parse(values.get(READ_SERVICES_KEY)), ['ecs']);
+    assert.equal(plaque.userData.serviceRead, undefined);
+    assert.equal(values.size, 0);
+    game.readServices.add('ecs');
     click();
     assert.equal(get('service-read-state').textContent, 'Read');
-    assert.equal(get('service-read').disabled, true);
+    assert.equal(get('service-explain').hidden, false);
+    get('service-explain').onclick();
+    assert.deepEqual(voiceRequests, ['ecs']);
+    voiceRequests.length = 0;
     get('service-close').onclick();
     assert.equal(game.api.quest, quest);
     const missionClick = id => get('mission-services').events.get('click')({
@@ -117,15 +124,16 @@ test('reading requires reaching the end and explicit confirmation; clicks and cl
     get('service-content').scrollHeight = 80;
     missionClick('route53'); frames.splice(0).forEach(fn => fn());
     assert.equal(get('service-title').textContent, 'Amazon Route 53');
-    assert.equal(get('service-read').disabled, false);
+    assert.equal(get('service-explain').hidden, false);
     globalThis.localStorage.setItem = () => { throw new Error('blocked'); };
-    get('service-read').onclick();
-    assert.equal(game.readServices.has('route53'), true);
-    assert.equal(game.readingService, false);
+    get('service-explain').onclick();
+    assert.deepEqual(voiceRequests, ['route53']);
+    voiceRequests.length = 0;
+    assert.equal(game.readServices.has('route53'), false);
+    assert.equal(game.readingService, true);
     missionClick('s3'); frames.splice(0).forEach(fn => fn());
-    assert.equal(get('service-read').textContent, 'Voice practice to earn MP');
-    assert.equal(get('service-read').disabled, false);
-    get('service-read').onclick();
+    assert.equal(get('service-explain').hidden, false);
+    get('service-explain').onclick();
     assert.deepEqual(voiceRequests, ['s3']);
     assert.equal(game.readServices.has('s3'), false);
     assert.equal(game.readingService, true);

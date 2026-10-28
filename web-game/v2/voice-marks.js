@@ -6,11 +6,21 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
   const get = id => document.getElementById(id);
   const key = get("voice-marks-key"), button = get("voice-marks-refresh");
   const status = get("voice-marks-status"), results = get("voice-marks-results");
+  const search = get("voice-marks-search"), filter = get("voice-marks-filter");
+  const count = get("voice-marks-count"), empty = get("voice-marks-empty");
   let revision = 0;
+  let cachedActivities = [], loadedKey = null;
   try { key.value = storage.getItem("api_key") || ""; }
   catch { /* The key can still be entered when storage is unavailable. */ }
   const clear = () => {
     revision++;
+    cachedActivities = [];
+    loadedKey = null;
+    search.value = "";
+    filter.value = "all";
+    search.disabled = filter.disabled = true;
+    count.textContent = "";
+    empty.hidden = true;
     results.hidden = true;
     get("voice-marks-rows").replaceChildren();
     get("voice-marks-activities").replaceChildren();
@@ -19,6 +29,29 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
     status.textContent = "";
     button.disabled = false;
   };
+  const renderActivities = () => {
+    if (loadedKey === null) return;
+    if (key.value.trim() !== loadedKey) { clear(); return; }
+    const query = search.value.trim().toLowerCase();
+    const shown = cachedActivities.filter(({ activity }) => {
+      const attempted = Number.isFinite(activity.bestScore) || Number.isFinite(activity.latestScore);
+      const matchesFilter = filter.value === "attempted" ? attempted :
+        filter.value === "passed" ? activity.completed :
+        filter.value === "needs-retry" ? attempted && !activity.completed :
+        filter.value === "not-started" ? !activity.completed && !attempted : true;
+      return matchesFilter && (activity.label.toLowerCase().includes(query) ||
+        activity.serviceId.toLowerCase().includes(query));
+    });
+    get("voice-marks-activities").replaceChildren(...shown.map(({ row }) => row));
+    count.textContent = `Showing ${shown.length} of ${cachedActivities.length} voice activities`;
+    empty.textContent = cachedActivities.length
+      ? "No activities match. Try another service or choose All."
+      : "No voice activities available.";
+    empty.hidden = shown.length !== 0;
+  };
+  clear();
+  search.addEventListener("input", renderActivities);
+  filter.addEventListener("change", renderActivities);
   key.addEventListener("input", clear);
   eventTarget.addEventListener?.("storage", event => {
     if (event.key === "api_key" || event.key === null) {
@@ -61,10 +94,11 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
       const date = value => Number.isFinite(value) && value > 0 ? new Intl.DateTimeFormat("en-GB", {
         timeZone: "Asia/Hong_Kong", dateStyle: "medium", timeStyle: "short",
       }).format(new Date(value * 1000)) : "-";
-      const makeRow = values => {
+      const makeRow = (values, labels) => {
         const row = document.createElement("tr");
-        for (const text of values) {
+        for (const [index, text] of values.entries()) {
           const cell = document.createElement("td");
+          if (labels) cell.setAttribute("data-label", labels[index]);
           cell.textContent = text;
           row.append(cell);
         }
@@ -74,21 +108,24 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
         service.label, service.completed ? "Completed (ungraded participation)" : "Not yet completed",
         service.completed ? date(service.completedAt) : "-",
       ]));
-      const activityRows = data.activities.map(activity => {
-        const graded = activity.bestScore != null || activity.latestScore != null;
+      cachedActivities = data.activities.map(activity => {
+        const graded = Number.isFinite(activity.bestScore) || Number.isFinite(activity.latestScore);
         const grades = graded
           ? `Best: ${activity.bestScore ?? "-"} / 100; latest: ${activity.latestScore ?? "-"} / 100`
           : activity.completed ? "Ungraded participation" : "Not graded";
         const reward = activity.mpAwarded != null && graded ? `${activity.mpAwarded} MP` :
           activity.completed && !graded ? "No graded reward recorded" : "-";
-        return makeRow([
+        const row = makeRow([
           activity.label, String(activity.round),
           activity.completed ? "Completed" : graded ? "In progress" : "Not yet completed",
           grades, activity.feedback || "-", reward, activity.completed ? date(activity.completedAt) : "-",
-        ]);
+        ], ["Activity", "Round", "Status", "Grade", "Feedback", "MP awarded", "Completed (Hong Kong)"]);
+        return { activity, row };
       });
       get("voice-marks-rows").replaceChildren(...rows);
-      get("voice-marks-activities").replaceChildren(...activityRows);
+      loadedKey = apiKey;
+      search.disabled = filter.disabled = false;
+      renderActivities();
       const completed = data.activities.filter(activity => activity.completed).length;
       get("voice-marks-summary").textContent = `${completed} of ${data.activities.length} voice activities completed`;
       get("voice-marks-wallet").textContent =

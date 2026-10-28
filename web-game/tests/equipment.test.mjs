@@ -103,6 +103,7 @@ test('new players equip a round shield after their inventory is populated', () =
     guard: { release() {} },
     player: { Broadcast(message) { messages.push(message); } },
     sound: { play() {} },
+    saveCheckpoint() {},
   };
   assert.equal(Game.prototype.selectShield.call(game, 'Shield_Round'), true);
   assert.deepEqual(JSON.parse(JSON.stringify(messages)), [{ topic: 'inventory.shield', value: 'Shield_Round' }]);

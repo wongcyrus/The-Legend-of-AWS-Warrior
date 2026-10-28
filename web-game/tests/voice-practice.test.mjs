@@ -14,6 +14,19 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 const EN_PASSAGE = 'Amazon S3 stores data as objects in buckets.';
 const ZH_PASSAGE = 'Amazon S3 以物件形式將資料儲存在儲存桶內。';
 
+test('voice pages have one refresh control and one status message per device', () => {
+  const pc = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../voice-practice.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(pc, /id="pc-refresh"|id="pc-submit-status"|Reading marks a discovery|Magic power and badge cost/);
+  assert.doesNotMatch(phone, /id="mobile-submit-status"/);
+  assert.match(pc, /id="voice-check"[^>]*>Refresh passage or result</);
+  for (const [html, prefix] of [[pc, 'pc'], [phone, 'mobile']]) {
+    assert.match(html, new RegExp(`id="${prefix}-speak"[^>]*>Hold to speak<`));
+    assert.match(html, new RegExp(`id="${prefix}-send-answer"[^>]*>Submit spoken reading<`));
+    assert.equal((html.match(new RegExp(`id="${prefix}-voice-status"`, 'g')) || []).length, 1);
+  }
+});
+
 class Element {
   constructor() {
     this.events = new Map();
@@ -127,6 +140,8 @@ test('speech requires a meaningful final transcript and server-only passed resul
   assert.equal(isMeaningfulTranscript('你好'), false);
   assert.equal(isMeaningfulTranscript('啊 啊 啊'), false);
   assert.equal(isMeaningfulTranscript('啊啊啊啊啊啊'), false);
+  assert.equal(isMeaningfulTranscript('クラウドサービスを利用します'), true);
+  assert.equal(isMeaningfulTranscript('บริการจัดเก็บข้อมูล'), true);
   assert.equal(voiceResultPassed({ status: 'completed', result: { passed: true } }), true);
   assert.equal(voiceResultPassed({ status: 'completed', result: { passed: false } }), false);
   assert.equal(voiceResultPassed({ transcript: 'correct answer' }), false);
@@ -406,7 +421,7 @@ test('submit immediately shows saving state and displays returned completion wit
   speakFinal(app, 'Read this passage aloud.');
   const saving = app.elements.get('mobile-send-answer').click();
   assert.equal(app.elements.get('mobile-send-answer').textContent, 'Submitting...');
-  assert.match(app.elements.get('mobile-voice-result').textContent, /Saving/);
+  assert.equal(app.elements.get('mobile-voice-result').textContent, '');
   assert.match(app.elements.get('mobile-voice-status').textContent, /Submitting/);
   assert.equal(app.elements.get('mobile-send-answer').disabled, true);
   release();
@@ -420,14 +435,14 @@ test('submission blockers show a local explanation instead of silently returning
   const app = mobileFixture({ recognition: {}, claimStatus: 'ready' });
   await tick();
   await app.api.submitTranscript();
-  assert.match(app.elements.get('mobile-submit-status').textContent, /No completed speech/);
+  assert.match(app.elements.get('mobile-voice-status').textContent, /No completed speech/);
   app.api.speak();
   await app.api.submitTranscript();
-  assert.match(app.elements.get('mobile-submit-status').textContent, /Release the microphone/);
+  assert.match(app.elements.get('mobile-voice-status').textContent, /Release the microphone/);
   app.api.stopRecognition();
   speakFinal(app, 'A long spoken reading. '.repeat(400));
   await app.api.submitTranscript();
-  assert.match(app.elements.get('mobile-submit-status').textContent, /6,000-character limit/);
+  assert.match(app.elements.get('mobile-voice-status').textContent, /6,000-character limit/);
   assert.equal(app.requests.filter(request => request.url.endsWith('/voice/mobile/answer')).length, 0);
 });
 
@@ -461,6 +476,46 @@ test('English and Cantonese passages follow language selection immediately and r
   await tick();
   assert.equal(other.elements.get('mobile-voice-language').value, 'zh-HK');
   assert.equal(other.elements.get('mobile-voice-question').textContent, ZH_PASSAGE);
+});
+
+test('configured languages populate the picker, STT locale and submitted language without code changes', async () => {
+  const passage = 'Ce service conserve les fichiers de mon jeu.';
+  const app = mobileFixture({ recognition: {}, claimStatus: 'ready',
+    phoneStorage: new Map([['aws-warrior:voice:language', 'zh-HK']]),
+    serverData: { mode: 'graded_read_aloud', defaultLanguage: 'fr-CA', language: 'fr-CA',
+      readingTexts: { 'fr-CA': passage },
+      languages: [{ id: 'fr-CA', label: 'Français', speechLocale: 'fr-FR' }] } });
+  await tick();
+  const get = id => app.elements.get(id);
+  const select = get('mobile-voice-language');
+  assert.equal(select.children.length, 1);
+  assert.equal(select.children[0].textContent, 'Français');
+  assert.equal(select.value, 'fr-CA');
+  assert.equal(get('mobile-voice-question').textContent, passage);
+  assert.equal(get('mobile-voice-question').lang, 'fr-CA');
+  speakFinal(app, passage);
+  assert.equal(app.recognition.instance.lang, 'fr-FR');
+  await get('mobile-send-answer').click();
+  assert.equal(JSON.parse(app.requests.at(-1).options.body).language, 'fr-CA');
+  select.value = 'en-US';
+  select.change();
+  assert.equal(select.value, 'fr-CA');
+  for (const filename of ['game-v2.html', 'voice-practice.html']) {
+    const html = readFileSync(new URL('../' + filename, import.meta.url), 'utf8');
+    assert.doesNotMatch(html, /<option value="(?:en-US|zh-HK)"/);
+  }
+});
+
+test('configured languages with no translated passage never silently display an English substitute', async () => {
+  const app = mobileFixture({ recognition: {}, claimStatus: 'ready', serverData: {
+    mode: 'graded_read_aloud', languages: [{ id: 'fr-FR', label: 'Français', speechLocale: 'fr-FR' }],
+    readingTexts: { 'en-US': EN_PASSAGE },
+  } });
+  await tick();
+  assert.equal(app.elements.get('mobile-voice-question').textContent, '');
+  assert.equal(app.elements.get('mobile-speak').disabled, true);
+  assert.equal(app.elements.get('mobile-voice-language').disabled, true);
+  assert.match(app.elements.get('mobile-voice-status').textContent, /no available reading language/);
 });
 
 test('a ready session with historical completed true still accepts this read-aloud participation', async () => {
@@ -553,7 +608,7 @@ test('network failures clearly offer a result check and do not invent completion
   assert.equal(app.elements.get('mobile-voice-transcript').textContent, 'Amazon S3 stores game files');
   assert.equal(app.elements.get('mobile-speak').disabled, false);
   assert.equal(app.elements.get('mobile-send-answer').disabled, false);
-  assert.match(app.elements.get('mobile-submit-status').textContent, /HTTP 503.*Refresh passage or result/);
+  assert.match(app.elements.get('mobile-voice-status').textContent, /HTTP 503.*Refresh passage or result/);
 });
 
 test('HTTP 429 distinguishes daily budget, session attempts and temporary gateway throttling', async () => {
@@ -567,7 +622,7 @@ test('HTTP 429 distinguishes daily budget, session attempts and temporary gatewa
     await tick();
     speakFinal(app, 'Amazon S3 stores game files');
     await app.api.submitTranscript();
-    assert.match(app.elements.get('mobile-submit-status').textContent, expected);
+    assert.match(app.elements.get('mobile-voice-status').textContent, expected);
     assert.equal(app.elements.get('mobile-voice-transcript').textContent, 'Amazon S3 stores game files');
   }
 });
@@ -686,7 +741,23 @@ test('desktop defaults to PC speech without QR and refreshes authoritative walle
     assert.equal(app.game.readServices.has('s3'), true);
     assert.equal(app.values.get('aws-warrior:v2:read-services'), '["s3"]');
     assert.equal(app.game.walletRefreshed, true);
-    assert.match(app.elements.get('voice-desktop-panel').children.at(-1).textContent, /Grade: 85\/100.*MP earned: 10/);
+    assert.match(app.elements.get('pc-voice-result').textContent, /Grade: 85\/100.*MP earned: 10/);
+    assert.equal(app.elements.get('voice-desktop-panel').children.length, 0);
+    assert.equal(app.elements.get('pc-practice-content').hidden, true);
+    assert.equal(app.elements.get('voice-start').hidden, true);
+    const requests = app.requests.length;
+    await app.elements.get('voice-start').click();
+    assert.equal(app.requests.length, requests);
+  } finally { app.restore(); }
+});
+
+test('desktop starts voice for services outside the original six-service pilot', async () => {
+  const app = desktopFixture();
+  try {
+    app.controller.open('ecs');
+    await tick();
+    assert.equal(JSON.parse(app.requests[0].options.body).serviceId, 'ecs');
+    assert.equal(app.elements.get('pc-speak').disabled, false);
   } finally { app.restore(); }
 });
 
@@ -726,6 +797,9 @@ test('PC uses hold-to-speak and authenticated submission, then shows grade and r
     assert.deepEqual(JSON.parse(sent.options.body),
       { transcript: EN_PASSAGE, source: 'browser', speechCompleted: true, language: 'en-US' });
     assert.match(app.elements.get('pc-voice-result').textContent, /85\/100.*MP earned: 10/);
+    assert.equal(app.elements.get('pc-voice-status').textContent, '');
+    assert.equal(app.elements.get('voice-start').hidden, true);
+    assert.equal(app.elements.get('voice-desktop-panel').children.length, 0);
     assert.equal(app.game.walletRefreshed, true);
     assert.equal(app.game.readServices.has('s3'), true);
   } finally { app.restore(); }

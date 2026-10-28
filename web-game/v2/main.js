@@ -15,6 +15,7 @@ import { spatial_grid_controller } from "../src/spatial-grid-controller.js";
 import { baseUrl } from "../src/constant.js";
 import { Assets } from "./assets.js?v=20261027-maps-1";
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js";
+import { GameSave, initialGameSave } from "./game-save.js?v=20261029-save-1";
 import { World } from "./world.js?v=20261028-facing-signs-1";
 import { MAPS, isSafePosition, nearbyGate } from "./maps.js?v=20261027-maps-1";
 import { sharedResources, disposeMap } from "./map-lifecycle.js?v=20261027-maps-1";
@@ -32,7 +33,7 @@ import { SHIELDS, ShieldGuard } from "./shields.js?v=20261027-equipment-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261028-voice-1";
-import { bindServiceReader } from "./aws-service-reader.js?v=20261028-voice-mp-2";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261029-modal-1";
 import { SPELLS, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261028-voice-mp-1";
 import { MagicEffects } from "./magic-effects.js?v=20261028-magic-2";
 
@@ -642,6 +643,8 @@ class Game {
     this.dodge = new DodgeMotion();
     this.guard = new ShieldGuard();
     this.weapon = "Sword";
+    this.infinitiveMagic = false;
+    this.shield = "Shield_Round";
     this.feedback = new CombatFeedback(document.getElementById("combat-feedback"));
     this.manager = new entity_manager.EntityManager();
     this.grid = new spatial_hash_grid.SpatialHashGrid([[-200, -200], [200, 200]], [80, 80]);
@@ -673,6 +676,20 @@ class Game {
       baseUrl, readKey: () => localStorage.getItem("api_key"),
       changed: () => this.updateMagicUI(),
     });
+    this.gameSave = new GameSave({
+      baseUrl, changed: save => {
+        const labels = { guest: "Local play - set a key to save", loading: "Loading save...",
+          saving: "Saving...", saved: "Saved", offline: "Offline - retrying",
+          conflict: "Newer save found. Load it to continue saving.", blocked: "Save unavailable - check your key or reload" };
+        document.getElementById("game-save-status").textContent = labels[save.status] +
+          (save.cacheUnavailable ? " (local recovery unavailable)" : "");
+        document.getElementById("game-save-retry").hidden = !["offline", "conflict", "blocked"].includes(save.status);
+        document.getElementById("game-save-retry").textContent = save.status === "conflict" ? "Load latest save" : "Retry save";
+      },
+      restored: state => {
+        if (this.gameSave.key === localStorage.getItem("api_key")) this.resumeSave = state;
+      },
+    });
     this.bindUI();
     this.refreshVoiceWallet();
   }
@@ -696,6 +713,18 @@ class Game {
       pending ? `Retry ${SPELLS[pending.spell].label} ${pending.level} — reservation pending` :
       wallet ? `${balance} MP available` : error || "Save your API key to load MP.";
     document.getElementById("magic-badges").textContent = state;
+    if (this.infinitiveMagic) {
+      document.getElementById("magic-badges").textContent = "Infinitive Magic Mode";
+      const cast = document.getElementById("magic-cast");
+      cast.disabled = !this.ready || busy || Boolean(pending);
+      cast.textContent = "Cast: free (X)";
+      cast.title = "Infinitive Magic Mode - no MP cost or cooldown";
+      document.querySelectorAll("[data-spell], [data-magic-level]").forEach(button => {
+        button.disabled = cast.disabled;
+        if (button.dataset.magicLevel) button.title = "No MP cost";
+      });
+      return;
+    }
     const cooldown = this.magic?.cooldown ?? 0;
     const unavailable = !this.ready || busy || checking > 0 || (!wallet && !pending) || cooldown > 0;
     const matchesPending = !pending || (pending.spell === this.spell && pending.level === this.magicLevel);
@@ -719,6 +748,23 @@ class Game {
   magicStatus(message) {
     document.getElementById("magic-cast").title = message;
     document.getElementById("manual-cast-status").textContent = message;
+  }
+
+  toggleInfinitiveMagic(event) {
+    if (event.code !== "KeyM" || !event.ctrlKey || !event.altKey || event.metaKey || event.shiftKey ||
+        event.repeat || event.isComposing || event.target?.closest?.("input, textarea, select, [contenteditable]") ||
+        document.querySelector("dialog[open]")) return;
+    event.preventDefault();
+    if (!this.ready || !this.magic || this.voiceWallet.busy || this.voiceWallet.pending) {
+      this.magicStatus("Finish loading or resolve the pending MP reservation before changing magic mode.");
+      return;
+    }
+    this.infinitiveMagic = !this.infinitiveMagic;
+    if (this.infinitiveMagic) this.magic.cooldown = 0;
+    this.updateMagicUI();
+    this.magicStatus(this.infinitiveMagic
+      ? "Infinitive Magic Mode enabled - free local casts, no cooldowns. Reload to reset."
+      : "Infinitive Magic Mode disabled - normal MP costs and cooldowns restored.");
   }
 
   canCastMagic() {
@@ -752,17 +798,19 @@ class Game {
       forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.player._rotation);
       return this.magic.canCast(spell, level, origin, forward);
     };
-    const cast = await this.voiceWallet.cast({
-      spell, level, valid,
-      execute: pay => {
-        if (!this.magic.cast(spell, level, origin, forward, pay)) return false;
-        this.guard.release();
-        this.sound.play({ lightning: "magicLightning", fireball: "magicFire", frost: "magicFrost",
-          storm: "magicStorm", shockwave: "magicShock" }[spell]);
-        this.magicStatus(`${SPELLS[spell].label} ${["I", "II", "III"][level - 1]} cast! Spent ${level} MP.`);
-        return true;
-      },
-    });
+    const free = this.infinitiveMagic === true;
+    const execute = pay => {
+      if (!this.magic.cast(spell, level, origin, forward, pay)) return false;
+      if (free) this.magic.cooldown = 0;
+      this.guard.release();
+      this.sound.play({ lightning: "magicLightning", fireball: "magicFire", frost: "magicFrost",
+        storm: "magicStorm", shockwave: "magicShock" }[spell]);
+      this.magicStatus(`${SPELLS[spell].label} ${["I", "II", "III"][level - 1]} cast! ${free ? "Infinitive Magic Mode - no MP spent." : `Spent ${level} MP.`}`);
+      return true;
+    };
+    const cast = free
+      ? !this.voiceWallet.busy && !this.voiceWallet.pending && valid() && execute(() => true)
+      : await this.voiceWallet.cast({ spell, level, valid, execute });
     if (!cast && this.voiceWallet.error) this.magicStatus(this.voiceWallet.error);
     this.updateMagicUI();
     return cast;
@@ -818,6 +866,13 @@ class Game {
     this.progressKey = key; this.progressReset = reset; this.progressChanging = true;
     this.guard.release();
     if (!await this.progress.selectAccount(key, reset)) return;
+    const seed = initialGameSave(), data = this.progress.data;
+    seed.adventure = { chests: data.chests, boss: data.boss };
+    seed.equipment.finish = data.finish;
+    seed.missions = data.passed;
+    this.resumeSave = seed;
+    await this.gameSave.selectAccount(key, seed);
+    if (key !== this.progressKey || reset !== this.progressReset) return;
     this.progressChanging = false;
     this.updateAdventure();
     if (changed && this.map.id === "village" && this.boss?.GetComponent("NPCController")._stateMachine._currentState &&
@@ -833,6 +888,51 @@ class Game {
       `AWS missions: ${data.passed.length} | Village: ${Math.min(data.passed.length, BUILDINGS.length)} / ${BUILDINGS.length} restored`;
   }
 
+  saveCheckpoint() {
+    if (!this.ready || this.progressChanging || this.restoringSave || this.resumeSave ||
+        this.gameSave.key !== localStorage.getItem("api_key")) return;
+    this.gameSave.update({
+      schemaVersion: 2, checkpoint: this.map.id,
+      equipment: { weapon: this.weapon, shield: this.shield, finish: this.progress.data.finish,
+        spell: this.spell, level: this.magicLevel },
+      adventure: { chests: this.progress.data.chests, boss: this.progress.data.boss },
+      missions: this.progress.data.passed,
+    });
+  }
+
+  restoreCheckpoint() {
+    if (!this.resumeSave || !this.ready || !this.mapActorsReady() || this.traveling ||
+        this.progressChanging || this.api.grading || this.talking) return;
+    const state = this.resumeSave;
+    this.restoringSave = true;
+    try {
+      if (this.map.id !== state.checkpoint && !this.switchMap(state.checkpoint, true)) return;
+      const controller = this.player.GetComponent("BasicCharacterController");
+      controller._target.position.set(this.map.spawn[0], 0, this.map.spawn[1]);
+      controller._velocity.set(0, 0, 0);
+      controller._stateMachine.SetState("idle");
+      this.player.SetPosition(controller._target.position);
+      this.dodge.remaining = 0;
+      this.guard.release();
+      const health = this.player.GetComponent("HealthComponent");
+      health._health = health._maxHealth;
+      health._UpdateUI();
+      this.progress.data = { reset: this.progress.data.reset, passed: [...state.missions],
+        chests: [...state.adventure.chests], boss: state.adventure.boss, finish: state.equipment.finish };
+      this.progress.save();
+      this.selectWeapon(state.equipment.weapon, true);
+      this.selectShield(state.equipment.shield);
+      this.spell = state.equipment.spell; this.magicLevel = state.equipment.level;
+      document.querySelectorAll("[data-spell]").forEach(button =>
+        button.setAttribute("aria-pressed", String(button.dataset.spell === this.spell)));
+      document.querySelectorAll("[data-magic-level]").forEach(button =>
+        button.setAttribute("aria-pressed", String(Number(button.dataset.magicLevel) === this.magicLevel)));
+      this.updateAdventure();
+      this.updateMagicUI();
+      this.resumeSave = null;
+    } finally { this.restoringSave = false; }
+  }
+
   selectWeapon(name, force = false) {
     if (!this.player || !Object.hasOwn(WEAPONS, name)) return false;
     const state = this.player.GetComponent("BasicCharacterController")._stateMachine._currentState?.Name;
@@ -844,16 +944,19 @@ class Game {
     this.player.Broadcast({ topic: "inventory.equip", value: name === "Unarmed" ? null : name });
     document.querySelectorAll("[data-weapon]").forEach(button =>
       button.setAttribute("aria-pressed", String(button.dataset.weapon === name)));
+    this.saveCheckpoint();
     return true;
   }
 
   selectShield(name) {
     if (!this.player || (name !== "None" && !Object.hasOwn(SHIELDS, name))) return false;
     this.guard.release();
+    this.shield = name;
     this.player.Broadcast({ topic: "inventory.shield", value: name === "None" ? null : name });
     document.querySelectorAll("[data-shield]").forEach(button =>
       button.setAttribute("aria-pressed", String(button.dataset.shield === name)));
     this.sound.play("equip");
+    this.saveCheckpoint();
     return true;
   }
 
@@ -918,6 +1021,7 @@ class Game {
     this.updateAdventure();
     this.sound.play("chest");
     this.status(`${chest.name} opened! Forest emerald weapon finish unlocked. Exploration rewards are cosmetic, not AWS marks.`);
+    this.saveCheckpoint();
     return true;
   }
 
@@ -927,6 +1031,7 @@ class Game {
     this.updateAdventure();
     this.sound.play("success");
     this.status("Crystal Warden defeated! Crystal weapon finish unlocked. Ordinary monsters still check your AWS tasks.");
+    this.saveCheckpoint();
   }
 
   showCombatManual() {
@@ -982,6 +1087,17 @@ class Game {
 
   bindUI() {
     bindServiceReader(this, THREE);
+    document.getElementById("game-save-retry").onclick = () =>
+      this.gameSave.status === "conflict" ? this.gameSave.load({ discard: true }) :
+        this.gameSave.status === "blocked" ? this.gameSave.load() :
+        this.gameSave.pending ? this.gameSave.flush() : this.gameSave.load();
+    window.addEventListener("online", () => {
+      if (this.gameSave.status === "offline")
+        this.gameSave.document ? this.gameSave.flush() : this.gameSave.load();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") this.gameSave.flush();
+    });
     const manual = document.getElementById("combat-manual");
     document.getElementById("manual-button").onclick = () => this.showCombatManual();
     document.getElementById("manual-close").onclick = () => manual.close();
@@ -998,6 +1114,7 @@ class Game {
         document.querySelectorAll("[data-spell]").forEach(item =>
           item.setAttribute("aria-pressed", String(item.dataset.spell === id)));
         this.updateMagicUI();
+        this.saveCheckpoint();
         this.renderer?.domElement.focus();
       };
       document.getElementById("magic-bar").appendChild(button);
@@ -1008,6 +1125,7 @@ class Game {
         document.querySelectorAll("[data-magic-level]").forEach(item =>
           item.setAttribute("aria-pressed", String(item === button)));
         this.updateMagicUI();
+        this.saveCheckpoint();
         this.renderer?.domElement.focus();
       };
     });
@@ -1038,6 +1156,7 @@ class Game {
     soundVolume.onpointerup = () => this.renderer?.domElement.focus();
     document.addEventListener("pointerdown", unlockSound, { passive: true });
     document.addEventListener("keydown", unlockSound);
+    document.addEventListener("keydown", event => this.toggleInfinitiveMagic(event));
     document.addEventListener("visibilitychange", () => {
       this.sound.setPaused(document.hidden);
       if (document.hidden) this.guard.release();
@@ -1488,6 +1607,7 @@ class Game {
     document.getElementById("map-label").textContent = map.name + " / N";
     this.traveling = false;
     this.sound.play("portal");
+    this.saveCheckpoint();
     this.travelStatus(`Entered ${map.name}. Your AWS task is unchanged. T uses the glowing return gate.`);
     this.renderer.domElement.focus();
     return true;
@@ -1633,6 +1753,7 @@ class Game {
         this.progress.pass(quest.filter);
         if (!emerald && this.progress.data.finish === "plain") this.progress.selectFinish("verdant");
         this.updateAdventure();
+        this.saveCheckpoint();
       }
       this.sound.play(result.isSuccess ? "success" : "failure");
       this.showQuest();
@@ -1757,6 +1878,7 @@ class Game {
       document.getElementById("loading").hidden = true;
       document.body.dataset.ready = "true";
     }
+    this.restoreCheckpoint();
     const beforeX = this.player._position.x, beforeZ = this.player._position.z;
     this.manager.Update(dt);
     if (this.traveling || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) {

@@ -1,13 +1,24 @@
 import { baseUrl } from "../src/constant.js";
-import { BUILDING_SERVICES, AWS_SERVICES } from "./aws-theme.js?v=20261028-voice-1";
+import { AWS_SERVICES } from "./aws-theme.js?v=20261028-voice-1";
 import { qrcode } from "./vendor/qrcode-generator.mjs";
 
 const DESKTOP_KEY = "aws-warrior:voice:desktop";
 const MOBILE_KEY = "aws-warrior:voice:mobile";
 const LANGUAGE_KEY = "aws-warrior:voice:language";
 const MAX_ATTEMPTS = 6;
-const voiceLanguage = value => value === "zh-HK" ? "zh-HK" : "en-US";
-const SERVICE_SET = new Set(BUILDING_SERVICES);
+const SERVICE_SET = new Set(Object.keys(AWS_SERVICES));
+
+export function voiceLanguageOptions(session) {
+  const texts = session?.readingTexts ?? {};
+  const options = Array.isArray(session?.languages) ? session.languages :
+    Object.keys(texts).map(id => {
+      let label = id;
+      try { label = new Intl.DisplayNames([id], { type: "language" }).of(id); } catch { /* Use the locale identifier. */ }
+      return { id, label, speechLocale: id };
+    });
+  return options.filter(option => typeof option.id === "string" && typeof option.label === "string" &&
+    typeof option.speechLocale === "string" && typeof texts[option.id] === "string" && texts[option.id].trim());
+}
 
 function ownerFingerprint(key) {
   let hash = 2166136261;
@@ -77,8 +88,8 @@ async function jsonRequest(path, { method = "GET", apiKey, bearer, body, fetcher
 export function isMeaningfulTranscript(value) {
   if (typeof value !== "string") return false;
   const words = value.match(/[\p{L}\p{N}]+/gu) || [];
-  const cjk = value.match(/\p{Script=Han}/gu) || [];
-  if (cjk.length >= 6 && new Set(cjk).size >= 3) return true;
+  const unspaced = (value.match(/\p{L}/gu) || []).filter(letter => !/\p{Script=Latin}/u.test(letter));
+  if (unspaced.length >= 6 && new Set(unspaced).size >= 3) return true;
   return words.length >= 2 && words.join("").length >= 8;
 }
 
@@ -98,7 +109,7 @@ export function voiceStatusMessage(status) {
   return ({
     pairing: "Scan the QR code with your phone to pair this read-aloud practice.",
     claimed: "Phone connected. Open the passage on your phone and read it aloud.",
-    generating_question: "Preparing the reading passage. Use Check my result manually to refresh.",
+    generating_question: "Preparing the reading passage. Use Refresh passage or result to check again.",
     awaiting_question_approval: "A teacher is reviewing the passage. Do not read it yet; check again manually for an update.",
     ready: "The reading passage is ready. Read it aloud, then check your result.",
     evaluating: "Your reading is being graded. Check again for your grade and MP reward.",
@@ -146,6 +157,7 @@ function statusParagraph(container, message, className = "") {
 
 function drawPairing(panel, state) {
   panel.replaceChildren();
+  if (state.status === "completed") return;
   if (state.pairingToken && state.status === "pairing") {
     const url = new URL("./voice-practice.html", location.href);
     url.searchParams.set("v", "20261028-voice-mp-2");
@@ -167,10 +179,13 @@ function drawPairing(panel, state) {
   statusParagraph(panel, state.status === "ready" && state.result?.passed === false
     ? "Try again in the original phone tab: tap Refresh, then read the displayed passage aloud. If that tab is unavailable, start a new QR session."
     : voiceStatusMessage(state.status), "voice-session-status");
-  if (Number.isInteger(state.result?.score))
-    statusParagraph(panel, `Grade: ${state.result.score}/100. ${state.result.feedback || ""}${resultBreakdownText(state.result.breakdown)} MP earned: ${state.result.mpAwarded ?? 0}.`, "voice-feedback");
-  else if (state.status === "completed" && voiceResultPassed(state))
-    statusParagraph(panel, "Historical participation completed. No graded MP reward.", "voice-feedback");
+}
+
+function gradeResultText(data) {
+  return Number.isInteger(data.result?.score)
+    ? `Grade: ${data.result.score}/100. ${data.result.feedback || ""}${resultBreakdownText(data.result.breakdown)} MP earned: ${data.result.mpAwarded ?? 0}.`
+    : data.status === "completed" && voiceResultPassed(data)
+      ? "Read-aloud participation is complete. No graded MP reward." : "";
 }
 
 export function bindVoicePractice(game) {
@@ -181,6 +196,7 @@ export function bindVoicePractice(game) {
   const check = document.getElementById("voice-check");
   const transfer = document.getElementById("voice-transfer");
   const pcContent = document.getElementById("pc-practice-content");
+  const result = document.getElementById("pc-voice-result");
   let selectedService = null;
   let state = null;
   let owner = null;
@@ -195,6 +211,7 @@ export function bindVoicePractice(game) {
   const clearOwnedState = () => {
     generation++;
     speech.suspend();
+    result.textContent = "";
     state = null;
     owner = null;
     try { sessionStorage.removeItem(DESKTOP_KEY); } catch { /* Optional session recovery. */ }
@@ -210,10 +227,10 @@ export function bindVoicePractice(game) {
     return current;
   };
   const updateButtons = () => {
-    start.disabled = starting || speech.isBusy() || state?.status === "evaluating";
-    start.textContent = state?.status === "completed" ? "Next voice activity"
-      : state?.inputDevice === "phone" ? "Start a new QR session" : state ? "Start another practice" : "Start voice practice";
-    check.disabled = !state || starting;
+    start.hidden = state?.status === "completed";
+    start.disabled = start.hidden || starting || speech.isBusy() || state?.status === "evaluating";
+    start.textContent = state?.inputDevice === "phone" ? "Start a new QR session" : state ? "Start another practice" : "Start voice practice";
+    check.disabled = !state || starting || speech.isBusy();
     transfer.disabled = starting || !state || state.status !== "ready" ||
       state.inputDevice === "phone" || speech.isBusy();
     transfer.textContent = "Use phone microphone (QR)";
@@ -221,15 +238,17 @@ export function bindVoicePractice(game) {
   const render = () => {
     sessionError = null;
     panel.replaceChildren();
+    result.textContent = "";
     if (state) {
       document.getElementById("voice-desktop-title").textContent =
         `Read ${state.serviceLabel || AWS_SERVICES[state.serviceId]?.label || "an AWS service"} aloud`;
       if (state.inputDevice === "phone" || state.status === "pairing") {
         speech.suspend();
         drawPairing(panel, state);
+        result.textContent = gradeResultText(state);
+        result.lang = state.result?.language || state.language || state.defaultLanguage || "";
       } else {
         speech.setSession(state);
-        statusParagraph(panel, "Speak on this computer, or use your phone if this computer has no microphone. Both use the same activity.");
       }
     } else {
       speech.suspend();
@@ -272,7 +291,7 @@ export function bindVoicePractice(game) {
   const speech = bindMobileVoicePractice({
     autoConnect: false,
     documentRef: {
-      getElementById: id => document.getElementById(id.replace(/^mobile-/, "pc-")),
+      getElementById: id => document.getElementById(id === "mobile-refresh" ? "voice-check" : id.replace(/^mobile-/, "pc-")),
       createElement: tag => document.createElement(tag),
     },
     requestSession: () => authenticatedRequest(""),
@@ -296,6 +315,8 @@ export function bindVoicePractice(game) {
     state = current.fingerprint ? readDesktopState(sessionStorage, current.fingerprint, serviceId) : null;
     if (state) render();
     else {
+      speech.suspend();
+      result.textContent = "";
       panel.replaceChildren();
       statusParagraph(panel, current.key
         ? "Opening your next voice activity. Your API key stays on this computer."
@@ -304,12 +325,12 @@ export function bindVoicePractice(game) {
     }
     if (!dialog.open) dialog.showModal();
     game.readingService = true;
-    start.focus();
+    (start.hidden ? check : start).focus();
     if (!state && current.key) startSession();
     else if (state && current.key) checkStatus();
   };
   const startSession = async () => {
-    if (starting || speech.isBusy() || state?.status === "evaluating") return;
+    if (starting || speech.isBusy() || ["evaluating", "completed"].includes(state?.status)) return;
     let current;
     try { current = currentKey(); }
     catch (error) { showError(error.message); return; }
@@ -317,6 +338,7 @@ export function bindVoicePractice(game) {
     starting = true;
     const epoch = ++generation;
     speech.suspend();
+    result.textContent = "";
     start.textContent = "Starting voice practice…";
     panel.replaceChildren();
     statusParagraph(panel, "Preparing your next unfinished voice activity...");
@@ -470,7 +492,7 @@ export function bindMobileVoicePractice({
   const result = get("mobile-voice-result");
   const startSpeech = get("mobile-speak");
   const sendAnswer = get("mobile-send-answer");
-  const submitStatus = get("mobile-submit-status");
+  const submitStatus = status;
   const refreshButton = get("mobile-refresh");
   const languageSelect = get("mobile-voice-language");
   const attempts = get("mobile-voice-attempts");
@@ -533,15 +555,15 @@ export function bindMobileVoicePractice({
   };
   let language;
   try { language = mobileStorage?.getItem(LANGUAGE_KEY); } catch { /* Optional preference. */ }
-  language = language === "en-US" || language === "zh-HK" ? language : null;
-  languageSelect.value = language || "en-US";
+  language = typeof language === "string" ? language : null;
+  languageSelect.disabled = true;
+  let languageOptions = [];
 
   const hidePairingLink = () => {
     try { windowRef.history.replaceState(null, "", windowRef.location.pathname); } catch { /* Hide pairing secrets when supported. */ }
   };
   const showStatus = text => {
     status.textContent = text;
-    submitStatus.textContent = text;
   };
   const pairingUnavailable = message => {
     showStatus(message);
@@ -560,16 +582,16 @@ export function bindMobileVoicePractice({
   const attemptsUsed = () => Number.isInteger(session?.attempts) ? session.attempts : 0;
   const isReadAloud = () => ["read_aloud", "graded_read_aloud"].includes(session?.mode);
   const readingText = () => {
-    const localized = session?.readingTexts?.[language || "en-US"];
+    const localized = session?.readingTexts?.[language];
     if (typeof localized === "string" && localized.trim()) return localized;
-    return language !== "zh-HK" && typeof session?.question === "string" ? session.question : "";
+    return !isReadAloud() && typeof session?.question === "string" ? session.question : "";
   };
   const canAnswer = () => isReadAloud() && session?.status === "ready" && Boolean(readingText()) &&
     attemptsUsed() < attemptLimit() && !pendingTurn;
   const isBusy = () => Boolean(recognition || holding || finishing || submitting);
   const updateControls = () => {
     const ready = canAnswer() && !isBusy();
-    languageSelect.disabled = isBusy();
+    languageSelect.disabled = isBusy() || !languageOptions.length;
     startSpeech.disabled = !SpeechRecognitionClass || (!holding && !ready);
     startSpeech.textContent = holding ? "Listening... release when finished" : finishing ? "Finishing speech..." : "Hold to speak";
     startSpeech.setAttribute?.("aria-pressed", String(holding));
@@ -584,10 +606,17 @@ export function bindMobileVoicePractice({
     session = { ...data, question: data.question ?? session?.question };
     practiceContent.hidden = false;
     refreshButton.textContent = "Refresh passage or result";
-    if (!language) {
-      language = voiceLanguage(data.language);
-      languageSelect.value = language;
-    }
+    languageOptions = voiceLanguageOptions(session);
+    if (!languageOptions.some(option => option.id === language))
+      language = [data.language, data.defaultLanguage, languageOptions[0]?.id]
+        .find(id => languageOptions.some(option => option.id === id)) ?? null;
+    languageSelect.replaceChildren(...languageOptions.map(option => {
+      const element = documentRef.createElement("option");
+      element.value = option.id;
+      element.textContent = option.label;
+      return element;
+    }));
+    languageSelect.value = language || "";
     if (pendingTurn && ["ready", "completed", "failed", "expired", "cancelled"].includes(data.status)) pendingTurn = null;
     const legacy = !isReadAloud();
     const passedCompletion = data.status === "completed" && voiceResultPassed(data);
@@ -597,22 +626,18 @@ export function bindMobileVoicePractice({
         : attemptsUsed() >= attemptLimit() && data.status !== "evaluating"
         ? "The read-aloud retry limit has been reached. Start a new QR session on desktop to continue."
         : mobileStatus(data.status));
-    result.textContent = Number.isInteger(data.result?.score)
-      ? `Grade: ${data.result.score}/100. ${data.result.feedback || ""}${resultBreakdownText(data.result.breakdown)} MP earned: ${data.result.mpAwarded ?? 0}.`
-      : passedCompletion
-      ? "Read-aloud participation is complete. No graded MP reward."
-      : data.result?.error
+    result.textContent = gradeResultText(data) || (data.result?.error
         ? "Your reading could not be saved. Please try again or ask your teacher for help."
         : data.result?.passed === false
         ? "I could not hear enough clear speech to count this attempt. Read the displayed passage aloud and try again."
-        : "";
-    result.lang = voiceLanguage(data.result?.language || data.language);
+        : "");
+    result.lang = data.result?.language || data.language || data.defaultLanguage || language || "";
     question.textContent = !["pairing", "claimed", "generating_question", "awaiting_question_approval"].includes(data.status)
       ? (isReadAloud() ? readingText() : typeof session.question === "string" ? session.question : "")
       : "";
-    question.lang = language || "en-US";
+    question.lang = language || "";
     if (data.status === "ready" && !readingText() && isReadAloud()) {
-      pairingUnavailable("The selected language's reading passage is unavailable. Choose the other language or start a new QR session on desktop.");
+      pairingUnavailable("This activity has no available reading language. Start a new practice or ask your teacher to check its configuration.");
     } else if (data.status === "ready" && !session.question) {
       pairingUnavailable("The saved practice has no reading passage. Refresh once; if it is still missing, choose Start a new QR session on desktop and scan that new code.");
     }
@@ -621,9 +646,9 @@ export function bindMobileVoicePractice({
     if (session.mode === "graded_read_aloud") {
       if (data.result?.error) result.textContent = "Grading could not finish. No grade or MP was awarded. Please retry.";
       else if (data.result?.feedback && !Number.isInteger(data.result?.score)) result.textContent = data.result.feedback;
-      if (passedCompletion) showStatus("Voice activity passed. Your grade and MP reward have been saved.");
+      if (passedCompletion) showStatus(autoConnect ? "Voice activity passed. Your grade and MP reward have been saved." : "");
       else if (data.status === "evaluating") showStatus("Grading your reading. Your result will appear automatically.");
-      else if (data.status === "ready") showStatus("Read the displayed passage aloud. A grade of 60 or higher earns MP once for this activity.");
+      else if (data.status === "ready" && readingText()) showStatus("Ready to read aloud.");
     }
     if (!SpeechRecognitionClass && canAnswer())
       showStatus("Browser speech recognition is unavailable. Try a supported browser or ask your teacher for help.");
@@ -705,7 +730,7 @@ export function bindMobileVoicePractice({
   const setTranscript = text => {
     transcript.textContent = text;
     finalSpeechReady = isMeaningfulTranscript(text);
-    transcript.lang = language || "en-US";
+    transcript.lang = language || "";
     updateControls();
   };
   const stopRecognition = () => {
@@ -738,7 +763,7 @@ export function bindMobileVoicePractice({
     try {
       active = new SpeechRecognitionClass();
       recognition = active;
-      active.lang = language || "en-US";
+      active.lang = languageOptions.find(option => option.id === language)?.speechLocale || language;
       active.continuous = true;
       active.interimResults = false;
       active.onresult = event => {
@@ -843,11 +868,11 @@ export function bindMobileVoicePractice({
       showStatus("The transcript exceeds the 6,000-character limit and was not sent. Hold to speak again for a shorter reading.");
       return;
     }
-    const spoken = { transcript: transcript.textContent, language: language || "en-US" };
+    const spoken = { transcript: transcript.textContent, language };
     const epoch = sessionEpoch;
     submitting = true;
     showStatus("Submitting your reading...");
-    result.textContent = session.mode === "graded_read_aloud" ? "Saving your reading for grading..." : "Saving your participation...";
+    result.textContent = "";
     updateControls();
     try {
       const data = await tokenRequest("voice/mobile/answer", {
@@ -896,8 +921,11 @@ export function bindMobileVoicePractice({
     updateControls();
   };
   languageSelect.addEventListener("change", () => {
-    if (submitting) { languageSelect.value = language || "en-US"; return; }
-    language = voiceLanguage(languageSelect.value);
+    if (submitting || !languageOptions.some(option => option.id === languageSelect.value)) {
+      languageSelect.value = language || "";
+      return;
+    }
+    language = languageSelect.value;
     languageSelect.value = language;
     resetPending();
     try { mobileStorage?.setItem(LANGUAGE_KEY, language); } catch { /* Optional preference. */ }
@@ -956,7 +984,9 @@ export function bindMobileVoicePractice({
     refresh, speak, releaseSpeech, submitTranscript, stopRecognition,
     isBusy,
     setSession(data) {
-      if (session?.id !== data.id) { sessionEpoch++; refreshing = false; }
+      if (session?.id !== data.id) {
+        sessionEpoch++; refreshing = false; pendingTurn = null; resetPending();
+      }
       pageClosed = false;
       renderSession(data);
     },

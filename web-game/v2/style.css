@@ -142,6 +142,37 @@ dialog input { width: 100%; padding: 10px; background: #0f272c; color: #fff; bor
 #magic-badges { overflow-wrap: anywhere; }
 #voice-marks-wallet { padding: 12px; border: 1px solid #9dc6ff66; border-radius: 8px; color: #bdddff; }
 #voice-marks-activities td { min-width: 90px; white-space: normal; overflow-wrap: anywhere; }
+.voice-marks-page { padding: 24px; }
+.voice-marks-layout { width: 100%; padding: 28px; }
+.voice-marks-layout > p { max-width: 90ch; }
+#voice-marks-form { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 24px 0; }
+#voice-marks-key { min-width: 0; width: min(360px, 100%); padding: 10px; }
+#voice-marks-form p { flex-basis: 100%; margin: 0; order: 1; }
+.voice-activity-table table { table-layout: fixed; font-size: 14px; line-height: 1.6; }
+.voice-activity-table .marks-service { width: 15%; }
+.voice-activity-table .marks-round { width: 5%; }
+.voice-activity-table .marks-status { width: 10%; }
+.voice-activity-table .marks-grade { width: 12%; }
+.voice-activity-table .marks-feedback { width: 36%; }
+.voice-activity-table .marks-mp { width: 8%; }
+.voice-activity-table .marks-date { width: 14%; }
+.voice-activity-table th { overflow-wrap: anywhere; }
+#voice-marks-activities td { min-width: 0; padding: 16px 12px; }
+#voice-marks-activities td:nth-child(5) { white-space: pre-wrap; }
+@media (max-width: 1000px) {
+  .voice-marks-page { padding: 12px; }
+  .voice-marks-layout { padding: 18px; }
+  .voice-activity-table { overflow: visible; }
+  .voice-activity-table table, .voice-activity-table tbody { display: block; width: 100%; }
+  .voice-activity-table caption { display: block; }
+  .voice-activity-table colgroup { display: none; }
+  .voice-activity-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #voice-marks-activities tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 16px 0; border: 1px solid #74938b; border-radius: 8px; overflow: hidden; }
+  #voice-marks-activities td { display: block; border: 0; padding: 12px; }
+  #voice-marks-activities td::before { content: attr(data-label); display: block; color: #c2d4c9; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+  #voice-marks-activities td:first-child { font-size: 18px; background: #0f272c; }
+  #voice-marks-activities td:first-child, #voice-marks-activities td:nth-child(5) { grid-column: 1 / -1; }
+}
 @media (max-width: 850px) {
   .masthead { padding: 13px 16px; gap: 8px; flex-wrap: wrap; }
   .game-brand { gap: 12px; }
