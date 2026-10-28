@@ -140,9 +140,12 @@ F opens a nearby hidden cache; follow the smuggler's trail west of the forest
 watcher, explore the lake shore, or search north of the ruins. The optional
 Crystal Warden waits northeast of the ruins and unlocks a crystal finish.
 These rewards are cosmetic, never AWS marks; normal monsters remain available
-for grading without opening caches or defeating the Warden. Adventure progress
-is saved locally per API-key hash, not as authoritative server progress, and
-resetting that student's marks clears their adventure rewards.
+for grading without opening caches or defeating the Warden. Signed-in V2 players
+save their safe map checkpoint, equipment, spell selection and cosmetic adventure
+progress in DynamoDB. Existing local adventure data is migrated on the first save;
+mission claims are checked against the student's actual passed AWS tests.
+Exploration cosmetics never grant marks or MP. Reset task marks invalidate saved
+mission claims on the next server load; exploration cosmetics remain separate.
 Guide characters walk around their home areas, pause when approached or spoken
 to, and keep their golden markers and minimap positions as they move.
 Defeated monsters return after a short delay at random walkable locations outside
@@ -162,17 +165,44 @@ fixed character pool are reused. Inactive characters do not update or collide.
 The new terrain uses procedural geometry and the existing licensed asset packs.
 Shared scenery is cached at startup; map-specific monster models download on the
 first visit only. Terrain is built on demand rather than loading every map at once.
+
+### Safe saves and recovery
+
+For local magic testing, press **Ctrl+Alt+M** (macOS: **Control+Option+M**) to
+toggle **Infinitive Magic Mode**. It allows all spell levels without MP costs
+or cooldowns, while the MP bar continues to show the real server balance.
+The shortcut is ignored in dialogs/text fields and during unresolved MP
+reservations. It does not bypass movement/combat safety checks, award MP or
+manufacture grades. There is no visible toggle or URL flag; the active mode is
+labelled in the magic panel and resets on reload, never entering game saves.
+This is a local testing convenience, not an administrator/security boundary.
+
+V2 saves at travel, equipment/spell changes, caches, boss victories and mission
+completion, not on each movement/frame. Resume uses the map's safe spawn and fresh
+combat state; position, monsters, HP, XP, camera, sound, quality and the active
+tab's task instructions are not cloud-saved. MP and voice grades retain their
+separate authoritative server records.
+
+The save indicator shows loading, saving, saved, offline retry or conflict.
+Pending changes are cached locally under an API-key hash. Retries reuse the same
+request ID; account changes ignore old responses. A newer tab/device save is
+never silently overwritten: **Load latest save** explicitly discards the local
+conflicting draft. Device storage must be available for recovery after closing
+the page; without it cloud saving still works, with a warning. A first-time device
+needs a successful server load before it can queue offline checkpoint saves.
+Unknown future save versions are protected rather than reset. These routes use
+the existing optional voice Lambda/table and require its backend deployment.
 AWS service plaques mark the six village buildings, and service emblems sit
 above travel gates. Small individual AWS service signs are spread throughout
 the village, highlands and desert, with a sign in each of the nine vault chambers.
 Click a service sign, building plaque or mission badge to read a short service
 introduction and open its official AWS page. Gameplay pauses while reading
 and resumes when the description is closed. Signs show **New** and **Click to
-learn** until the player reaches the end of the introduction and practical
-game-related example, then chooses **Mark as read**. **Read** badges persist
-locally in this browser across maps and visits; opening a sign alone does not
-mark it read. The six voice-enabled services use graded voice practice instead
-of a reading-only confirmation. Reading itself never awards MP.
+learn** for new discoveries. **Read aloud** is the single practice action for every
+service; there is no **Mark as read** button. Reading, scrolling and closing a
+sign never mark it complete or award MP. Passed voice activities update the local
+**Read** indicator, while existing local read history remains preserved.
+Only server-graded passing voice activities can award MP.
 There are **302 distinct discoveries**:
 96 in the village, 76 in the highlands, 62 in the desert, and 68 in the vault.
 All are individual signs placed simultaneously across the existing maps,
@@ -252,17 +282,19 @@ supported browser or ask the teacher for help. Browser recognition may send audi
 to the browser provider and is not necessarily on-device. It does not prove speaker identity or prevent
 replay/devtools cheating; this is learning practice, not a secure oral exam.
 
-Choose English or Cantonese (Hong Kong) before speaking; matching authored text
-appears immediately. An LLM grades recognised passage coverage (70 points) and
+Choose an available reading language before speaking; matching authored text
+appears immediately. English and Cantonese (Hong Kong) are initially configured.
+An LLM grades recognised passage coverage (70 points) and
 content (30), tolerating speech-recognition errors and mixed AWS terminology.
 It does not grade pronunciation or assess comprehension. Score 60 passes:
 60-74 earns 5 MP, 75-89 earns 10 MP, and 90-100 earns 15 MP, credited up to
 the 100 MP capacity. Each versioned activity rewards only its first pass.
 Retries, repeated QR sessions and better subsequent scores cannot farm MP.
 
-There are two authored rounds across S3, EC2, IAM, VPC, Lambda and DynamoDB.
-Unfinished services in the current round come before the next round. Once all
-12 activities are passed, no further rewarded repetitions are offered; new
+The configuration contains 308 authored activities covering all 302 discoveries:
+one round per service and the existing second round for S3, EC2, IAM, VPC,
+Lambda and DynamoDB. Unfinished services in the current round come before the
+next round. Once all configured activities are passed, no further rewarded repetitions are offered; new
 content requires a new authored activity version. A first pass consumes its
 reward even when the MP bar is full; capped rewards are not held for later.
 Existing participation records
@@ -275,28 +307,46 @@ with a bounded retry count. Desktop checks for phone results remain manual.
 Model failures award neither a failing grade nor MP and allow a retry.
 Requests time out after twenty seconds with recovery guidance.
 
-The pilot covers S3, EC2, IAM, VPC, Lambda and DynamoDB using authored lessons.
-Other discoveries retain their existing reader until an approved lesson exists.
+All discovery signs offer authored English and Cantonese voice activities.
 Historical reading records are preserved. Spoken grades and MP are stored
 separately from AWS task grades; normal task assignment and kill-to-grade do
 not change.
 
-New practices use server-owned bilingual activity snapshots and versioned
+New practices use server-owned translated activity snapshots and versioned
 rubrics. AgentCore provides a validated score, breakdown and feedback; backend
 code alone decides pass thresholds and MP. DynamoDB transactions protect
 grades, once-only rewards and MP deductions. **Voice marks** in game navigation
-opens `voice-marks.html` for saved grades, feedback, activity progress and MP.
+opens `voice-marks.html` in a separate tab for saved grades, feedback, activity
+progress and MP, keeping the current game session open.
 Legacy sessions and approved question banks remain unchanged. Future interview
 activities can use separate rubrics without changing the wallet rules.
 
-The marks page separates twelve graded activities from the six historical
+The marks page separates configured graded activities from the six historical
 service-completion records. Grades, feedback, actual MP awarded and Hong Kong
 completion times come from the server, not browser reading flags. A saved game
 API key is reused on the same origin; a different device can enter its own key
 without putting it in the URL. Existing project assessment marks are unchanged.
+Service search and All, Attempted, Passed, Needs retry and Not started filters run
+against the loaded activities without extra API calls; the shown count is separate
+from overall completion. Changing accounts clears the loaded results and filters.
+
+The web app and both game versions use the bundled HKIIT logo for favicon and
+home-screen branding, replacing the default React icons.
 
 For contracts, reward atomicity, retry behavior and deployment permissions, see
 [`src/VoicePractice/OPERATIONS.md`](src/VoicePractice/OPERATIONS.md).
+
+Voice content is configuration, not JavaScript source:
+[`src/VoicePractice/languages.json`](src/VoicePractice/languages.json) defines the
+language labels, browser recognition locales and grading feedback languages;
+[`src/VoicePractice/activities.json`](src/VoicePractice/activities.json) defines
+service labels, stable activity IDs, rounds and translated passages. Add a language
+entry and translations for the activities you want to offer; both PC and phone
+automatically list only languages with a passage. Different languages share the
+same activity's once-only MP reward. Run the backend tests and redeploy the voice
+backend after editing these bundled files; configuration edits are not live database
+updates and do not require changing frontend code. See the operations guide's
+configuration example.
 
 Run the local feature checks from the repository root:
 
