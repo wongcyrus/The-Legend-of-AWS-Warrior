@@ -105,7 +105,7 @@ python3 -m http.server
 
 Open `http://localhost:8000/game-v2.html` for V2. Use WASD to move and turn,
 Shift to run, Space to attack, E near a guide to get a task, and T near a gate to
-travel. Scroll over the world to switch weapons; Shift + scroll zooms the camera.
+travel. Scroll over the world to zoom the camera; Shift + scroll switches weapons.
 You can explore without an API key; set a key to request and grade quests.
 Receive new tasks only by pressing E near a character with a golden marker.
 Clicking characters or markers does not request tasks, and there is no task-fetch button.
@@ -115,19 +115,21 @@ monster deaths, and task/result sounds. Enemy cues fade with distance and are
 rate-limited to avoid overlapping noise. Audio starts after the first key press or click. Mute and
 volume controls are in the top navigation; their settings persist in this browser.
 The Marks navigation link is omitted so it cannot take you out of the game.
-Click the weapon and shield icons to equip items, or scroll over the game to
-cycle weapons. Shift + scroll zooms the camera; keys 1/2/0 select Sword/Axe/Unarmed.
-The equipped icons have a gold border. Hover an icon for its name; the weapon
+Click the weapon and shield icons to equip items, or Shift + scroll over the game to
+cycle weapons. Scroll zooms the camera; keys 1/2/0 select Sword/Axe/Unarmed.
+The equipped icons have an orange border. Hover an icon for its name; the weapon
 summary shows damage, attack style and reach. The weapon bar scrolls horizontally
 on small screens. Scrolling UI panels or an open dialog does not switch weapons.
 You start with a round shield equipped. All 14 melee weapon models and five shield
 styles load when selected. Daggers favour speed, hammers favour damage, and
-spears and other long weapons have greater reach. Hold R or the Block button to
+spears and other long weapons have greater reach. Hold R to
 stop frontal melee hits and cactus spikes; guarding slows movement and prevents
 attacks. Your back remains exposed. Heavy Yeti and Warden blows deal half damage
 through a block and break the guard for 1.5 seconds; release R before blocking again.
-Blocking lasts only while R or the Block button is held; it is not a toggle.
+Blocking lasts only while R is held; it is not a toggle.
 Selecting No shield removes protection. Bows and ranged player attacks are not included.
+The bottom control bar holds the keyboard hints; the equipment panel only shows
+blocking, guard-break and dodge status while active, plus nearby targets.
 Sword attacks are fast; the axe hits harder but swings more slowly. Q dodges
 backward, or toward a held movement key, with a short invulnerable window and a
 cooldown. Dodges respect walls, water and actors. Enemy ground rings warn of
@@ -160,6 +162,211 @@ fixed character pool are reused. Inactive characters do not update or collide.
 The new terrain uses procedural geometry and the existing licensed asset packs.
 Shared scenery is cached at startup; map-specific monster models download on the
 first visit only. Terrain is built on demand rather than loading every map at once.
+AWS service plaques mark the six village buildings, and service emblems sit
+above travel gates. Small individual AWS service signs are spread throughout
+the village, highlands and desert, with a sign in each of the nine vault chambers.
+Click a service sign, building plaque or mission badge to read a short service
+introduction and open its official AWS page. Gameplay pauses while reading
+and resumes when the description is closed. Signs show **New** and **Click to
+learn** until the player reaches the end of the introduction and practical
+game-related example, then chooses **Mark as read**. **Read** badges persist
+locally in this browser across maps and visits; opening a sign alone does not
+mark it read. The six voice-enabled services use graded voice practice instead
+of a reading-only confirmation. Reading itself never awards MP.
+There are **302 distinct discoveries**:
+96 in the village, 76 in the highlands, 62 in the desert, and 68 in the vault.
+All are individual signs placed simultaneously across the existing maps,
+with no rotating replacements. Each discovery sign has a different offering across all four maps
+and turns horizontally toward the camera so its icon and text stay readable;
+posts remain upright and building plaques stay attached to their walls.
+Building and gate branding can repeat the village services
+but shares their Read status. Reading progress remains a local discovery record,
+not a source of MP. Existing read/spent badge data is preserved but is not
+converted into MP. MP is linked to the student's authenticated account and
+comes only from passing graded voice activities; it does not award AWS project
+marks, XP or equipment.
+The July 2026 official archive contains 305 service-icon entries; duplicated
+category entries and Marketplace light/dark artwork share one discovery each.
+The collection includes tools, programs, and historical offerings, not just
+currently available services. Introductions link to official product pages or
+AWS documentation searches; check current availability before using an offering.
+Icons load only for the starting map and visited maps, with late downloads
+updating individual signs without rebuilding the world.
+
+Choose **Lightning**, **Fireball**, **Frost wave**, **Thunderstorm** or
+**Shockwave** in the Magic bar, select power **I / II / III**, then press **X**
+or **Cast X**. Power levels cost 1 / 2 / 3 MP and multiply damage while
+increasing range. A cast consumes MP even if it misses. Lightning hits
+forward and chains to up to 2 / 3 enemies at higher levels; fireballs travel
+forward and explode on impact; frost damages a forward cone and slows enemies;
+thunderstorm strikes nearby enemies; shockwave damages and pushes them back.
+Walls block spells, and a shared 2-9 second spell-dependent cooldown prevents
+rapid casting. Magic pauses with service reading and projectiles clear on
+travel or death. Magic kills use the same normal kill-to-grade path as melee.
+
+The MP bar below HP shows the server-backed balance out of 100. Reading,
+waiting, kills and missions do not replenish MP. Cast requests reserve MP on
+the server with an idempotency key before displaying the spell; retries cannot
+spend twice. An API key and a working connection are required. URL parameters
+such as `magicTest=1` no longer bypass MP costs or cooldowns.
+
+Open **Combat manual** in the top navigation for all 15 weapons, five shields,
+and five spells. Tables show weapon damage at your current Power, animation
+speed, reach, and spell damage/range/effects for powers I / II / III. The
+manual pauses gameplay and shows MP costs and cooldowns.
+Magic damage scales with current player Power: level I uses 6.4x (Lightning),
+5.2x (Fireball), 3.2x (Frost wave), 4.4x (Thunderstorm), or 3.6x (Shockwave).
+Levels II / III double / triple that damage; projectile damage is fixed at cast
+time. All spells cost the same 1 / 2 / 3 MP, but have different roles:
+Lightning targets distant tough enemies (40 range, 6s cooldown, half damage per
+chain bounce); Fireball blasts packed groups (36 range, 5s); Frost controls an
+approaching cone (18 range, 4s, slow for 4 / 5 / 6s); Thunderstorm hits surrounding
+groups (15 range, 9s); Shockwave creates an escape opening (10 range, 2s,
+knockback). Cooldown is shared across spells. The Combat manual modal
+contains all weapon/spell power values, rules, best situations and tradeoffs.
+Gameplay shows only selection controls and MP balance, without
+explanatory paragraphs or magic pop-up messages. The latest cast message is
+available inside the manual and on the Cast button's tooltip.
+
+### Oral service practice (opt-in)
+
+Voice practice defaults to the computer's microphone. If it has no microphone,
+choose **Use phone microphone (QR)** to transfer the same activity to a phone.
+Transfer disables desktop submission; it does not create another question or
+reward. The short-lived QR link grants one phone access; keep it private.
+The phone stores its short-lived capability for session recovery, so reloading or
+rescanning on the same browser resumes the reading without repeating pairing.
+Desktop **Start another practice** recovers an inaccessible session without
+resetting its activity's reward eligibility.
+Both devices require browser speech recognition; the transcript is read-only
+and cannot be typed or pasted. Hold the microphone button while reading and
+release it to finish recognition, then submit. Keyboard users hold Space or Enter.
+The game sets no speaking-duration timer; browser interruptions are restarted
+while held, preserving earlier final words. Repeated empty recognition failures
+stop with a retry message. After release, finalization waits for browser final
+results, with a five-second recovery guard if the browser omits its end event.
+There is no extra consent checkbox or warning banner; the browser's own
+microphone permission still applies. There is no recording or Amazon Transcribe fallback.
+Unsupported browsers show guidance without consuming the QR; open the link in a
+supported browser or ask the teacher for help. Browser recognition may send audio
+to the browser provider and is not necessarily on-device. It does not prove speaker identity or prevent
+replay/devtools cheating; this is learning practice, not a secure oral exam.
+
+Choose English or Cantonese (Hong Kong) before speaking; matching authored text
+appears immediately. An LLM grades recognised passage coverage (70 points) and
+content (30), tolerating speech-recognition errors and mixed AWS terminology.
+It does not grade pronunciation or assess comprehension. Score 60 passes:
+60-74 earns 5 MP, 75-89 earns 10 MP, and 90-100 earns 15 MP, credited up to
+the 100 MP capacity. Each versioned activity rewards only its first pass.
+Retries, repeated QR sessions and better subsequent scores cannot farm MP.
+
+There are two authored rounds across S3, EC2, IAM, VPC, Lambda and DynamoDB.
+Unfinished services in the current round come before the next round. Once all
+12 activities are passed, no further rewarded repetitions are offered; new
+content requires a new authored activity version. A first pass consumes its
+reward even when the MP bar is full; capped rewards are not held for later.
+Existing participation records
+remain ungraded and do not receive invented grades or historical MP.
+
+Each student can submit 100 times per UTC day (reset at 08:00 Hong Kong time)
+and six times per session. Submission immediately shows saving/grading progress.
+Grading runs asynchronously; the active input device checks every four seconds
+with a bounded retry count. Desktop checks for phone results remain manual.
+Model failures award neither a failing grade nor MP and allow a retry.
+Requests time out after twenty seconds with recovery guidance.
+
+The pilot covers S3, EC2, IAM, VPC, Lambda and DynamoDB using authored lessons.
+Other discoveries retain their existing reader until an approved lesson exists.
+Historical reading records are preserved. Spoken grades and MP are stored
+separately from AWS task grades; normal task assignment and kill-to-grade do
+not change.
+
+New practices use server-owned bilingual activity snapshots and versioned
+rubrics. AgentCore provides a validated score, breakdown and feedback; backend
+code alone decides pass thresholds and MP. DynamoDB transactions protect
+grades, once-only rewards and MP deductions. **Voice marks** in game navigation
+opens `voice-marks.html` for saved grades, feedback, activity progress and MP.
+Legacy sessions and approved question banks remain unchanged. Future interview
+activities can use separate rubrics without changing the wallet rules.
+
+The marks page separates twelve graded activities from the six historical
+service-completion records. Grades, feedback, actual MP awarded and Hong Kong
+completion times come from the server, not browser reading flags. A saved game
+API key is reused on the same origin; a different device can enter its own key
+without putting it in the URL. Existing project assessment marks are unchanged.
+
+For contracts, reward atomicity, retry behavior and deployment permissions, see
+[`src/VoicePractice/OPERATIONS.md`](src/VoicePractice/OPERATIONS.md).
+
+Run the local feature checks from the repository root:
+
+```sh
+npm test --prefix src/VoicePractice
+npm test --prefix src/VoiceAgent
+node --test web-game/tests/*.test.mjs
+python3 -m unittest discover -s tests -p test_voice_deployment.py
+```
+
+`node web-game/tests/voice-browser-integration.mjs` additionally runs the
+served PC/phone flow in Chrome using mocked speech recognition and API
+responses. It requires Chrome at `/opt/google/chrome/chrome`; it is not
+a physical microphone acceptance test and does not call student AWS accounts.
+
+`EnableVoicePractice` defaults to `false` in `template.yaml`. The
+`AWS::BedrockAgentCore::Runtime` and endpoint are ordinary CloudFormation
+resources in the SAM template; CDK is not required. The Node.js code artifact
+must be packaged separately. Model access and the target region must support
+the configured `VoiceModelId`.
+
+To prepare an additive deployment without rebuilding or changing the deployed
+.NET grader:
+
+```sh
+python3 admin/deploy_voice_practice.py \
+  --stack YOUR_EXISTING_STACK \
+  --artifact-bucket YOUR_PRIVATE_SAME_REGION_ARTIFACT_BUCKET \
+  --region us-east-1
+```
+
+This installs the declared Node dependencies, uploads immutable agent/API
+artifacts, validates the combined SAM template, and creates a change set.
+It preserves deployed non-voice resources/code and rejects unexpected resource
+changes or replacement. Review the printed change set before execution. Use
+`--execute` only when provisioning is intended. Keep the existing artifact
+bucket private, encrypted and TLS-only. Retained infrastructure includes AgentCore
+and a log-encryption KMS key. Graded readings invoke the configured Bedrock model
+through AgentCore and incur inference charges, but no Amazon Transcribe charges.
+Cap attempts, monitor
+spend, and test classroom browsers before rollout.
+
+The retired private audio bucket is kept for safe lifecycle cleanup of previous
+recordings after one day (cleanup is not instant). The Lambda no longer has
+audio-bucket access or Transcribe permissions, and upload/transcription endpoints
+return 404. Do not log transcripts, API keys or pairing tokens;
+use scoped IAM roles, encryption and a documented student-data retention policy.
+Enable CloudTrail and appropriate S3 data-event/access logging and monitoring
+for the deployment; encrypt log destinations and restrict staff access.
+The legacy browser-local reading record remains a convenience cache, not
+proof of learning. Server grades and MP transactions are authoritative for
+rewards, not proof of speaker identity, pronunciation or understanding.
+
+Each expedition has one larger glowing super monster near its farthest enemy
+spawn: the **Frostpeak Titan**, **Sunspire Overlord**, or **Vault Nightlord**.
+They have more health, stronger attacks, an overhead **SUPER MONSTER** nameplate
+with their name and health bar, and longer
+attack warnings. Frontal melee hits break shields like the existing heavy
+attacks. They respawn normally and do not grant extra magic badges or marks.
+There are no icon-gallery walls,
+decorative activation circles or all-services browser. Glowing travel gates
+remain functional: stand near one and press T to change maps.
+Restoring a building lights its plaque's frame. These are
+thematic landmarks, not service unlocks or requirements for a particular mission.
+The AWS Mission panel shows service badges only when a supported service is
+explicitly named in the task name or instructions; unknown tasks remain unlabelled.
+Region subtitles and validation messages reinforce the AWS learning objective.
+Official AWS architecture icons are stored locally under `web-game/v2/assets/aws/`
+with provenance and a separate notice. They are AWS-owned assets, not CC0;
+their use does not imply AWS endorsement of this independent educational game.
 V2 keeps a compact task tracker on screen. Full task requirements and NPC
 conversations open in a large, scrollable reading window and can be reopened
 without losing the current task. Instructions open when you accept a task.
