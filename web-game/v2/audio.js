@@ -25,6 +25,11 @@ const EFFECTS = {
   hammer: [[500, 0.24, 0, 0.16, "noise", 70], [75, 0.2, 0.04, 0.16, "triangle", 35]],
   block: [[1800, 0.16, 0, 0.13, "square", 700], [3200, 0.09, 0, 0.09, "noise", 900]],
   guardBreak: [[2200, 0.28, 0, 0.16, "noise", 160], [120, 0.3, 0, 0.15, "sawtooth", 40]],
+  magicLightning: [[2400, 0.18, 0, 0.15, "noise", 200], [880, 0.2, 0, 0.1, "sawtooth", 180]],
+  magicFire: [[200, 0.45, 0, 0.18, "noise", 1200], [90, 0.3, 0.1, 0.12, "triangle", 35]],
+  magicFrost: [[2500, 0.5, 0, 0.12, "noise", 700], [1200, 0.4, 0, 0.08, "sine", 1800]],
+  magicStorm: [[80, 0.65, 0, 0.18, "noise", 500], [160, 0.5, 0.1, 0.12, "sawtooth", 40]],
+  magicShock: [[140, 0.45, 0, 0.18, "triangle", 25], [900, 0.3, 0, 0.12, "noise", 80]],
 };
 const COOLDOWNS = { yeti: 0.6, bat: 0.35, cactus: 0.3, spike: 0.12, slam: 0.15,
   equip: 0.08, evade: 0.12, block: 0.1, guardBreak: 0.2 };

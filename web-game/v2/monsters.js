@@ -14,6 +14,22 @@ export const MONSTERS = {
     acceleration: 65, scale: 0.022, windup: 0.5, cooldown: 0.9, hover: 2.2 },
 };
 
+export const SUPER_MONSTERS = {
+  mountains: { label: "Frostpeak Titan", health: 540, damage: 30, color: 0x7ddaff },
+  desert: { label: "Sunspire Overlord", health: 360, damage: 22, color: 0xff9b54 },
+  dungeon: { label: "Vault Nightlord", health: 270, damage: 18, color: 0xc98bff },
+};
+
+export function superMonsterProfile(name, map) {
+  const elite = SUPER_MONSTERS[map];
+  if (!elite || !Object.hasOwn(MONSTERS, name)) return null;
+  const base = MONSTERS[name];
+  return { ...base, ...elite, scale: base.scale * 1.65,
+    windup: base.windup + 0.5, cooldown: base.cooldown + 0.3,
+    range: base.ranged ? base.range : base.range + 2,
+    reach: base.ranged ? base.reach : base.reach + 2 };
+}
+
 const rosters = {
   village: ["Ghost", "GreenDemon", "Cyclops", "Skull"],
   mountains: ["Yeti", "Yeti", "Ghost", "Yeti", "Cyclops", "Yeti", "Ghost", "Yeti"],

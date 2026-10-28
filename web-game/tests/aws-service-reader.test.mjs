@@ -1,0 +1,143 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { existsSync, readFileSync } from 'node:fs';
+import { AWS_SERVICES, BUILDING_SERVICES } from '../v2/aws-theme.js';
+import { bindServiceReader, loadReadServices, READ_SERVICES_KEY } from '../v2/aws-service-reader.js';
+
+test('individual service descriptions include practical examples and official links, without a catalog', () => {
+  for (const service of Object.values(AWS_SERVICES)) {
+    assert.ok(service.description.length >= 40);
+    assert.ok(service.example.length >= 100);
+    assert.ok(['aws.amazon.com', 'docs.aws.amazon.com'].includes(new URL(service.url).hostname));
+  }
+  for (const id of BUILDING_SERVICES) {
+    assert.ok(AWS_SERVICES[id].description.length >= 100);
+    assert.ok(AWS_SERVICES[id].example.length >= 100);
+    assert.ok(AWS_SERVICES[id].benefit.length >= 100);
+  }
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const world = readFileSync(new URL('../v2/aws-world.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /catalog-|All services|service-grid|block-button/);
+  assert.doesNotMatch(main + world, /AWS_GALLERIES|loadGalleryImages|galleryImagesReady|bindCatalog|hologram/);
+  assert.doesNotMatch(world, /RingGeometry/);
+  assert.match(html, /id="service-example"/);
+  assert.match(html, /id="service-read"[^>]+disabled/);
+  assert.match(main, /if \(this\.readingService(?:\s*\|\||\))/);
+  for (const name of ['aws-catalog.js', 'aws-catalog-data.js', 'aws-service-info.js']) {
+    assert.equal(existsSync(new URL('../v2/' + name, import.meta.url)), false);
+  }
+});
+
+test('read badges recover from corrupt or unavailable browser storage and reject unknown IDs', () => {
+  const load = value => loadReadServices({ getItem: () => value });
+  for (const value of [null, '{}', 'true', 'broken']) assert.equal(load(value).size, 0);
+  assert.deepEqual([...load('["s3","s3","vpc","fake","__proto__","constructor"]')], ['s3', 'vpc']);
+  assert.equal(loadReadServices({ getItem() { throw new Error('blocked'); } }).size, 0);
+  assert.deepEqual([...load('["s3","ecs","cloudfront","rds","ecs","unknown"]')], ['s3', 'ecs', 'cloudfront', 'rds']);
+});
+
+test('reading requires reaching the end and explicit confirmation; clicks and closing alone never count', () => {
+  const previous = { document: globalThis.document, window: globalThis.window,
+    localStorage: globalThis.localStorage, requestAnimationFrame: globalThis.requestAnimationFrame };
+  const elements = new Map(), listeners = new Map(), values = new Map(), frames = [];
+  class Element {
+    constructor() {
+      this.events = new Map(); this.style = {}; this.dataset = {}; this.scrollTop = 0;
+      this.clientHeight = 100; this.scrollHeight = 300; this.textContent = '';
+    }
+    addEventListener(name, fn) { this.events.set(name, fn); }
+    showModal() { this.open = true; }
+    close() { this.open = false; this.events.get('close')?.(); }
+    focus() { globalThis.document.activeElement = this; }
+  }
+  globalThis.document = {
+    getElementById(id) { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); },
+    addEventListener(name, fn) { listeners.set(name, fn); },
+    querySelector() { return [...elements.values()].find(element => element.open) || null; },
+  };
+  globalThis.window = { addEventListener() {} };
+  globalThis.localStorage = { getItem: key => values.get(key) || null,
+    setItem(key, value) { values.set(key, value); } };
+  globalThis.requestAnimationFrame = fn => frames.push(fn);
+  try {
+    const get = id => document.getElementById(id);
+    const canvas = new Element();
+    canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+    const plaque = { visible: true, userData: { awsService: 'ecs', setRead(value) { this.serviceRead = value; } } };
+    const hidden = { visible: false, userData: { awsService: 'vpc', setRead(value) { this.serviceRead = value; } } };
+    const keys = { forward: true, space: true };
+    const quest = { name: 'unchanged' };
+    const voiceRequests = [];
+    const game = { ready: true, guard: { release() {} }, player: { GetComponent: () => ({ _keys: keys }) },
+      renderer: { domElement: canvas }, world: { servicePlaques: [plaque, hidden] }, api: { quest } };
+    let target = plaque;
+    bindServiceReader(game, {
+      Vector2: class { set() {} },
+      Raycaster: class {
+        setFromCamera() {}
+        intersectObjects(objects) { assert.deepEqual(objects, [plaque]); return target ? [{ object: target }] : []; }
+      },
+    }, { bindVoice: () => ({ open: id => voiceRequests.push(id) }) });
+    const event = { target: canvas, button: 0, pointerId: 1, clientX: 40, clientY: 40 };
+    const click = () => { listeners.get('pointerdown')(event); listeners.get('pointerup')(event); frames.splice(0).forEach(fn => fn()); };
+    listeners.get('pointermove')(event);
+    assert.equal(canvas.style.cursor, 'pointer');
+    assert.match(canvas.title, /Click to learn/);
+    listeners.get('pointerdown')(event); listeners.get('pointerup')({ ...event, clientX: 60 });
+    assert.equal(get('service-dialog').open, undefined);
+    click();
+    assert.equal(game.readingService, true);
+    assert.deepEqual(keys, { forward: false, space: false });
+    assert.equal(get('service-title').textContent, 'Amazon ECS');
+    assert.equal(get('service-example').textContent, AWS_SERVICES.ecs.example);
+    assert.equal(get('service-read').disabled, true);
+    get('service-read').onclick();
+    assert.equal(game.readServices.size, 0);
+    get('service-close').onclick();
+    assert.equal(game.readingService, false);
+    assert.equal(values.size, 0);
+    click();
+    get('service-content').scrollTop = 200;
+    get('service-content').events.get('scroll')();
+    assert.equal(get('service-read').disabled, false);
+    assert.equal(game.readServices.size, 0);
+    get('service-read').onclick();
+    assert.equal(game.readingService, false);
+    assert.equal(plaque.userData.serviceRead, true);
+    assert.deepEqual(JSON.parse(values.get(READ_SERVICES_KEY)), ['ecs']);
+    click();
+    assert.equal(get('service-read-state').textContent, 'Read');
+    assert.equal(get('service-read').disabled, true);
+    get('service-close').onclick();
+    assert.equal(game.api.quest, quest);
+    const missionClick = id => get('mission-services').events.get('click')({
+      target: { closest: () => ({ dataset: { awsService: id } }) },
+    });
+    get('service-content').scrollHeight = 80;
+    missionClick('route53'); frames.splice(0).forEach(fn => fn());
+    assert.equal(get('service-title').textContent, 'Amazon Route 53');
+    assert.equal(get('service-read').disabled, false);
+    globalThis.localStorage.setItem = () => { throw new Error('blocked'); };
+    get('service-read').onclick();
+    assert.equal(game.readServices.has('route53'), true);
+    assert.equal(game.readingService, false);
+    missionClick('s3'); frames.splice(0).forEach(fn => fn());
+    assert.equal(get('service-read').textContent, 'Voice practice to earn MP');
+    assert.equal(get('service-read').disabled, false);
+    get('service-read').onclick();
+    assert.deepEqual(voiceRequests, ['s3']);
+    assert.equal(game.readServices.has('s3'), false);
+    assert.equal(game.readingService, true);
+    missionClick('__proto__');
+    assert.equal(game.readingService, true);
+    get('service-close').onclick();
+    assert.equal(game.readingService, false);
+    target = null;
+    listeners.get('pointermove')(event);
+    assert.equal(canvas.style.cursor, '');
+    game.traveling = true;
+    missionClick('iam');
+    assert.equal(game.readingService, false);
+  } finally { Object.assign(globalThis, previous); }
+});

@@ -159,7 +159,6 @@ test('T is a separate gate action and E remains the guide interaction', () => {
   const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(html, /travel-button|click Travel/);
-  assert.match(html, /Walk to a glowing gate and press T to travel/);
   assert.match(html, /<kbd>T<\/kbd> Travel gate/);
   assert.doesNotMatch(main, /travel-button/);
   assert.match(main, /event.code === "KeyT"[\s\S]*?this._params.game.useGate\(\)/);
@@ -189,7 +188,7 @@ test('travel shortcut supports key-only events and reports account-sync blocking
   assert.equal(prevented, 5);
 });
 
-test('travel failures explain the reason beside the travel controls', () => {
+test('travel failures explain the reason in the existing status area', () => {
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
   const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', { MAPS });
@@ -205,5 +204,8 @@ test('travel failures explain the reason beside the travel controls', () => {
   game.player = { GetComponent() { return { IsAlive: () => false }; } };
   assert.equal(Game.prototype.switchMap.call(game, 'mountains'), false);
   assert.match(message, /Return to village/);
-  assert.match(html, /id="travel-status" role="status"/);
+  assert.doesNotMatch(html, /id="travel-status"/);
+  assert.match(html, /id="status" role="status"/);
+  Game.prototype.travelStatus.call({ status(value) { message = value; } }, 'Gate is loading.');
+  assert.equal(message, 'Gate is loading.');
 });

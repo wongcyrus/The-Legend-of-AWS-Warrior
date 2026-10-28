@@ -1,7 +1,7 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js";
 import { FBXLoader } from "https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/FBXLoader.js";
 import { SkeletonUtils } from "https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/utils/SkeletonUtils.js";
-import { monsterAnimations } from "./monsters.js?v=20261027-monsters-1";
+import { monsterAnimations } from "./monsters.js?v=20261028-magic-1";
 
 export class MonsterModels {
   constructor() {

@@ -1,0 +1,6 @@
+QR Code Generator for JavaScript, qrcode-generator 2.0.4
+Copyright (c) 2009 Kazuhiko Arase
+Upstream: https://github.com/kazuhikoarase/qrcode-generator
+License: MIT; bundled locally in qrcode-generator.mjs. No remote QR service or runtime build step is used.
+
+The QR Code word is a registered trademark of DENSO WAVE INCORPORATED.

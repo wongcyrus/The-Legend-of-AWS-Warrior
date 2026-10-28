@@ -6,6 +6,63 @@ import { WEAPONS } from '../v2/adventure.js';
 import { SHIELDS, ShieldGuard } from '../v2/shields.js';
 import { findMeleeTargets } from '../v2/combat.js';
 import { equipmentIcon, nextWeapon } from '../v2/equipment-ui.js';
+import { SPELLS, spellDamage } from '../v2/magic.js';
+
+test('combat manual lists live weapon stats, all spell powers and shields, and pauses safely', () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  const node = () => ({
+    children: [], open: false, scrollTop: 99,
+    appendChild(child) { this.children.push(child); },
+    replaceChildren() { this.children = []; },
+    showModal() { this.open = true; },
+  });
+  const elements = Object.fromEntries(['manual-mode', 'manual-strength', 'manual-weapons',
+    'manual-spells', 'manual-shields', 'combat-manual', 'manual-content'].map(id => [id, node()]));
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+    WEAPONS, SPELLS, spellDamage, SHIELDS,
+    document: { getElementById: id => elements[id], createElement: node },
+  });
+  const keys = { forward: true, space: true };
+  let power = 50, released = false;
+  const game = {
+    magicTesting: true, guard: { release() { released = true; } },
+    player: { GetComponent: name => name === 'HealthComponent' ? { _params: { strength: power } } : { _keys: keys } },
+  };
+  Game.prototype.showCombatManual.call(game);
+  const values = id => elements[id].children.map(row => row.children.map(cell => cell.textContent));
+  const weapons = values('manual-weapons');
+  assert.equal(weapons.length, 15);
+  Object.entries(WEAPONS).forEach(([name, weapon], index) => {
+    assert.deepEqual(weapons[index], [weapon.label,
+      Math.round(power * (name === 'Unarmed' ? 1 : weapon.damage)),
+      `${name === 'Unarmed' ? 1 : weapon.damage}x`, `${weapon.speed}x`, weapon.reach || 5, weapon.style]);
+  });
+  const spells = values('manual-spells');
+  assert.equal(spells.length, 5);
+  Object.values(SPELLS).forEach((spell, index) => {
+    assert.equal(spells[index][0], spell.label);
+    assert.equal(spells[index][1], [1, 2, 3].map(level => spell.damage * level).join(' / '));
+    assert.equal(spells[index][2], [0, 1, 2].map(level => spell.range + level * 4).join(' / '));
+    assert.equal(spells[index][3], `${spell.cooldown}s`);
+    assert.ok(spells[index][4].length > 20);
+    assert.equal(spells[index][5], `${spell.bestFor}. ${spell.tradeoff}`);
+  });
+  Object.values(SHIELDS).forEach(label => assert.ok(elements['manual-shields'].textContent.includes(label)));
+  assert.match(elements['manual-mode'].textContent, /1 \/ 2 \/ 3 MP.*reserved on the server/);
+  assert.doesNotMatch(elements['manual-mode'].textContent, /free|unlimited/i);
+  assert.ok(released && !keys.forward && !keys.space && elements['combat-manual'].open);
+  assert.equal(elements['manual-content'].scrollTop, 0);
+  game.magicTesting = false; power = 80;
+  Game.prototype.showCombatManual.call(game);
+  assert.equal(values('manual-weapons').length, 15);
+  assert.equal(values('manual-weapons')[0][1], 96);
+  assert.equal(values('manual-spells')[0][1], '512 / 1024 / 1536');
+  assert.match(elements['manual-mode'].textContent, /1 \/ 2 \/ 3 MP/);
+  assert.match(main, /if \(this.readingService \|\| document.getElementById\("combat-manual"\).open\)/);
+  assert.match(html, /id="manual-button"[^>]+aria-haspopup="dialog"/);
+  assert.match(html, /id="combat-manual"[^>]+aria-labelledby="manual-title"/);
+});
 
 test('all existing melee models and five shields are selectable, without adding bows or arrows', () => {
   assert.equal(Object.keys(WEAPONS).length, 15);
@@ -66,6 +123,49 @@ test('equipment has accessible icon bars instead of dropdown menus', () => {
   }
 });
 
+test('equipment panel omits repeated controls and only shows active guard and dodge status', () => {
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  const hud = html.match(/<div class="v2-ui player-hud">[\s\S]*?(?=<footer)/)[0];
+  assert.doesNotMatch(hud, /Hold R|Q:|Walk to|Click \/ scroll|equipped at start/);
+  assert.doesNotMatch(html, /block-button/);
+  assert.doesNotMatch(html, /id="(?:weapon-summary|magic-summary|magic-tactics|magic-help|magic-feedback)"/);
+  assert.match(html, /<kbd>R<\/kbd> Block/);
+  assert.match(html, /<kbd>Q<\/kbd> Dodge/);
+  assert.match(html, /<kbd>T<\/kbd> Travel gate/);
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(main, /block-button|blockButton/);
+  const source = main.match(/    document.getElementById\("shield-state"\).textContent[\s\S]*?(?=\n    const chest =)/)[0];
+  const elements = { 'shield-state': {}, 'dodge-state': {} };
+  const update = runInNewContext('(function () {' + source + '\n})', {
+    document: { getElementById: id => elements[id] },
+  });
+  const game = { guard: { active: false, broken: 0 }, dodge: { active: false, cooldown: 0 } };
+  update.call(game);
+  assert.equal(elements['shield-state'].hidden, true);
+  assert.equal(elements['dodge-state'].hidden, true);
+  game.guard.active = game.dodge.active = true;
+  update.call(game);
+  assert.equal(elements['shield-state'].textContent, 'Blocking');
+  assert.equal(elements['shield-state'].hidden, false);
+  assert.equal(elements['dodge-state'].hidden, false);
+  game.guard.active = game.dodge.active = false;
+  game.guard.broken = 1.5; game.dodge.cooldown = 0.8;
+  update.call(game);
+  assert.equal(elements['shield-state'].textContent, 'Guard broken: 1.5s');
+  assert.equal(elements['dodge-state'].textContent, 'Dodge: 0.8s');
+});
+
+test('magic messages stay in the manual and cast tooltip instead of covering gameplay', () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const elements = { 'magic-cast': {}, 'manual-cast-status': {} };
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+    document: { getElementById: id => elements[id] },
+  });
+  Game.prototype.magicStatus.call({}, 'Need 3 reading badges.');
+  assert.equal(elements['magic-cast'].title, 'Need 3 reading badges.');
+  assert.equal(elements['manual-cast-status'].textContent, 'Need 3 reading badges.');
+});
+
 test('weapon cycling goes in both directions and wraps at either end', () => {
   const names = Object.keys(WEAPONS);
   assert.equal(nextWeapon(names, 'Sword', 1), 'Axe');
@@ -74,7 +174,7 @@ test('weapon cycling goes in both directions and wraps at either end', () => {
   assert.equal(nextWeapon(names, 'Sword', -1), 'Scythe');
 });
 
-test('wheel cycles weapons with throttling, Shift zooms, and UI or modal scrolling never changes equipment', () => {
+test('wheel zooms, Shift cycles weapons with throttling, and UI or modal scrolling is untouched', () => {
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   let time = 0, modal = false, alive = true, prevented = 0, accept = true, selections = 0;
   const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
@@ -90,19 +190,21 @@ test('wheel cycles weapons with throttling, Shift zooms, and UI or modal scrolli
   const scroll = (extra = {}) => Game.prototype.scrollEquipment.call(game, {
     deltaY: 100, target: { closest: () => false }, preventDefault() { prevented++; }, ...extra,
   });
-  scroll();
+  scroll({ shiftKey: true });
   assert.equal(game.weapon, 'Axe');
-  scroll();
+  scroll({ shiftKey: true });
   assert.equal(selections, 1);
   time = 200;
-  scroll({ deltaY: -100 });
+  scroll({ shiftKey: true, deltaY: -100 });
   assert.equal(game.weapon, 'Sword');
-  scroll({ shiftKey: true });
+  scroll();
   assert.equal(game.cameraDistance, 31);
-  scroll({ shiftKey: true, deltaY: -10000 });
+  scroll({ deltaY: -10000 });
   assert.equal(game.cameraDistance, 18);
-  scroll({ shiftKey: true, deltaY: 10000 });
+  scroll({ deltaY: 10000 });
   assert.equal(game.cameraDistance, 46);
+  assert.equal(game.weapon, 'Sword');
+  assert.equal(selections, 2);
   time = 400;
   const count = prevented;
   scroll({ target: { closest: () => true } });
@@ -114,10 +216,10 @@ test('wheel cycles weapons with throttling, Shift zooms, and UI or modal scrolli
   scroll({ deltaY: 0 });
   assert.equal(prevented, count);
   assert.equal(selections, 2);
-  accept = false; scroll();
+  accept = false; scroll({ shiftKey: true });
   assert.equal(game.weapon, 'Sword');
   assert.equal(game.lastWeaponScroll, 200);
-  accept = true; scroll();
+  accept = true; scroll({ shiftKey: true });
   assert.equal(game.weapon, 'Axe');
 });
 

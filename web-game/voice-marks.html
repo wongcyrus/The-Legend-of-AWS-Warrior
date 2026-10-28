@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#182e30">
+  <title>AWS Warrior - Voice Marks</title>
+  <link rel="icon" type="image/png" href="./resources/branding/hkiit-logo.png">
+  <link rel="stylesheet" href="./v2/style.css?v=20261028-mp-1">
+</head>
+<body class="voice-mobile-page">
+  <main class="voice-mobile-card" aria-labelledby="marks-title">
+    <span class="eyebrow">AWS WARRIOR</span>
+    <h1 id="marks-title">My voice-practice marks</h1>
+    <p>Check your graded read-aloud activities, feedback and MP rewards. Voice-practice grades are separate from project assessment marks. Older participation records remain ungraded and do not receive invented grades or MP.</p>
+    <form id="voice-marks-form">
+      <label for="voice-marks-key">Your API key</label>
+      <input id="voice-marks-key" type="password" autocomplete="off" required>
+      <p>Use the same key as the game. Your key is sent securely, never in the page URL.</p>
+      <button id="voice-marks-refresh" type="submit">Check my voice marks</button>
+    </form>
+    <p id="voice-marks-status" role="status" aria-live="polite"></p>
+    <section id="voice-marks-results" aria-label="Saved voice completions" hidden>
+      <h2 id="voice-marks-summary"></h2>
+      <p id="voice-marks-wallet"></p>
+      <div class="manual-table">
+        <table>
+          <caption>Graded read-aloud activities. Completion times are shown in Hong Kong time. No raw transcripts are displayed.</caption>
+          <thead><tr><th scope="col">Activity</th><th scope="col">Round</th><th scope="col">Status</th><th scope="col">Grade</th><th scope="col">Feedback</th><th scope="col">MP awarded</th><th scope="col">Completed (Hong Kong)</th></tr></thead>
+          <tbody id="voice-marks-activities"></tbody>
+        </table>
+      </div>
+      <h3>Service participation history</h3>
+      <div class="manual-table">
+        <table>
+          <caption>Saved participation is not a grade or an MP reward.</caption>
+          <thead><tr><th scope="col">Service</th><th scope="col">Status</th><th scope="col">Completed (Hong Kong)</th></tr></thead>
+          <tbody id="voice-marks-rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <p>Finished a reading on your phone? Check again here to see the saved result.</p>
+    <a href="./game-v2.html">Return to AWS Warrior</a>
+  </main>
+  <script type="module" src="./v2/voice-marks.js?v=20261028-mp-1"></script>
+</body>
+</html>

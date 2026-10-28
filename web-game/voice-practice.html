@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#182e30">
+  <title>AWS Warrior - Voice Practice</title>
+  <link rel="icon" type="image/png" href="./resources/branding/hkiit-logo.png">
+  <link rel="stylesheet" href="./v2/style.css?v=20261028-voice-mp-1">
+</head>
+<body class="voice-mobile-page">
+  <main class="voice-mobile-card" aria-labelledby="mobile-voice-title">
+    <span class="eyebrow">AWS WARRIOR · LEARNING PRACTICE</span>
+    <h1 id="mobile-voice-title">Read a service passage aloud</h1>
+    <p>Pass at 60/100 to earn MP once for this activity. Grades assess recognised content, not pronunciation or comprehension. Repeat passes earn no more MP.</p>
+    <p id="mobile-voice-status" role="status" aria-live="polite">Connecting securely to your desktop session…</p>
+    <section id="mobile-practice-content" aria-label="Read-aloud practice" hidden>
+    <section aria-labelledby="mobile-question-heading">
+      <h2 id="mobile-question-heading">Text to read aloud</h2>
+      <p id="mobile-voice-question" class="voice-mobile-question"></p>
+    </section>
+    <p id="mobile-voice-attempts" role="status"></p>
+    <section id="mobile-chat-section" aria-labelledby="mobile-chat-heading" hidden>
+      <h2 id="mobile-chat-heading">Practice history</h2>
+      <div id="mobile-voice-chat" class="voice-chat" role="log" aria-live="polite" aria-label="Spoken practice conversation" tabindex="0"></div>
+    </section>
+    <label class="voice-language" for="mobile-voice-language">Reading language
+      <select id="mobile-voice-language">
+        <option value="en-US">English</option>
+        <option value="zh-HK">廣東話（香港） · Cantonese (Hong Kong)</option>
+      </select>
+    </label>
+    <p>Changing language immediately shows the matching passage and discards any unsent speech.</p>
+    <button id="mobile-speak" type="button" aria-pressed="false" disabled>Hold to speak</button>
+    <p>Hold the button while reading. Release when finished, then submit.</p>
+    <section aria-labelledby="mobile-transcript-heading">
+      <h2 id="mobile-transcript-heading">Read-only speech transcript</h2>
+      <p id="mobile-voice-transcript" class="voice-transcript" aria-live="polite">Your final spoken words will appear here. Typing and pasting are not available.</p>
+      <button id="mobile-send-answer" type="button" disabled>Submit spoken reading</button>
+      <p id="mobile-submit-status" role="status" aria-live="polite"></p>
+    </section>
+    <section aria-labelledby="mobile-result-heading">
+      <h2 id="mobile-result-heading">Grade and MP reward</h2>
+      <p id="mobile-voice-result" aria-live="polite"></p>
+    </section>
+    <p class="voice-teacher-help">If you cannot use a microphone or speech recognition, ask your teacher for assistance. Teacher assistance does not submit speech or mark this practice complete.</p>
+    </section>
+    <button id="mobile-refresh" type="button" disabled>Retry connection</button>
+    <a href="./game-v2.html">Return to AWS Warrior</a>
+  </main>
+  <script type="module" src="./v2/voice-mobile.js?v=20261028-voice-mp-2"></script>
+</body>
+</html>

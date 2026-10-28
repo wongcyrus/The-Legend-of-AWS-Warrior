@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#182e30">
   <title>AWS Warrior - V2</title>
-  <link rel="icon" href="./favicon.ico">
-  <link rel="stylesheet" href="./v2/style.css?v=20261027-equipment-bar-1">
+  <link rel="icon" type="image/png" href="./resources/branding/hkiit-logo.png">
+  <link rel="stylesheet" href="./v2/style.css?v=20261028-voice-mp-1">
   <script type="importmap">
     {
       "imports": {
@@ -27,20 +27,23 @@
     </div>
     <nav aria-label="Game navigation">
       <a href="./game.html">Play Classic</a>
+      <a href="./voice-marks.html">Voice marks</a>
+      <button id="manual-button" type="button" aria-haspopup="dialog">Combat manual</button>
       <button id="key-button" type="button">Set Key</button>
       <button id="sound-button" type="button" aria-pressed="false">Mute sound</button>
       <label class="sound-volume">Volume <input id="sound-volume" type="range" min="0" max="100" step="5" aria-label="Sound effects volume"></label>
       <label>Quality <select id="quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
     </nav>
   </div>
-  <section class="v2-ui location"><span class="eyebrow">YOUR JOURNEY</span><h2 id="region">Cloudhaven Village</h2><p id="village-progress">Village: 0 / 6 buildings restored</p></section>
+  <section class="v2-ui location"><span id="cloud-region" class="eyebrow">AWS Learning Hub</span><h2 id="region">Cloudhaven Village</h2><p id="village-progress">AWS missions: 0 | Village: 0 / 6 restored</p></section>
   <div id="combat-feedback" aria-hidden="true"></div>
-  <aside class="v2-ui quest-card" aria-label="Current quest">
-    <div class="card-heading"><span class="eyebrow">QUEST JOURNAL</span><span id="quest-state">EXPLORE</span></div>
+  <aside class="v2-ui quest-card" aria-label="Current AWS mission">
+    <div class="card-heading"><span class="eyebrow">AWS MISSION</span><span id="quest-state">EXPLORE</span></div>
+    <div id="mission-services" aria-label="Mission services" hidden></div>
     <h2 id="quest-title">A world worth saving</h2>
     <p id="quest-description">Press E near a character with a golden marker to receive an AWS task.</p>
     <div class="quest-actions">
-      <button id="instructions-button" type="button" aria-haspopup="dialog" hidden>Read task</button>
+      <button id="instructions-button" type="button" aria-haspopup="dialog" hidden>Mission details</button>
       <button id="conversation-button" type="button" aria-haspopup="dialog" hidden>Read conversation</button>
     </div>
     <p id="status" role="status" aria-live="polite">Set your API key to connect chat and quest grading. You can explore without a key.</p>
@@ -50,22 +53,29 @@
   <div class="v2-ui player-hud">
     <div class="health-heading"><strong>Warrior</strong><span id="health-value">100 / 100</span></div>
     <div class="health-track"><div id="health-bar"></div></div>
+    <div class="health-heading"><strong>MP</strong><span id="mp-value">0 / 100</span></div>
+    <div class="health-track mp-track" role="meter" aria-label="Magic points" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="mp-bar"></div></div>
     <div class="player-stats"><span>XP <b id="stats-experience">0</b></span><span>Power <b id="stats-strength">50</b></span><span>Monsters <b id="defeated">0</b></span></div>
     <div hidden><span id="stats-wisdomness"></span><span id="stats-benchpress"></span><span id="stats-curl"></span></div>
-    <div class="equipment-heading">Weapons <span>Click / scroll to switch</span></div>
+    <div class="equipment-heading">Weapons</div>
     <div id="weapon-bar" class="equipment-bar" role="group" aria-label="Equip a weapon"></div>
-    <p id="weapon-summary">Sword: fast</p>
-    <div class="equipment-heading">Shields <span>Round shield equipped at start</span></div>
+    <div class="equipment-heading">Shields</div>
     <div id="shield-bar" class="equipment-bar shield-bar" role="group" aria-label="Equip a shield"></div>
-    <button id="block-button" type="button" aria-pressed="false" disabled>Hold R / hold to Block</button>
-    <p id="shield-state" role="status">Preparing your round shield...</p>
-    <p id="dodge-state">Q: Dodge ready</p>
-    <p id="explore-hint">F: Open nearby chests</p>
+    <p id="shield-state" role="status" hidden></p>
+    <p id="dodge-state" hidden></p>
+    <p id="explore-hint" hidden></p>
     <button id="home-button" type="button">Return to village</button>
-    <p id="travel-status" role="status" aria-live="polite">Walk to a glowing gate and press T to travel.</p>
+    <div class="equipment-heading"><span>Magic</span><span id="magic-badges">0 MP</span></div>
+    <div id="magic-bar" class="magic-bar" role="group" aria-label="Choose a spell"></div>
+    <div class="magic-levels" role="group" aria-label="Magic power and badge cost">
+      <button type="button" data-magic-level="1" aria-pressed="true" title="Level 1: costs 1 MP">I</button>
+      <button type="button" data-magic-level="2" aria-pressed="false" title="Level 2: costs 2 MP">II</button>
+      <button type="button" data-magic-level="3" aria-pressed="false" title="Level 3: costs 3 MP">III</button>
+      <button id="magic-cast" type="button" disabled>Cast X</button>
+    </div>
   </div>
-  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>R</kbd> Block</span><span><kbd>E</kbd> Get task</span><span><kbd>Q</kbd> Dodge</span><span><kbd>F</kbd> Open chest</span><span><kbd>T</kbd> Travel gate</span><span><kbd>Scroll</kbd> Weapon &middot; <kbd>Shift + scroll</kbd> Zoom</span></footer>
-  <div class="v2-ui credits">Town assets: <a href="https://kenney.nl/assets/fantasy-town-kit" target="_blank" rel="noopener noreferrer">Kenney / CC0</a> &middot; Nature &amp; creatures: Quaternius &middot; <a href="./v2/assets/sources.json">Asset sources</a></div>
+  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>X</kbd> Magic</span><span><kbd>R</kbd> Block</span><span><kbd>E</kbd> Get task</span><span><kbd>Q</kbd> Dodge</span><span><kbd>F</kbd> Open chest</span><span><kbd>T</kbd> Travel gate</span><span><kbd>Scroll</kbd> Zoom &middot; <kbd>Shift + scroll</kbd> Weapon</span></footer>
+  <div class="v2-ui credits">Town: <a href="https://kenney.nl/assets/fantasy-town-kit" target="_blank" rel="noopener noreferrer">Kenney / CC0</a> &middot; Nature &amp; creatures: Quaternius &middot; <a href="./v2/assets/aws/NOTICE.txt" title="Independent educational game; not endorsed by AWS">AWS icons / notice</a> &middot; <a href="./v2/assets/sources.json">Sources</a></div>
   <section id="loading" class="loading" aria-label="Loading the enhanced world">
     <span class="eyebrow">A NEW CHAPTER</span><h2>The Cloudlands await.</h2>
     <p id="loading-message">Preparing the village, forest and ancient ruins...</p>
@@ -88,6 +98,77 @@
       <div class="dialog-actions"><button type="button" id="cancel-key">Cancel</button><button type="submit">Save key</button></div>
     </form>
   </dialog>
-  <script src="./v2/main.js?v=20261027-equipment-bar-1" type="module"></script>
+  <dialog id="service-dialog" class="v2-ui service-dialog" aria-labelledby="service-title">
+    <div class="card-heading"><span id="service-category" class="eyebrow"></span><span id="service-read-state"></span></div>
+    <section id="service-content" class="service-detail" tabindex="0" aria-label="Service introduction and example">
+      <img id="service-icon" alt="" width="96" height="96">
+      <h2 id="service-title"></h2>
+      <p id="service-description"></p>
+      <h3>In a game like this</h3>
+      <p id="service-example"></p>
+      <h3 id="service-benefit-heading" hidden>Why it helps</h3>
+      <p id="service-benefit"></p>
+      <p>This collection follows the AWS icon archive and includes tools, programs, and historical offerings. An icon does not guarantee current availability. Check the linked AWS documentation before using an offering.</p>
+      <p>Reading marks a discovery as read, but earns no MP. Pass a graded voice activity to earn MP for magic. Each activity rewards MP only once; passed services rotate to other unfinished activities.</p>
+      <a id="service-source" target="_blank" rel="noopener noreferrer">Learn more on AWS</a>
+    </section>
+    <div class="dialog-actions"><button id="service-close" type="button">Back to game</button><button id="service-read" type="button" disabled>Mark as read</button>    <button id="service-explain" type="button" hidden>Read aloud</button></div>
+  </dialog>
+  <dialog id="voice-desktop-dialog" class="v2-ui voice-dialog" aria-labelledby="voice-desktop-title">
+    <span class="eyebrow">READ-ALOUD PRACTICE</span>
+    <h2 id="voice-desktop-title">Read this AWS service aloud</h2>
+    <p id="voice-desktop-intro">Read aloud using this computer's microphone. If it has no microphone, transfer the same activity to your phone by QR. Grades assess recognised content, not pronunciation or comprehension. Pass at 60/100 to earn MP once per activity.</p>
+    <div id="voice-desktop-panel"></div>
+    <section id="pc-practice-content" aria-label="Speak on this computer" hidden>
+      <h3>Text to read aloud</h3>
+      <p id="pc-voice-question" class="voice-mobile-question"></p>
+      <p id="pc-voice-attempts"></p>
+      <label class="voice-language" for="pc-voice-language">Reading language
+        <select id="pc-voice-language"><option value="en-US">English</option><option value="zh-HK">廣東話（香港） · Cantonese (Hong Kong)</option></select>
+      </label>
+      <p>Changing language or transferring to your phone discards unsent speech. Hold the button while reading; release when finished.</p>
+      <button id="pc-speak" type="button" aria-pressed="false" disabled>Hold to speak</button>
+      <h3>Read-only speech transcript</h3>
+      <p id="pc-voice-transcript" class="voice-transcript" aria-live="polite"></p>
+      <button id="pc-send-answer" type="button" disabled>Submit spoken reading</button>
+      <p id="pc-submit-status" role="status" aria-live="polite"></p>
+      <p id="pc-voice-status" role="status" aria-live="polite"></p>
+      <h3>Grade and MP reward</h3>
+      <p id="pc-voice-result" aria-live="polite"></p>
+      <button id="pc-refresh" type="button">Refresh passage or result</button>
+    </section>
+    <div class="voice-actions">
+      <button id="voice-start" type="button">Start voice practice</button>
+      <button id="voice-transfer" type="button" disabled>Use phone microphone (QR)</button>
+      <button id="voice-check" type="button" disabled>Check my result manually</button>
+      <button id="voice-desktop-close" type="button">Back to service</button>
+    </div>
+  </dialog>
+  <dialog id="combat-manual" class="v2-ui task-dialog" aria-labelledby="manual-title">
+    <span class="eyebrow">WARRIOR FIELD GUIDE</span>
+    <h2 id="manual-title">Weapons, shields and magic</h2>
+    <div id="manual-content" class="combat-manual-content" tabindex="0" role="region" aria-label="Combat instructions and power tables">
+      <p>The game pauses while this manual is open. Complete AWS tasks in your account, then defeat a monster to grade your work. Magic kills use the same grading rules as melee kills.</p>
+      <h3>Controls</h3>
+      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: cast your selected spell. Choose I, II or III for its power. R: hold to block. Q: dodge. Scroll: zoom. Shift + scroll: cycle weapons. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. T near a gate: travel. F near a chest: open it.</p>
+      <h3>All weapons</h3>
+      <p id="manual-strength"></p>
+      <p>Unarmed uses your full Power because no weapon is equipped; weapon multipliers apply only to equipped items.</p>
+      <div class="manual-table"><table><caption>Melee damage per landed hit</caption><thead><tr><th scope="col">Weapon</th><th scope="col">Damage</th><th scope="col">Power multiplier</th><th scope="col">Speed</th><th scope="col">Reach</th><th scope="col">Style</th></tr></thead><tbody id="manual-weapons"></tbody></table></div>
+      <h3>All magic</h3>
+      <p id="manual-mode"></p>
+      <p id="manual-cast-status" role="status"></p>
+      <p>Every slash-separated value is I / II / III. Damage scales with your current Power. Level-I damage multipliers are Lightning 6.4x, Fireball 5.2x, Frost wave 3.2x, Thunderstorm 4.4x and Shockwave 3.6x, compared with at most 3x for melee weapons. Levels II / III multiply spell damage by 2 / 3; damage is rounded to a whole number. Listed damage is per enemy hit, except Lightning's chain bounces deal 50%, then 25% of its first hit. Higher powers add 0 / 4 / 8 range.</p>
+      <p>All spells cost 1 / 2 / 3 MP. Cooldown is shared across spells, so switching cannot bypass it. All spells are blocked by line-of-sight obstacles; face your target for Lightning, Fireball and Frost wave. A missed cast still spends MP.</p>
+      <div class="manual-table"><table><caption>Spell power, situations and tradeoffs</caption><thead><tr><th scope="col">Spell</th><th scope="col">Damage I / II / III</th><th scope="col">Range I / II / III</th><th scope="col">Normal cooldown</th><th scope="col">Effect I / II / III</th><th scope="col">Best situation and tradeoff</th></tr></thead><tbody id="manual-spells"></tbody></table></div>
+      <p>MP comes only from passed voice activities: 60-74 earns 5 MP, 75-89 earns 10 MP, and 90-100 earns 15 MP, credited up to the 100 MP capacity. Each activity rewards once. Reading, repeated passes, kills, waiting and missions never replenish MP. Dialogs, loading, travel and death block casting.</p>
+      <h3>Shields</h3>
+      <p id="manual-shields"></p>
+      <h3>Super monsters</h3>
+      <p>Look for the orange SUPER MONSTER nameplate: Frostpeak Titan, Sunspire Overlord or Vault Nightlord. They are larger, tougher and hit harder. They respawn normally and give no extra reading badges or mission marks.</p>
+    </div>
+    <div class="dialog-actions"><button id="manual-close" type="button">Back to game</button></div>
+  </dialog>
+  <script src="./v2/main.js?v=20261028-voice-mp-2" type="module"></script>
 </body>
 </html>

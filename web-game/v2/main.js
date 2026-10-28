@@ -15,21 +15,26 @@ import { spatial_grid_controller } from "../src/spatial-grid-controller.js";
 import { baseUrl } from "../src/constant.js";
 import { Assets } from "./assets.js?v=20261027-maps-1";
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js";
-import { World } from "./world.js?v=20261027-maps-1";
+import { World } from "./world.js?v=20261028-facing-signs-1";
 import { MAPS, isSafePosition, nearbyGate } from "./maps.js?v=20261027-maps-1";
 import { sharedResources, disposeMap } from "./map-lifecycle.js?v=20261027-maps-1";
 import { createRenderer, WebGLUnavailableError } from "./renderer.js";
 import { findMeleeTargets, findMovementBlockers } from "./combat.js?v=20261027-equipment-1";
 import { GuidePatrol } from "./guides.js";
-import { SoundEffects } from "./audio.js?v=20261027-equipment-1";
+import { SoundEffects } from "./audio.js?v=20261028-magic-1";
 import { WEAPONS, FINISHES, AdventureProgress, DodgeMotion } from "./adventure.js?v=20261027-equipment-1";
 import { CombatFeedback } from "./feedback.js";
 import { findMonsterSpawn, MonsterRespawns } from "./spawning.js?v=20261027-maps-1";
 import { BUILDINGS, GUIDES, ENEMY_SPAWNS, LAKE, PLAYER_SPAWN, CHESTS, BOSS, regionAt, seededRandom } from "./layout.js";
-import { MONSTERS, monsterFor, clearShot, SpikeShots } from "./monsters.js?v=20261027-monsters-1";
-import { MonsterModels } from "./monster-models.js?v=20261027-monsters-1";
+import { MONSTERS, monsterFor, superMonsterProfile, clearShot, SpikeShots } from "./monsters.js?v=20261028-magic-1";
+import { MonsterModels } from "./monster-models.js?v=20261028-magic-1";
 import { SHIELDS, ShieldGuard } from "./shields.js?v=20261027-equipment-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
+import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
+import { loadServiceImages } from "./aws-world.js?v=20261028-voice-1";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261028-voice-mp-2";
+import { SPELLS, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261028-voice-mp-1";
+import { MagicEffects } from "./magic-effects.js?v=20261028-magic-2";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
   Update(dt) {
@@ -62,6 +67,11 @@ class BasicCharacterController extends player_entity.BasicCharacterController {
 class BasicCharacterControllerInput extends player_input.BasicCharacterControllerInput {
   _onKeyDown(event) {
     if (event.target?.closest?.("input, select, dialog")) return;
+    if (event.code === "KeyX") {
+      event.preventDefault();
+      if (!event.repeat) this._params.game.castMagic();
+      return;
+    }
     if (event.code === "KeyR" || event.key?.toLowerCase() === "r") {
       event.preventDefault();
       if (!event.repeat) this._params.game.startBlock();
@@ -92,7 +102,7 @@ class BasicCharacterControllerInput extends player_input.BasicCharacterControlle
   }
 
   _onMouseUp() {
-    // Keep V2 interaction keyboard-only instead of using Classic's picker.
+    // Guide interaction stays on E; don't invoke Classic's picker.
   }
 
   _onKeyUp(event) {
@@ -210,8 +220,8 @@ class NPCController extends npc_entity.NPCController {
     });
   }
 
-  setMonster(name) {
-    if (this.kind === name) return;
+  setMonster(name, elite = false) {
+    if (this.kind === name && Boolean(this.elite) === elite) return;
     const { model, animations } = this._params.game.monsterModels.create(name);
     this._stateMachine._currentState?.Exit();
     this._stateMachine._currentState = null;
@@ -221,12 +231,21 @@ class NPCController extends npc_entity.NPCController {
       this._params.game.monsterModels.release(this._target);
     }
     this.kind = name;
+    this.elite = elite;
     this.profile = this._params.boss ? {
       ...MONSTERS.Cyclops, label: BOSS.name, health: 480, damage: 16,
       scale: 0.042, windup: 1.15, cooldown: 1,
-    } : MONSTERS[name];
+    } : elite ? superMonsterProfile(name, this._params.game.map.id) : MONSTERS[name];
     this._target = model;
     this._target.scale.setScalar(this.profile.scale);
+    if (elite) model.traverse(object => {
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        if (material?.emissive) {
+          material.emissive.setHex(this.profile.color);
+          material.emissiveIntensity = 0.3;
+        }
+      }
+    });
     this._target.position.copy(this._parent._position);
     this._params.scene.add(model);
     this._mixer = new THREE.AnimationMixer(model);
@@ -267,6 +286,10 @@ class NPCController extends npc_entity.NPCController {
 
   Update(dt) {
     if (this._params.game.traveling) return;
+    if (this.magicSlow > 0) {
+      this.magicSlow = Math.max(0, this.magicSlow - dt);
+      dt *= 0.4;
+    }
     super.Update(dt);
     if (this.kind === "Bat" && this._target && this.GetComponent("HealthComponent").IsAlive()) {
       this._target.position.y = this.profile.hover + Math.sin(this._params.game.clock.elapsedTime * 7) * 0.35;
@@ -326,10 +349,53 @@ class EnemyAttackController extends entity.Component {
     this.aim = null;
   }
 
+  updateSuperLabel(controller, health) {
+    const visible = Boolean(controller.elite && controller._target?.visible && health.IsAlive());
+    if (!visible) {
+      if (this.superLabel) this.superLabel.visible = false;
+      return;
+    }
+    if (!this.superLabel) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 512; canvas.height = 160;
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.encoding = THREE.sRGBEncoding;
+      this.superLabel = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: texture, transparent: true, depthWrite: false, fog: false,
+      }));
+      this.superLabel.scale.set(16, 5, 1);
+      this.game.scene.add(this.superLabel);
+    }
+    this.superLabel.visible = true;
+    this.superLabel.position.copy(this._parent._position);
+    this.superLabel.position.y = 12;
+    const title = `${controller.profile.label}: ${Math.ceil(health._health)} / ${health._maxHealth} HP`;
+    if (this.superLabel.userData.title === title) return;
+    this.superLabel.userData.title = title;
+    const canvas = this.superLabel.material.map.image, ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#161e2df2";
+    ctx.fillRect(0, 0, 512, 160);
+    ctx.strokeStyle = "#ff9900"; ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, 506, 154);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffb454"; ctx.font = "bold 28px sans-serif";
+    ctx.fillText("SUPER MONSTER", 256, 38);
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 32px sans-serif";
+    ctx.fillText(controller.profile.label, 256, 78);
+    ctx.fillStyle = "#3c4350"; ctx.fillRect(24, 92, 464, 18);
+    ctx.fillStyle = "#ff684f";
+    ctx.fillRect(24, 92, 464 * health._health / health._maxHealth, 18);
+    ctx.fillStyle = "#ffffff"; ctx.font = "22px sans-serif";
+    ctx.fillText(`${Math.ceil(health._health)} / ${health._maxHealth} HP`, 256, 140);
+    this.superLabel.material.map.needsUpdate = true;
+  }
+
   Update(dt) {
     const health = this.GetComponent("HealthComponent");
     const controller = this.GetComponent("NPCController");
     const player = this.game.player;
+    this.updateSuperLabel(controller, health);
     if (this.game.traveling || !controller._stateMachine._currentState || !health.IsAlive() ||
         !player.GetComponent("HealthComponent").IsAlive()) { this.reset(); return; }
     const profile = controller.profile;
@@ -398,7 +464,7 @@ class HealthComponent extends health_component.HealthComponent {
       const attacker = message.attacker?.GetComponent("NPCController");
       const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this._parent._rotation);
       const result = game.guard.block(message.value, direction, forward,
-        !message.direction && (attacker?.kind === "Yeti" || attacker?._params.boss));
+        !message.direction && (attacker?.kind === "Yeti" || attacker?.elite || attacker?._params.boss));
       if (result.blocked) {
         game.feedback.show(position, result.broken ? "GUARD BROKEN" : "BLOCKED", "#a9ddff");
         game.sound.play(result.broken ? "guardBreak" : "block");
@@ -603,10 +669,133 @@ class Game {
     });
     this.cameraDistance = 29;
     this.clock = new THREE.Clock();
+    this.voiceWallet = new MagicWallet({
+      baseUrl, readKey: () => localStorage.getItem("api_key"),
+      changed: () => this.updateMagicUI(),
+    });
     this.bindUI();
+    this.refreshVoiceWallet();
   }
 
   status(message) { document.getElementById("status").textContent = message; }
+
+  updateMagicUI() {
+    if (!this.voiceWallet) return;
+    this.voiceWallet.syncKey();
+    const { wallet, pending, checking, busy, error } = this.voiceWallet;
+    const balance = wallet?.balance ?? 0, max = wallet?.max ?? 100;
+    const mpValue = document.getElementById("mp-value"), mpBar = document.getElementById("mp-bar");
+    if (mpValue) mpValue.textContent = `${balance} / ${max}`;
+    if (mpBar) mpBar.style.width = `${balance / max * 100}%`;
+    const meter = document.querySelector('.mp-track[role="meter"]');
+    if (meter) {
+      meter.setAttribute("aria-valuenow", String(balance));
+      meter.setAttribute("aria-valuemax", String(max));
+    }
+    const state = busy ? "Reserving MP..." : checking ? "Checking MP..." :
+      pending ? `Retry ${SPELLS[pending.spell].label} ${pending.level} — reservation pending` :
+      wallet ? `${balance} MP available` : error || "Save your API key to load MP.";
+    document.getElementById("magic-badges").textContent = state;
+    const cooldown = this.magic?.cooldown ?? 0;
+    const unavailable = !this.ready || busy || checking > 0 || (!wallet && !pending) || cooldown > 0;
+    const matchesPending = !pending || (pending.spell === this.spell && pending.level === this.magicLevel);
+    const cast = document.getElementById("magic-cast");
+    cast.disabled = unavailable || !matchesPending || (!pending && balance < this.magicLevel);
+    cast.textContent = busy ? "Reserving MP..." : checking ? "Checking MP..." :
+      cooldown > 0 ? `Cooldown ${cooldown.toFixed(1)}s` : pending ? "Retry reserved cast (X)" : `Cast: ${this.magicLevel} MP (X)`;
+    cast.title = error || state;
+    document.querySelectorAll("[data-spell]").forEach(button => {
+      button.disabled = unavailable || (pending ? button.dataset.spell !== pending.spell : balance < this.magicLevel);
+    });
+    document.querySelectorAll("[data-magic-level]").forEach(button => {
+      const level = Number(button.dataset.magicLevel);
+      button.disabled = unavailable || (pending ? level !== pending.level : balance < level);
+      button.title = `${level} MP`;
+    });
+  }
+
+  refreshVoiceWallet() { return this.voiceWallet.refresh(); }
+
+  magicStatus(message) {
+    document.getElementById("magic-cast").title = message;
+    document.getElementById("manual-cast-status").textContent = message;
+  }
+
+  canCastMagic() {
+    if (!this.ready || !this.magic) { this.magicStatus("Magic is still loading."); return false; }
+    if (this.traveling || this.progressChanging) {
+      this.magicStatus("Wait for travel or account loading to finish before casting."); return false;
+    }
+    if (this.readingService || this.talking || document.querySelector("dialog[open]")) {
+      this.magicStatus("Close the reader or conversation before casting."); return false;
+    }
+    if (!this.player.GetComponent("HealthComponent").IsAlive()) {
+      this.magicStatus("Return to the village to recover before casting."); return false;
+    }
+    const controller = this.player.GetComponent("BasicCharacterController");
+    if (this.dodge.active || controller._stateMachine._currentState?.Name === "attack") {
+      this.magicStatus("Finish your attack or dodge before casting."); return false;
+    }
+    if (this.magic.cooldown > 0) {
+      this.magicStatus(`Magic is cooling down: ${this.magic.cooldown.toFixed(1)}s.`); return false;
+    }
+    return true;
+  }
+
+  async castMagic() {
+    if (!this.canCastMagic()) return false;
+    const spell = this.spell, level = this.magicLevel, map = this.map;
+    let origin, forward;
+    const valid = () => {
+      if (this.map !== map || !this.canCastMagic()) return false;
+      origin = this.player._position.clone();
+      forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.player._rotation);
+      return this.magic.canCast(spell, level, origin, forward);
+    };
+    const cast = await this.voiceWallet.cast({
+      spell, level, valid,
+      execute: pay => {
+        if (!this.magic.cast(spell, level, origin, forward, pay)) return false;
+        this.guard.release();
+        this.sound.play({ lightning: "magicLightning", fireball: "magicFire", frost: "magicFrost",
+          storm: "magicStorm", shockwave: "magicShock" }[spell]);
+        this.magicStatus(`${SPELLS[spell].label} ${["I", "II", "III"][level - 1]} cast! Spent ${level} MP.`);
+        return true;
+      },
+    });
+    if (!cast && this.voiceWallet.error) this.magicStatus(this.voiceWallet.error);
+    this.updateMagicUI();
+    return cast;
+  }
+
+  setupMagic() {
+    this.magicEffects = new MagicEffects(this.scene);
+    this.magic = new MagicCombat({
+      power: () => this.player.GetComponent("HealthComponent")._params.strength,
+      targets: () => this.enemies.filter(actor => actor._active !== false &&
+        actor.GetComponent("NPCController")._target?.visible && actor.GetComponent("HealthComponent").IsAlive())
+        .map(actor => ({ id: actor.Name, actor, x: actor._position.x, z: actor._position.z })),
+      canWalk: (x, z) => this.world.canWalk(x, z),
+      clear: (from, to) => clearShot(from, to, (x, z) => this.world.canWalk(x, z)),
+      damage: (target, value) => target.actor.Broadcast({ topic: "health.damage", value, attacker: this.player }),
+      slow: (target, duration) => {
+        target.actor.GetComponent("NPCController").magicSlow = duration;
+      },
+      push: (target, from, distance) => {
+        const dx = target.x - from.x, dz = target.z - from.z, length = Math.hypot(dx, dz) || 1;
+        const position = target.actor._position.clone();
+        for (let step = 0; step < Math.ceil(distance / 0.4); step++) {
+          const x = position.x + dx / length * 0.4, z = position.z + dz / length * 0.4;
+          if (!this.world.canWalk(x, z) ||
+              findMovementBlockers(this.grid, target.actor, { x, z }, position).length) break;
+          position.set(x, 0, z);
+        }
+        target.actor.GetComponent("NPCController")._target.position.copy(position);
+        target.actor.SetPosition(position);
+      },
+      effect: (...args) => this.magicEffects.spawn(...args),
+    });
+  }
 
   showKeyDialog(message = "Classic and V2 share your key and marks. Your active V2 quest stays separate in this browser tab.") {
     const dialog = document.getElementById("key-dialog");
@@ -641,7 +830,7 @@ class Game {
     this.player?.GetComponent("EquipWeapon").applyFinish();
     this.player?.GetComponent("EquipShield").applyFinish();
     document.getElementById("village-progress").textContent =
-      `Village: ${Math.min(data.passed.length, BUILDINGS.length)} / ${BUILDINGS.length} buildings restored`;
+      `AWS missions: ${data.passed.length} | Village: ${Math.min(data.passed.length, BUILDINGS.length)} / ${BUILDINGS.length} restored`;
   }
 
   selectWeapon(name, force = false) {
@@ -672,7 +861,7 @@ class Game {
     if (!event.deltaY || event.target.closest(".v2-ui, dialog") || document.querySelector("dialog[open]") ||
         !this.ready || this.traveling || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) return;
     event.preventDefault();
-    if (event.shiftKey) {
+    if (!event.shiftKey) {
       this.cameraDistance = THREE.MathUtils.clamp(this.cameraDistance + event.deltaY * 0.02, 18, 46);
       return;
     }
@@ -740,7 +929,92 @@ class Game {
     this.status("Crystal Warden defeated! Crystal weapon finish unlocked. Ordinary monsters still check your AWS tasks.");
   }
 
+  showCombatManual() {
+    const strength = this.player?.GetComponent("HealthComponent")._params.strength ?? 50;
+    const table = (id, rows) => {
+      const body = document.getElementById(id);
+      body.replaceChildren();
+      for (const values of rows) {
+        const row = document.createElement("tr");
+        values.forEach((value, index) => {
+          const cell = document.createElement(index ? "td" : "th");
+          if (!index) cell.scope = "row";
+          cell.textContent = value;
+          row.appendChild(cell);
+        });
+        body.appendChild(row);
+      }
+    };
+    document.getElementById("manual-mode").textContent =
+      "I / II / III cost 1 / 2 / 3 MP per cast, reserved on the server before casting. Misses still cost MP. " +
+      "Earn MP through graded voice activities, not by marking signs as read. MP is capped at 100. " +
+      "Combat effects run locally; only the MP wallet and reservation cooldown are server-enforced.";
+    document.getElementById("manual-strength").textContent =
+      `Weapon damage below uses your current Power (${strength}). Damage = Power x weapon multiplier; speed is an animation multiplier, not attacks per second. Reach and spell ranges use world units.`;
+    table("manual-weapons", Object.entries(WEAPONS).map(([name, weapon]) => [
+      weapon.label, Math.round(strength * (name === "Unarmed" ? 1 : weapon.damage)),
+      `${name === "Unarmed" ? 1 : weapon.damage}x`,
+      `${weapon.speed}x`, weapon.reach || 5, weapon.style,
+    ]));
+    const effects = {
+      lightning: "Aim forward; chains to up to 1 / 2 / 3 enemies. Each bounce deals half the previous hit. Chain radius: 10 / 12 / 14.",
+      fireball: "Forward projectile; explodes on impact or at maximum range. Blast radius: 6 / 8 / 10.",
+      frost: "Forward 120-degree cone; slows enemies to 40% movement speed for 4 / 5 / 6 seconds.",
+      storm: "Hits every visible enemy around you within range.",
+      shockwave: "Hits enemies around you; pushes them up to 5 / 7 / 9 units, stopping at obstacles.",
+    };
+    table("manual-spells", Object.entries(SPELLS).map(([id, spell]) => [
+      spell.label, [1, 2, 3].map(level => spellDamage(id, level, strength)).join(" / "),
+      [0, 1, 2].map(level => spell.range + level * 4).join(" / "),
+      `${spell.cooldown}s`, effects[id], `${spell.bestFor}. ${spell.tradeoff}`,
+    ]));
+    document.getElementById("manual-shields").textContent =
+      `${Object.values(SHIELDS).join(", ")}. All five have the same protection; appearance differs. Hold R to block frontal hits within 60 degrees of facing. Sides and rear remain exposed. Heavy hits deal half damage (rounded up), break guard for 1.5 seconds, and require a fresh R press.`;
+    this.guard.release();
+    if (this.player) {
+      const keys = this.player.GetComponent("BasicCharacterControllerInput")._keys;
+      Object.keys(keys).forEach(key => { keys[key] = false; });
+    }
+    const dialog = document.getElementById("combat-manual");
+    if (!dialog.open) dialog.showModal();
+    document.getElementById("manual-content").scrollTop = 0;
+  }
+
   bindUI() {
+    bindServiceReader(this, THREE);
+    const manual = document.getElementById("combat-manual");
+    document.getElementById("manual-button").onclick = () => this.showCombatManual();
+    document.getElementById("manual-close").onclick = () => manual.close();
+    manual.addEventListener("close", () => this.renderer?.domElement.focus());
+    this.spell = "lightning";
+    this.magicLevel = 1;
+    for (const [id, spell] of Object.entries(SPELLS)) {
+      const button = document.createElement("button");
+      button.type = "button"; button.textContent = spell.label;
+      button.dataset.spell = id;
+      button.setAttribute("aria-pressed", String(id === this.spell));
+      button.onclick = () => {
+        this.spell = id;
+        document.querySelectorAll("[data-spell]").forEach(item =>
+          item.setAttribute("aria-pressed", String(item.dataset.spell === id)));
+        this.updateMagicUI();
+        this.renderer?.domElement.focus();
+      };
+      document.getElementById("magic-bar").appendChild(button);
+    }
+    document.querySelectorAll("[data-magic-level]").forEach(button => {
+      button.onclick = () => {
+        this.magicLevel = Number(button.dataset.magicLevel);
+        document.querySelectorAll("[data-magic-level]").forEach(item =>
+          item.setAttribute("aria-pressed", String(item === button)));
+        this.updateMagicUI();
+        this.renderer?.domElement.focus();
+      };
+    });
+    document.getElementById("magic-cast").onclick = () => {
+      this.castMagic();
+      this.renderer?.domElement.focus();
+    };
     const soundButton = document.getElementById("sound-button");
     const soundVolume = document.getElementById("sound-volume");
     const updateSound = () => {
@@ -789,6 +1063,8 @@ class Game {
         this.showQuest();
       }
       localStorage.setItem("api_key", key);
+      this.refreshVoiceWallet();
+      window.dispatchEvent(new Event("voice-owner-changed"));
       this.syncProgress();
       closeDialog();
       this.status("Key saved. Press E near a guide to receive a quest.");
@@ -819,8 +1095,7 @@ class Game {
         button.dataset[kind] = name;
         button.setAttribute("aria-label", label);
         button.setAttribute("aria-pressed", String(kind === "weapon" && name === this.weapon));
-        const weapon = WEAPONS[name];
-        button.title = weapon ? `${label}: ${weapon.style}, reach ${weapon.reach || 5}` : label;
+        button.title = label;
         button.innerHTML = equipmentIcon(name);
         const shortcut = { Sword: "1", Axe: "2", Unarmed: "0" }[name];
         if (kind === "weapon" && shortcut) {
@@ -835,15 +1110,6 @@ class Game {
         bar.appendChild(button);
       }
     }
-    const blockButton = document.getElementById("block-button");
-    blockButton.onpointerdown = event => {
-      event.preventDefault();
-      blockButton.setPointerCapture(event.pointerId);
-      this.startBlock();
-    };
-    for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
-      blockButton.addEventListener(event, () => this.guard.release());
-    }
     window.addEventListener("blur", () => {
       this.guard.release();
       if (this.player) Object.keys(this.player.GetComponent("BasicCharacterControllerInput")._keys)
@@ -854,7 +1120,8 @@ class Game {
         this.syncProgress();
         this.showQuest();
         this.status("Your marks were reset. Press E near a guide to start again.");
-      } else if (event.key === "api_key") {
+      } else if (event.key === "api_key" || event.key === null) {
+        this.refreshVoiceWallet();
         sessionStorage.removeItem(QUEST_KEY);
         document.getElementById("task-dialog").close();
         this.syncProgress();
@@ -913,18 +1180,19 @@ class Game {
     this.applyQuality();
     window.addEventListener("resize", () => this.resize());
     this.resize();
-    await assets.preload();
+    await Promise.all([assets.preload(), loadServiceImages()]);
     this.models = await assets.templates();
     this.shared = sharedResources(this.models);
     this.worldRoot = new THREE.Group();
     this.scene.add(this.worldRoot);
-    this.world = new World(this.worldRoot, this.models, this.map);
+    this.world = new World(this.worldRoot, this.models, this.map, this.readServices);
     this.cameraBoxes = BUILDINGS.map(b => new THREE.Box3(
       new THREE.Vector3(b.x - 8.5, 0, b.z - 8.5),
       new THREE.Vector3(b.x + 8.5, 16, b.z + 8.5)));
     this.spawnPlayer();
     this.spawnGuides();
     this.spawnEnemies();
+    this.setupMagic();
     this.updateAdventure();
     this.loadTimeout = setTimeout(() => {
       if (!this.ready) this.fail(new Error("Character loading took too long. Check your connection and try again."));
@@ -1062,6 +1330,7 @@ class Game {
     controller._velocity.set(0, 0, 0);
     Object.keys(controller._input._keys).forEach(key => { controller._input._keys[key] = false; });
     controller._mixer.stopAllAction();
+    controller.magicSlow = 0;
     monster.GetComponent("EnemyAttackController").reset();
     controller._stateMachine.SetState("idle");
     controller._animations.idle.action.reset().play();
@@ -1079,7 +1348,6 @@ class Game {
 
   travelStatus(message) {
     this.status(message);
-    document.getElementById("travel-status").textContent = message;
   }
 
   useGate() {
@@ -1125,7 +1393,7 @@ class Game {
     const root = new THREE.Group();
     let world;
     try {
-      world = new World(root, this.models, map);
+      world = new World(root, this.models, map, this.readServices);
     } catch (error) {
       disposeMap(root, this.shared);
       this.traveling = false;
@@ -1147,6 +1415,8 @@ class Game {
       [[-map.limit - 20, -map.limit - 20], [map.limit + 20, map.limit + 20]], [80, 80]);
     this.respawns.pending.clear();
     this.spikes.clear();
+    this.magic?.clearProjectiles();
+    this.magicEffects?.clear();
     this.feedback.update(10, () => ({ x: 0, y: 0, z: 0 }));
     this.speakingGuide = null;
     const register = (actor, active, position) => {
@@ -1189,8 +1459,11 @@ class Game {
       const active = Boolean(position);
       const npc = actor.GetComponent("NPCController");
       npc._params.world = world;
-      if (active) npc.setMonster(index === ENEMY_SPAWNS.length ? "Cyclops" : monsterFor(id, index));
+      if (active) npc.setMonster(index === ENEMY_SPAWNS.length ? "Cyclops" : monsterFor(id, index),
+        id !== "village" && index === map.enemies.length - 1);
       npc._target.visible = active;
+      const label = actor.GetComponent("EnemyAttackController").superLabel;
+      if (label) label.visible = false;
       actor.GetComponent("EnemyAttackController").reset();
       register(actor, active, position);
       if (active) this.respawnEnemy(actor, { x: position[0], z: position[1] });
@@ -1222,6 +1495,21 @@ class Game {
 
   showQuest(completed = false) {
     const quest = this.api.quest;
+    const badges = document.getElementById("mission-services");
+    badges.replaceChildren();
+    for (const id of missionServices(quest)) {
+      const service = AWS_SERVICES[id];
+      const badge = document.createElement("button");
+      badge.type = "button"; badge.className = "service-badge";
+      badge.dataset.awsService = id;
+      const icon = document.createElement("img");
+      icon.src = service.icon; icon.alt = ""; icon.width = icon.height = 24;
+      const label = document.createElement("span");
+      label.textContent = service.label;
+      badge.append(icon, label);
+      badges.appendChild(badge);
+    }
+    badges.hidden = !badges.childElementCount;
     document.getElementById("quest-title").textContent = quest
       ? quest.name.split(".").pop().replace(/_/g, " ")
       : completed ? "All AWS tasks complete" : "A world worth saving";
@@ -1335,7 +1623,7 @@ class Game {
     if (this.api.grading) return;
     const account = localStorage.getItem("api_key"), reset = localStorage.getItem(MARKS_RESET_KEY);
     const version = this.progress.version;
-    this.status("Grading your AWS quest. You can keep exploring...");
+    this.status("Checking AWS resources... You can keep exploring.");
     try {
       const result = await this.api.gradeQuest();
       if (!result || account !== localStorage.getItem("api_key") || reset !== localStorage.getItem(MARKS_RESET_KEY) ||
@@ -1349,8 +1637,8 @@ class Game {
       this.sound.play(result.isSuccess ? "success" : "failure");
       this.showQuest();
       this.status(result.isSuccess
-        ? "Quest passed! Your marks are saved. Press E near a guide for the next challenge."
-        : "Task not passed. Fix your AWS resources, then defeat another monster to retry. Your task instructions are still saved.");
+        ? "Validation passed! Your AWS marks are saved. Visit a guide for the next mission."
+        : "Changes needed. Fix your AWS resources, then defeat another monster to retry. Your mission instructions are still saved.");
       const link = document.getElementById("result-link");
       try {
         const url = new URL(result.logUrl);
@@ -1445,11 +1733,18 @@ class Game {
   frame() {
     if (this.failed) return;
     requestAnimationFrame(() => this.frame());
+    if (this.readingService || document.getElementById("combat-manual").open) {
+      this.clock.getDelta();
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     const dt = Math.min(this.clock.getDelta(), 1 / 30);
     this.guard.update(dt);
     const time = this.clock.elapsedTime;
     const controller = this.player.GetComponent("BasicCharacterController");
     if (localStorage.getItem("api_key") !== this.progressKey || localStorage.getItem(MARKS_RESET_KEY) !== this.progressReset) {
+      this.magic.clearProjectiles();
+      this.magicEffects.clear();
       sessionStorage.removeItem(QUEST_KEY);
       this.syncProgress();
       this.showQuest();
@@ -1464,6 +1759,12 @@ class Game {
     }
     const beforeX = this.player._position.x, beforeZ = this.player._position.z;
     this.manager.Update(dt);
+    if (this.traveling || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) {
+      this.magic.clearProjectiles();
+      this.magicEffects.clear();
+    } else this.magic.update(dt);
+    this.magicEffects.update(dt);
+    this.updateMagicUI();
     const dodge = this.dodge.update(dt, this.player._position, (x, z, from) => this.world.canWalk(x, z) &&
       findMovementBlockers(this.grid, this.player, { x, z }, from).length === 0);
     if (dodge.x !== this.player._position.x || dodge.z !== this.player._position.z) {
@@ -1483,7 +1784,7 @@ class Game {
         direction: { x: -shot.vx, z: -shot.vz } }),
     });
     this.spikes.active.forEach(shot => shot.mesh.position.set(shot.x, 3, shot.z));
-    this.world.update(time, this.player._position);
+    this.world.update(time, this.player._position, this.camera);
     if (this.quality === "low") this.world.detail.visible = false;
     this.markers.forEach((marker, index) => {
       const guide = marker.userData.guide._position;
@@ -1497,29 +1798,27 @@ class Game {
     this.sun.position.set(position.x - 55, 95, position.z + 40);
     this.sun.target.position.copy(position);
     document.getElementById("region").textContent = this.map.id === "village" ? regionAt(position.x, position.z) : this.map.name;
-    const weapon = WEAPONS[this.weapon];
-    document.getElementById("weapon-summary").textContent =
-      `${weapon.label}: ${Math.round(this.player.GetComponent("HealthComponent")._params.strength * weapon.damage)} damage / ${weapon.style} / reach ${weapon.reach || 5}`;
-    document.getElementById("block-button").disabled = !this.guard.equipped;
-    document.getElementById("block-button").setAttribute("aria-pressed", String(this.guard.active));
+    document.getElementById("cloud-region").textContent = CLOUD_REGIONS[this.map.id].subtitle;
     document.getElementById("shield-state").textContent = this.guard.broken > 0
-      ? `Guard broken: ${this.guard.broken.toFixed(1)}s. Release R, then block again.`
-      : this.guard.active ? "Blocking front: slower movement; no attacks. Yeti blows break guard."
-        : this.guard.equipped ? "Hold R or Block: defend the front. Your back is exposed." : "Choose a shield to block melee attacks and spikes.";
+      ? `Guard broken: ${this.guard.broken.toFixed(1)}s`
+      : this.guard.active ? "Blocking" : "";
+    document.getElementById("shield-state").hidden = !this.guard.active && this.guard.broken <= 0;
     document.getElementById("dodge-state").textContent = this.dodge.active ? "Dodging: invulnerable" :
-      this.dodge.cooldown > 0 ? `Q: Dodge in ${this.dodge.cooldown.toFixed(1)}s` : "Q: Dodge ready";
+      this.dodge.cooldown > 0 ? `Dodge: ${this.dodge.cooldown.toFixed(1)}s` : "";
+    document.getElementById("dodge-state").hidden = !this.dodge.active && this.dodge.cooldown <= 0;
     const chest = this.nearbyChest();
     const boss = this.boss.GetComponent("HealthComponent"), gate = nearbyGate(this.map, position);
     const nearbyEnemy = this.enemies.filter(actor => actor.GetComponent("NPCController")._target?.visible &&
       actor.GetComponent("HealthComponent").IsAlive() && actor._position.distanceTo(position) < 30)
       .sort((a, b) => a._position.distanceToSquared(position) - b._position.distanceToSquared(position))[0];
     const enemyHealth = nearbyEnemy?.GetComponent("HealthComponent");
-    document.getElementById("explore-hint").textContent = gate ? `T: Enter ${MAPS[gate.to].name}` :
+    document.getElementById("explore-hint").textContent = gate ? MAPS[gate.to].name :
       nearbyEnemy ? `${nearbyEnemy.GetComponent("NPCController").profile.label}: ${Math.ceil(enemyHealth._health)} / ${enemyHealth._maxHealth} HP` :
-      this.map.id !== "village" ? "Watch for heavy blows, fast bats and aimed cactus spikes. Q dodges." : chest ? `F: Open ${chest.name}` :
+      chest ? chest.name :
       this.boss._position.distanceTo(position) < 35 && boss.IsAlive()
         ? `Optional: ${BOSS.name} ${Math.ceil(boss._health)} / ${boss._maxHealth} HP`
-        : `Caches: ${this.progress.data.chests.length} / ${CHESTS.length} | Warden: ${this.progress.data.boss ? "defeated" : "optional"}`;
+        : "";
+    document.getElementById("explore-hint").hidden = !document.getElementById("explore-hint").textContent;
     this.feedback.update(dt, point => {
       const projected = point.clone().project(this.camera);
       return { x: (projected.x + 1) * innerWidth / 2, y: (1 - projected.y) * innerHeight / 2, z: projected.z };
