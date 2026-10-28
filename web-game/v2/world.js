@@ -2,22 +2,32 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.m
 import { instances, normalized } from "./assets.js?v=20261027-maps-1";
 import { BUILDINGS, LAKE, RUIN_WALLS, CHESTS, BOSS, SECRET_PATH, createScenery, isWalkable, seededRandom } from "./layout.js";
 import { MAPS, isMapWalkable } from "./maps.js?v=20261027-maps-1";
-import { buildExpedition, buildGates } from "./map-world.js?v=20261027-maps-1";
+import { buildExpedition, buildGates } from "./map-world.js?v=20261028-all-discoveries-1";
+import { servicePlaque, buildServiceLandmarks } from "./aws-world.js?v=20261028-voice-1";
+import { BUILDING_SERVICES, AWS_LANDMARKS, plaqueObscuresPlayer } from "./aws-theme.js?v=20261028-voice-1";
 
 export class World {
-  constructor(scene, models, map = MAPS.village) {
+  constructor(scene, models, map = MAPS.village, readServices = new Set()) {
     this.scene = scene;
     this.models = models;
     this.map = map;
+    this.readServices = readServices;
     this.scenery = map.id === "village" ? createScenery() : { trees: [] };
+    for (const kind of Object.keys(this.scenery)) {
+      this.scenery[kind] = this.scenery[kind].filter(point =>
+        !AWS_LANDMARKS[map.id].some(landmark => Math.hypot(point.x - landmark.x, point.z - landmark.z) < 9));
+    }
     this.animated = [];
     this.restorations = [];
+    this.servicePlaques = [];
+    this.plaquePoint = new THREE.Vector3();
     this.chests = [];
     this.detail = new THREE.Group();
     scene.add(this.detail);
     if (map.id !== "village") {
       buildExpedition(this);
       buildGates(this);
+      buildServiceLandmarks(this);
       return;
     }
     this.buildGround();
@@ -28,6 +38,7 @@ export class World {
     this.buildAdventure();
     this.buildHorizon();
     buildGates(this);
+    buildServiceLandmarks(this);
   }
 
   material(color, extra = {}) {
@@ -83,7 +94,7 @@ export class World {
   }
 
   buildVillage() {
-    for (const building of BUILDINGS) {
+    for (const [index, building] of BUILDINGS.entries()) {
       const house = new THREE.Group();
       house.position.set(building.x, 0, building.z);
       house.rotation.y = building.rotation;
@@ -119,7 +130,13 @@ export class World {
         flowers.position.set(x, 0, 1.2);
         restored.add(flowers);
       }
-      this.restorations.push({ boards, restored });
+      const plaque = servicePlaque(this, house, BUILDING_SERVICES[index],
+        { x: 0.2, y: 1.18, z: 1.1, width: 0.95 });
+      const frame = this.mesh(new THREE.PlaneGeometry(1.03, 0.44),
+        new THREE.MeshBasicMaterial({ color: 0x617080, side: THREE.DoubleSide }),
+        0.2, 1.18, 1.09, house);
+      plaque.userData.frame = frame;
+      this.restorations.push({ boards, restored, plaque, frame });
     }
     this.model("fountain-round-detail", 0, 0, -7, 4.2);
     this.model("stall-red", -15, 0, 10, 5, Math.PI / 2);
@@ -299,9 +316,10 @@ export class World {
   }
 
   setAdventure(data) {
-    this.restorations.forEach(({ boards, restored }, index) => {
+    this.restorations.forEach(({ boards, restored, frame }, index) => {
       boards.visible = index >= data.passed.length;
       restored.visible = !boards.visible;
+      frame.material.color.setHex(boards.visible ? 0x617080 : 0xff9900);
     });
     this.chests.forEach(chest => {
       const opened = data.chests.includes(chest.id);
@@ -310,7 +328,19 @@ export class World {
     });
   }
 
-  update(time, player) {
+  update(time, player, camera) {
+    if (camera && player) {
+      for (const plaque of this.servicePlaques) {
+        plaque.getWorldPosition(this.plaquePoint);
+        if (plaque.userData.awsLandmark) {
+          plaque.rotation.y = Math.atan2(camera.position.x - this.plaquePoint.x,
+            camera.position.z - this.plaquePoint.z);
+        }
+        const width = plaque.userData.awsWidth * plaque.matrixWorld.getMaxScaleOnAxis();
+        plaque.visible = !plaqueObscuresPlayer(this.plaquePoint, width, camera.position, player);
+        if (plaque.userData.frame) plaque.userData.frame.visible = plaque.visible;
+      }
+    }
     this.animated.forEach(({ object, type, offset = 0 }) => {
       if (type === "crystal") {
         object.rotation.y = time * 0.3 + offset;

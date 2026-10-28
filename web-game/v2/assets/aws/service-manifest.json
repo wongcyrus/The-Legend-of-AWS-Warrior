@@ -1,0 +1,1527 @@
+[
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_AWS-Clean-Rooms_64@5x.png",
+    "service": "aws-clean-rooms",
+    "icon": "./v2/assets/aws/services/aws-clean-rooms.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_AWS-Data-Exchange_64@5x.png",
+    "service": "aws-data-exchange",
+    "icon": "./v2/assets/aws/services/aws-data-exchange.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_AWS-Entity-Resolution_64@5x.png",
+    "service": "aws-entity-resolution",
+    "icon": "./v2/assets/aws/services/aws-entity-resolution.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_AWS-Glue-DataBrew_64@5x.png",
+    "service": "aws-glue-databrew",
+    "icon": "./v2/assets/aws/services/aws-glue-databrew.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_AWS-Glue_64@5x.png",
+    "service": "aws-glue",
+    "icon": "./v2/assets/aws/services/aws-glue.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_AWS-Lake-Formation_64@5x.png",
+    "service": "aws-lake-formation",
+    "icon": "./v2/assets/aws/services/aws-lake-formation.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Athena_64@5x.png",
+    "service": "amazon-athena",
+    "icon": "./v2/assets/aws/services/amazon-athena.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-CloudSearch_64@5x.png",
+    "service": "amazon-cloudsearch",
+    "icon": "./v2/assets/aws/services/amazon-cloudsearch.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Data-Firehose_64@5x.png",
+    "service": "amazon-data-firehose",
+    "icon": "./v2/assets/aws/services/amazon-data-firehose.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-DataZone_64@5x.png",
+    "service": "amazon-datazone",
+    "icon": "./v2/assets/aws/services/amazon-datazone.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-EMR_64@5x.png",
+    "service": "amazon-emr",
+    "icon": "./v2/assets/aws/services/amazon-emr.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-FinSpace_64@5x.png",
+    "service": "amazon-finspace",
+    "icon": "./v2/assets/aws/services/amazon-finspace.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Kinesis-Data-Streams_64@5x.png",
+    "service": "amazon-kinesis-data-streams",
+    "icon": "./v2/assets/aws/services/amazon-kinesis-data-streams.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Kinesis-Video-Streams_64@5x.png",
+    "service": "amazon-kinesis-video-streams",
+    "icon": "./v2/assets/aws/services/amazon-kinesis-video-streams.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Kinesis_64@5x.png",
+    "service": "amazon-kinesis",
+    "icon": "./v2/assets/aws/services/amazon-kinesis.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Managed-Service-for-Apache-Flink_64@5x.png",
+    "service": "amazon-managed-service-for-apache-flink",
+    "icon": "./v2/assets/aws/services/amazon-managed-service-for-apache-flink.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Managed-Streaming-for-Apache-Kafka_64@5x.png",
+    "service": "amazon-managed-streaming-for-apache-kafka",
+    "icon": "./v2/assets/aws/services/amazon-managed-streaming-for-apache-kafka.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-OpenSearch-Service_64@5x.png",
+    "service": "amazon-opensearch-service",
+    "icon": "./v2/assets/aws/services/amazon-opensearch-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-Redshift_64@5x.png",
+    "service": "amazon-redshift",
+    "icon": "./v2/assets/aws/services/amazon-redshift.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Analytics/64/Arch_Amazon-SageMaker_64@5x.png",
+    "service": "amazon-sagemaker",
+    "icon": "./v2/assets/aws/services/amazon-sagemaker.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_AWS-AppSync_64@5x.png",
+    "service": "aws-appsync",
+    "icon": "./v2/assets/aws/services/aws-appsync.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_AWS-B2B-Data-Interchange_64@5x.png",
+    "service": "aws-b2b-data-interchange",
+    "icon": "./v2/assets/aws/services/aws-b2b-data-interchange.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_AWS-Express-Workflows_64@5x.png",
+    "service": "aws-express-workflows",
+    "icon": "./v2/assets/aws/services/aws-express-workflows.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_AWS-Step-Functions_64@5x.png",
+    "service": "aws-step-functions",
+    "icon": "./v2/assets/aws/services/aws-step-functions.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_Amazon-AppFlow_64@5x.png",
+    "service": "amazon-appflow",
+    "icon": "./v2/assets/aws/services/amazon-appflow.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_Amazon-EventBridge_64@5x.png",
+    "service": "amazon-eventbridge",
+    "icon": "./v2/assets/aws/services/amazon-eventbridge.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_Amazon-MQ_64@5x.png",
+    "service": "amazon-mq",
+    "icon": "./v2/assets/aws/services/amazon-mq.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_Amazon-Managed-Workflows-for-Apache-Airflow_64@5x.png",
+    "service": "amazon-managed-workflows-for-apache-airflow",
+    "icon": "./v2/assets/aws/services/amazon-managed-workflows-for-apache-airflow.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_Amazon-Simple-Notification-Service_64@5x.png",
+    "service": "amazon-simple-notification-service",
+    "icon": "./v2/assets/aws/services/amazon-simple-notification-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Application-Integration/64/Arch_Amazon-Simple-Queue-Service_64@5x.png",
+    "service": "amazon-simple-queue-service",
+    "icon": "./v2/assets/aws/services/amazon-simple-queue-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-App-Studio_64@5x.png",
+    "service": "aws-app-studio",
+    "icon": "./v2/assets/aws/services/aws-app-studio.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-Deep-Learning-AMIs_64@5x.png",
+    "service": "aws-deep-learning-amis",
+    "icon": "./v2/assets/aws/services/aws-deep-learning-amis.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-Deep-Learning-Containers_64@5x.png",
+    "service": "aws-deep-learning-containers",
+    "icon": "./v2/assets/aws/services/aws-deep-learning-containers.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-DeepRacer_64@5x.png",
+    "service": "aws-deepracer",
+    "icon": "./v2/assets/aws/services/aws-deepracer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-Elemental-Inference_64@5x.png",
+    "service": "aws-elemental-inference",
+    "icon": "./v2/assets/aws/services/aws-elemental-inference.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-HealthImaging_64@5x.png",
+    "service": "aws-healthimaging",
+    "icon": "./v2/assets/aws/services/aws-healthimaging.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-HealthLake_64@5x.png",
+    "service": "aws-healthlake",
+    "icon": "./v2/assets/aws/services/aws-healthlake.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-HealthOmics_64@5x.png",
+    "service": "aws-healthomics",
+    "icon": "./v2/assets/aws/services/aws-healthomics.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-HealthScribe_64@5x.png",
+    "service": "aws-healthscribe",
+    "icon": "./v2/assets/aws/services/aws-healthscribe.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-Neuron_64@5x.png",
+    "service": "aws-neuron",
+    "icon": "./v2/assets/aws/services/aws-neuron.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_AWS-Panorama_64@5x.png",
+    "service": "aws-panorama",
+    "icon": "./v2/assets/aws/services/aws-panorama.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Augmented-AI-A2I_64@5x.png",
+    "service": "amazon-augmented-ai-a2i",
+    "icon": "./v2/assets/aws/services/amazon-augmented-ai-a2i.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock-AgentCore_64@5x.png",
+    "service": "amazon-bedrock-agentcore",
+    "icon": "./v2/assets/aws/services/amazon-bedrock-agentcore.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Bedrock_64@5x.png",
+    "service": "amazon-bedrock",
+    "icon": "./v2/assets/aws/services/amazon-bedrock.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-CodeGuru_64@5x.png",
+    "service": "amazon-codeguru",
+    "icon": "./v2/assets/aws/services/amazon-codeguru.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-CodeWhisperer_64@5x.png",
+    "service": "amazon-codewhisperer",
+    "icon": "./v2/assets/aws/services/amazon-codewhisperer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Comprehend-Medical_64@5x.png",
+    "service": "amazon-comprehend-medical",
+    "icon": "./v2/assets/aws/services/amazon-comprehend-medical.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Comprehend_64@5x.png",
+    "service": "amazon-comprehend",
+    "icon": "./v2/assets/aws/services/amazon-comprehend.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-DevOps-Guru_64@5x.png",
+    "service": "amazon-devops-guru",
+    "icon": "./v2/assets/aws/services/amazon-devops-guru.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Elastic-Inference_64@5x.png",
+    "service": "amazon-elastic-inference",
+    "icon": "./v2/assets/aws/services/amazon-elastic-inference.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Forecast_64@5x.png",
+    "service": "amazon-forecast",
+    "icon": "./v2/assets/aws/services/amazon-forecast.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Fraud-Detector_64@5x.png",
+    "service": "amazon-fraud-detector",
+    "icon": "./v2/assets/aws/services/amazon-fraud-detector.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Kendra_64@5x.png",
+    "service": "amazon-kendra",
+    "icon": "./v2/assets/aws/services/amazon-kendra.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Lex_64@5x.png",
+    "service": "amazon-lex",
+    "icon": "./v2/assets/aws/services/amazon-lex.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Lookout-for-Equipment_64@5x.png",
+    "service": "amazon-lookout-for-equipment",
+    "icon": "./v2/assets/aws/services/amazon-lookout-for-equipment.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Lookout-for-Vision_64@5x.png",
+    "service": "amazon-lookout-for-vision",
+    "icon": "./v2/assets/aws/services/amazon-lookout-for-vision.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Monitron_64@5x.png",
+    "service": "amazon-monitron",
+    "icon": "./v2/assets/aws/services/amazon-monitron.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Nova_64@5x.png",
+    "service": "amazon-nova",
+    "icon": "./v2/assets/aws/services/amazon-nova.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Personalize_64@5x.png",
+    "service": "amazon-personalize",
+    "icon": "./v2/assets/aws/services/amazon-personalize.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Polly_64@5x.png",
+    "service": "amazon-polly",
+    "icon": "./v2/assets/aws/services/amazon-polly.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Q_64@5x.png",
+    "service": "amazon-q",
+    "icon": "./v2/assets/aws/services/amazon-q.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Rekognition_64@5x.png",
+    "service": "amazon-rekognition",
+    "icon": "./v2/assets/aws/services/amazon-rekognition.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-SageMaker-AI_64@5x.png",
+    "service": "amazon-sagemaker-ai",
+    "icon": "./v2/assets/aws/services/amazon-sagemaker-ai.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-SageMaker-Ground-Truth_64@5x.png",
+    "service": "amazon-sagemaker-ground-truth",
+    "icon": "./v2/assets/aws/services/amazon-sagemaker-ground-truth.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-SageMaker-Studio-Lab_64@5x.png",
+    "service": "amazon-sagemaker-studio-lab",
+    "icon": "./v2/assets/aws/services/amazon-sagemaker-studio-lab.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Textract_64@5x.png",
+    "service": "amazon-textract",
+    "icon": "./v2/assets/aws/services/amazon-textract.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Transcribe_64@5x.png",
+    "service": "amazon-transcribe",
+    "icon": "./v2/assets/aws/services/amazon-transcribe.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Amazon-Translate_64@5x.png",
+    "service": "amazon-translate",
+    "icon": "./v2/assets/aws/services/amazon-translate.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_Apache-MXNet-on-AWS_64@5x.png",
+    "service": "apache-mxnet-on-aws",
+    "icon": "./v2/assets/aws/services/apache-mxnet-on-aws.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_PyTorch-on-AWS_64@5x.png",
+    "service": "pytorch-on-aws",
+    "icon": "./v2/assets/aws/services/pytorch-on-aws.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Artificial-Intelligence/64/Arch_TensorFlow-on-AWS_64@5x.png",
+    "service": "tensorflow-on-aws",
+    "icon": "./v2/assets/aws/services/tensorflow-on-aws.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Blockchain/64/Arch_Amazon-Managed-Blockchain_64@5x.png",
+    "service": "amazon-managed-blockchain",
+    "icon": "./v2/assets/aws/services/amazon-managed-blockchain.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_AWS-AppFabric_64@5x.png",
+    "service": "aws-appfabric",
+    "icon": "./v2/assets/aws/services/aws-appfabric.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_AWS-End-User-Messaging_64@5x.png",
+    "service": "aws-end-user-messaging",
+    "icon": "./v2/assets/aws/services/aws-end-user-messaging.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_AWS-Supply-Chain_64@5x.png",
+    "service": "aws-supply-chain",
+    "icon": "./v2/assets/aws/services/aws-supply-chain.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_AWS-Wickr_64@5x.png",
+    "service": "aws-wickr",
+    "icon": "./v2/assets/aws/services/aws-wickr.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-Chime-SDK_64@5x.png",
+    "service": "amazon-chime-sdk",
+    "icon": "./v2/assets/aws/services/amazon-chime-sdk.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-Chime_64@5x.png",
+    "service": "amazon-chime",
+    "icon": "./v2/assets/aws/services/amazon-chime.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-Connect_64@5x.png",
+    "service": "amazon-connect",
+    "icon": "./v2/assets/aws/services/amazon-connect.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-Pinpoint-APIs_64@5x.png",
+    "service": "amazon-pinpoint-apis",
+    "icon": "./v2/assets/aws/services/amazon-pinpoint-apis.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-Pinpoint_64@5x.png",
+    "service": "amazon-pinpoint",
+    "icon": "./v2/assets/aws/services/amazon-pinpoint.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-Quick_64@5x.png",
+    "service": "amazon-quick",
+    "icon": "./v2/assets/aws/services/amazon-quick.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-Simple-Email-Service_64@5x.png",
+    "service": "amazon-simple-email-service",
+    "icon": "./v2/assets/aws/services/amazon-simple-email-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-WorkDocs-SDK_64@5x.png",
+    "service": "amazon-workdocs-sdk",
+    "icon": "./v2/assets/aws/services/amazon-workdocs-sdk.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-WorkDocs_64@5x.png",
+    "service": "amazon-workdocs",
+    "icon": "./v2/assets/aws/services/amazon-workdocs.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Business-Applications/64/Arch_Amazon-WorkMail_64@5x.png",
+    "service": "amazon-workmail",
+    "icon": "./v2/assets/aws/services/amazon-workmail.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Cloud-Financial-Management/64/Arch_AWS-Billing-Conductor_64@5x.png",
+    "service": "aws-billing-conductor",
+    "icon": "./v2/assets/aws/services/aws-billing-conductor.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Cloud-Financial-Management/64/Arch_AWS-Budgets_64@5x.png",
+    "service": "aws-budgets",
+    "icon": "./v2/assets/aws/services/aws-budgets.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Cloud-Financial-Management/64/Arch_AWS-Cost-Explorer_64@5x.png",
+    "service": "aws-cost-explorer",
+    "icon": "./v2/assets/aws/services/aws-cost-explorer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Cloud-Financial-Management/64/Arch_AWS-Cost-and-Usage-Report_64@5x.png",
+    "service": "aws-cost-and-usage-report",
+    "icon": "./v2/assets/aws/services/aws-cost-and-usage-report.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Cloud-Financial-Management/64/Arch_AWS-FinOps-Agent_64@5x.png",
+    "service": "aws-finops-agent",
+    "icon": "./v2/assets/aws/services/aws-finops-agent.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Cloud-Financial-Management/64/Arch_Reserved-Instance-Reporting_64@5x.png",
+    "service": "reserved-instance-reporting",
+    "icon": "./v2/assets/aws/services/reserved-instance-reporting.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Cloud-Financial-Management/64/Arch_Savings-Plans_64@5x.png",
+    "service": "savings-plans",
+    "icon": "./v2/assets/aws/services/savings-plans.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-App-Runner_64@5x.png",
+    "service": "aws-app-runner",
+    "icon": "./v2/assets/aws/services/aws-app-runner.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Batch_64@5x.png",
+    "service": "batch",
+    "icon": "./v2/assets/aws/batch.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Compute-Optimizer_64@5x.png",
+    "service": "aws-compute-optimizer",
+    "icon": "./v2/assets/aws/services/aws-compute-optimizer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Elastic-Beanstalk_64@5x.png",
+    "service": "aws-elastic-beanstalk",
+    "icon": "./v2/assets/aws/services/aws-elastic-beanstalk.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Lambda_64@5x.png",
+    "service": "lambda",
+    "icon": "./v2/assets/aws/lambda.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Local-Zones_64@5x.png",
+    "service": "aws-local-zones",
+    "icon": "./v2/assets/aws/services/aws-local-zones.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Nitro-Enclaves_64@5x.png",
+    "service": "aws-nitro-enclaves",
+    "icon": "./v2/assets/aws/services/aws-nitro-enclaves.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Outposts-family_64@5x.png",
+    "service": "aws-outposts-family",
+    "icon": "./v2/assets/aws/services/aws-outposts-family.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Outposts-rack_64@5x.png",
+    "service": "aws-outposts-rack",
+    "icon": "./v2/assets/aws/services/aws-outposts-rack.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Outposts-servers_64@5x.png",
+    "service": "aws-outposts-servers",
+    "icon": "./v2/assets/aws/services/aws-outposts-servers.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Parallel-Cluster_64@5x.png",
+    "service": "aws-parallel-cluster",
+    "icon": "./v2/assets/aws/services/aws-parallel-cluster.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Parallel-Computing-Service_64@5x.png",
+    "service": "aws-parallel-computing-service",
+    "icon": "./v2/assets/aws/services/aws-parallel-computing-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Serverless-Application-Repository_64@5x.png",
+    "service": "aws-serverless-application-repository",
+    "icon": "./v2/assets/aws/services/aws-serverless-application-repository.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-SimSpace-Weaver_64@5x.png",
+    "service": "aws-simspace-weaver",
+    "icon": "./v2/assets/aws/services/aws-simspace-weaver.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_AWS-Wavelength_64@5x.png",
+    "service": "aws-wavelength",
+    "icon": "./v2/assets/aws/services/aws-wavelength.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Amazon-DCV_64@5x.png",
+    "service": "amazon-dcv",
+    "icon": "./v2/assets/aws/services/amazon-dcv.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Amazon-EC2-Auto-Scaling_64@5x.png",
+    "service": "autoscaling",
+    "icon": "./v2/assets/aws/autoscaling.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Amazon-EC2-Image-Builder_64@5x.png",
+    "service": "amazon-ec2-image-builder",
+    "icon": "./v2/assets/aws/services/amazon-ec2-image-builder.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Amazon-EC2_64@5x.png",
+    "service": "ec2",
+    "icon": "./v2/assets/aws/ec2.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Amazon-Elastic-VMware-Service_64@5x.png",
+    "service": "amazon-elastic-vmware-service",
+    "icon": "./v2/assets/aws/services/amazon-elastic-vmware-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Amazon-Lightsail-for-Research_64@5x.png",
+    "service": "amazon-lightsail-for-research",
+    "icon": "./v2/assets/aws/services/amazon-lightsail-for-research.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Amazon-Lightsail_64@5x.png",
+    "service": "lightsail",
+    "icon": "./v2/assets/aws/lightsail.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Bottlerocket_64@5x.png",
+    "service": "bottlerocket",
+    "icon": "./v2/assets/aws/services/bottlerocket.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Compute/64/Arch_Elastic-Fabric-Adapter_64@5x.png",
+    "service": "elastic-fabric-adapter",
+    "icon": "./v2/assets/aws/services/elastic-fabric-adapter.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_AWS-Fargate_64@5x.png",
+    "service": "aws-fargate",
+    "icon": "./v2/assets/aws/services/aws-fargate.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_Amazon-ECS-Anywhere_64@5x.png",
+    "service": "amazon-ecs-anywhere",
+    "icon": "./v2/assets/aws/services/amazon-ecs-anywhere.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_Amazon-EKS-Anywhere_64@5x.png",
+    "service": "amazon-eks-anywhere",
+    "icon": "./v2/assets/aws/services/amazon-eks-anywhere.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_Amazon-EKS-Distro_64@5x.png",
+    "service": "amazon-eks-distro",
+    "icon": "./v2/assets/aws/services/amazon-eks-distro.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_Amazon-Elastic-Container-Registry_64@5x.png",
+    "service": "ecr",
+    "icon": "./v2/assets/aws/ecr.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_Amazon-Elastic-Container-Service_64@5x.png",
+    "service": "ecs",
+    "icon": "./v2/assets/aws/ecs.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_Amazon-Elastic-Kubernetes-Service_64@5x.png",
+    "service": "eks",
+    "icon": "./v2/assets/aws/eks.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Containers/64/Arch_Red-Hat-OpenShift-Service-on-AWS_64@5x.png",
+    "service": "red-hat-openshift-service-on-aws",
+    "icon": "./v2/assets/aws/services/red-hat-openshift-service-on-aws.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-Activate_64@5x.png",
+    "service": "aws-activate",
+    "icon": "./v2/assets/aws/services/aws-activate.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-IQ_64@5x.png",
+    "service": "aws-iq",
+    "icon": "./v2/assets/aws/services/aws-iq.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-Managed-Services_64@5x.png",
+    "service": "aws-managed-services",
+    "icon": "./v2/assets/aws/services/aws-managed-services.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-Professional-Services_64@5x.png",
+    "service": "aws-professional-services",
+    "icon": "./v2/assets/aws/services/aws-professional-services.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-Support_64@5x.png",
+    "service": "aws-support",
+    "icon": "./v2/assets/aws/services/aws-support.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-Training-Certification_64@5x.png",
+    "service": "aws-training-certification",
+    "icon": "./v2/assets/aws/services/aws-training-certification.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-rePost-Private_64@5x.png",
+    "service": "aws-repost-private",
+    "icon": "./v2/assets/aws/services/aws-repost-private.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Customer-Enablement/64/Arch_AWS-rePost_64@5x.png",
+    "service": "aws-repost",
+    "icon": "./v2/assets/aws/services/aws-repost.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_AWS-Database-Migration-Service_64@5x.png",
+    "service": "aws-database-migration-service",
+    "icon": "./v2/assets/aws/services/aws-database-migration-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-Aurora_64@5x.png",
+    "service": "aurora",
+    "icon": "./v2/assets/aws/aurora.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-DocumentDB_64@5x.png",
+    "service": "amazon-documentdb",
+    "icon": "./v2/assets/aws/services/amazon-documentdb.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-DynamoDB_64@5x.png",
+    "service": "dynamodb",
+    "icon": "./v2/assets/aws/dynamodb.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-ElastiCache_64@5x.png",
+    "service": "amazon-elasticache",
+    "icon": "./v2/assets/aws/services/amazon-elasticache.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-Keyspaces_64@5x.png",
+    "service": "amazon-keyspaces",
+    "icon": "./v2/assets/aws/services/amazon-keyspaces.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-MemoryDB_64@5x.png",
+    "service": "amazon-memorydb",
+    "icon": "./v2/assets/aws/services/amazon-memorydb.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-Neptune_64@5x.png",
+    "service": "amazon-neptune",
+    "icon": "./v2/assets/aws/services/amazon-neptune.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-RDS_64@5x.png",
+    "service": "rds",
+    "icon": "./v2/assets/aws/rds.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Amazon-Timestream_64@5x.png",
+    "service": "amazon-timestream",
+    "icon": "./v2/assets/aws/services/amazon-timestream.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Databases/64/Arch_Oracle-Database-at-AWS_64@5x.png",
+    "service": "oracle-database-at-aws",
+    "icon": "./v2/assets/aws/services/oracle-database-at-aws.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-Cloud-Control-API_64@5x.png",
+    "service": "aws-cloud-control-api",
+    "icon": "./v2/assets/aws/services/aws-cloud-control-api.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-Cloud-Development-Kit_64@5x.png",
+    "service": "aws-cloud-development-kit",
+    "icon": "./v2/assets/aws/services/aws-cloud-development-kit.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-Cloud9_64@5x.png",
+    "service": "aws-cloud9",
+    "icon": "./v2/assets/aws/services/aws-cloud9.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-CloudShell_64@5x.png",
+    "service": "aws-cloudshell",
+    "icon": "./v2/assets/aws/services/aws-cloudshell.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-CodeArtifact_64@5x.png",
+    "service": "aws-codeartifact",
+    "icon": "./v2/assets/aws/services/aws-codeartifact.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-CodeBuild_64@5x.png",
+    "service": "aws-codebuild",
+    "icon": "./v2/assets/aws/services/aws-codebuild.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-CodeCommit_64@5x.png",
+    "service": "aws-codecommit",
+    "icon": "./v2/assets/aws/services/aws-codecommit.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-CodeDeploy_64@5x.png",
+    "service": "aws-codedeploy",
+    "icon": "./v2/assets/aws/services/aws-codedeploy.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-CodePipeline_64@5x.png",
+    "service": "aws-codepipeline",
+    "icon": "./v2/assets/aws/services/aws-codepipeline.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-Command-Line-Interface_64@5x.png",
+    "service": "aws-command-line-interface",
+    "icon": "./v2/assets/aws/services/aws-command-line-interface.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-Fault-Injection-Service_64@5x.png",
+    "service": "aws-fault-injection-service",
+    "icon": "./v2/assets/aws/services/aws-fault-injection-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-Infrastructure-Composer_64@5x.png",
+    "service": "aws-infrastructure-composer",
+    "icon": "./v2/assets/aws/services/aws-infrastructure-composer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-Tools-and-SDKs_64@5x.png",
+    "service": "aws-tools-and-sdks",
+    "icon": "./v2/assets/aws/services/aws-tools-and-sdks.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_AWS-X-Ray_64@5x.png",
+    "service": "aws-x-ray",
+    "icon": "./v2/assets/aws/services/aws-x-ray.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_Amazon-CodeCatalyst_64@5x.png",
+    "service": "amazon-codecatalyst",
+    "icon": "./v2/assets/aws/services/amazon-codecatalyst.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Developer-Tools/64/Arch_Amazon-Corretto_64@5x.png",
+    "service": "amazon-corretto",
+    "icon": "./v2/assets/aws/services/amazon-corretto.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_End-User-Computing/64/Arch_Amazon-WorkSpaces_64@5x.png",
+    "service": "amazon-workspaces",
+    "icon": "./v2/assets/aws/services/amazon-workspaces.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Front-End-Web-Mobile/64/Arch_AWS-Amplify_64@5x.png",
+    "service": "aws-amplify",
+    "icon": "./v2/assets/aws/services/aws-amplify.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Front-End-Web-Mobile/64/Arch_AWS-Device-Farm_64@5x.png",
+    "service": "aws-device-farm",
+    "icon": "./v2/assets/aws/services/aws-device-farm.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Front-End-Web-Mobile/64/Arch_Amazon-Location-Service_64@5x.png",
+    "service": "amazon-location-service",
+    "icon": "./v2/assets/aws/services/amazon-location-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Games/64/Arch_Amazon-GameLift-Servers_64@5x.png",
+    "service": "amazon-gamelift-servers",
+    "icon": "./v2/assets/aws/services/amazon-gamelift-servers.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Games/64/Arch_Amazon-GameLift-Streams_64@5x.png",
+    "service": "amazon-gamelift-streams",
+    "icon": "./v2/assets/aws/services/amazon-gamelift-streams.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Games/64/Arch_Open-3D-Engine_64@5x.png",
+    "service": "open-3d-engine",
+    "icon": "./v2/assets/aws/services/open-3d-engine.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_General-Icons/64/Arch_AWS-Marketplace_Dark_64@5x.png",
+    "service": "aws-marketplace",
+    "icon": "./v2/assets/aws/services/aws-marketplace.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_General-Icons/64/Arch_AWS-Marketplace_Light_64@5x.png",
+    "service": "aws-marketplace",
+    "icon": "./v2/assets/aws/services/aws-marketplace.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-Core_64@5x.png",
+    "service": "aws-iot-core",
+    "icon": "./v2/assets/aws/services/aws-iot-core.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-Device-Defender_64@5x.png",
+    "service": "aws-iot-device-defender",
+    "icon": "./v2/assets/aws/services/aws-iot-device-defender.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-Device-Management_64@5x.png",
+    "service": "aws-iot-device-management",
+    "icon": "./v2/assets/aws/services/aws-iot-device-management.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-Events_64@5x.png",
+    "service": "aws-iot-events",
+    "icon": "./v2/assets/aws/services/aws-iot-events.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-ExpressLink_64@5x.png",
+    "service": "aws-iot-expresslink",
+    "icon": "./v2/assets/aws/services/aws-iot-expresslink.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-FleetWise_64@5x.png",
+    "service": "aws-iot-fleetwise",
+    "icon": "./v2/assets/aws/services/aws-iot-fleetwise.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-Greengrass_64@5x.png",
+    "service": "aws-iot-greengrass",
+    "icon": "./v2/assets/aws/services/aws-iot-greengrass.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-SiteWise_64@5x.png",
+    "service": "aws-iot-sitewise",
+    "icon": "./v2/assets/aws/services/aws-iot-sitewise.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_AWS-IoT-TwinMaker_64@5x.png",
+    "service": "aws-iot-twinmaker",
+    "icon": "./v2/assets/aws/services/aws-iot-twinmaker.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Internet-of-Things/64/Arch_FreeRTOS_64@5x.png",
+    "service": "freertos",
+    "icon": "./v2/assets/aws/services/freertos.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-AppConfig_64@5x.png",
+    "service": "aws-appconfig",
+    "icon": "./v2/assets/aws/services/aws-appconfig.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Application-Auto-Scaling_64@5x.png",
+    "service": "aws-application-auto-scaling",
+    "icon": "./v2/assets/aws/services/aws-application-auto-scaling.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Auto-Scaling_64@5x.png",
+    "service": "aws-auto-scaling",
+    "icon": "./v2/assets/aws/services/aws-auto-scaling.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Backint-Agent_64@5x.png",
+    "service": "aws-backint-agent",
+    "icon": "./v2/assets/aws/services/aws-backint-agent.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Chatbot_64@5x.png",
+    "service": "aws-chatbot",
+    "icon": "./v2/assets/aws/services/aws-chatbot.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-CloudFormation_64@5x.png",
+    "service": "aws-cloudformation",
+    "icon": "./v2/assets/aws/services/aws-cloudformation.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-CloudTrail_64@5x.png",
+    "service": "aws-cloudtrail",
+    "icon": "./v2/assets/aws/services/aws-cloudtrail.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Compute-Optimizer_64@5x.png",
+    "service": "aws-compute-optimizer",
+    "icon": "./v2/assets/aws/services/aws-compute-optimizer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Config_64@5x.png",
+    "service": "aws-config",
+    "icon": "./v2/assets/aws/services/aws-config.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Console-Mobile-Application_64@5x.png",
+    "service": "aws-console-mobile-application",
+    "icon": "./v2/assets/aws/services/aws-console-mobile-application.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Control-Tower_64@5x.png",
+    "service": "aws-control-tower",
+    "icon": "./v2/assets/aws/services/aws-control-tower.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-DevOps-Agent_64@5x.png",
+    "service": "aws-devops-agent",
+    "icon": "./v2/assets/aws/services/aws-devops-agent.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Distro-for-OpenTelemetry_64@5x.png",
+    "service": "aws-distro-for-opentelemetry",
+    "icon": "./v2/assets/aws/services/aws-distro-for-opentelemetry.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Health-Dashboard_64@5x.png",
+    "service": "aws-health-dashboard",
+    "icon": "./v2/assets/aws/services/aws-health-dashboard.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Launch-Wizard_64@5x.png",
+    "service": "aws-launch-wizard",
+    "icon": "./v2/assets/aws/services/aws-launch-wizard.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-License-Manager_64@5x.png",
+    "service": "aws-license-manager",
+    "icon": "./v2/assets/aws/services/aws-license-manager.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Management-Console_64@5x.png",
+    "service": "aws-management-console",
+    "icon": "./v2/assets/aws/services/aws-management-console.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Organizations_64@5x.png",
+    "service": "aws-organizations",
+    "icon": "./v2/assets/aws/services/aws-organizations.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Partner-Central_64@5x.png",
+    "service": "aws-partner-central",
+    "icon": "./v2/assets/aws/services/aws-partner-central.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Proton_64@5x.png",
+    "service": "aws-proton",
+    "icon": "./v2/assets/aws/services/aws-proton.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Resilience-Hub_64@5x.png",
+    "service": "aws-resilience-hub",
+    "icon": "./v2/assets/aws/services/aws-resilience-hub.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Resource-Explorer_64@5x.png",
+    "service": "aws-resource-explorer",
+    "icon": "./v2/assets/aws/services/aws-resource-explorer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Service-Catalog_64@5x.png",
+    "service": "aws-service-catalog",
+    "icon": "./v2/assets/aws/services/aws-service-catalog.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Service-Management-Connector_64@5x.png",
+    "service": "aws-service-management-connector",
+    "icon": "./v2/assets/aws/services/aws-service-management-connector.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Sustainability_64@5x.png",
+    "service": "aws-sustainability",
+    "icon": "./v2/assets/aws/services/aws-sustainability.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Systems-Manager_64@5x.png",
+    "service": "aws-systems-manager",
+    "icon": "./v2/assets/aws/services/aws-systems-manager.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Telco-Network-Builder_64@5x.png",
+    "service": "aws-telco-network-builder",
+    "icon": "./v2/assets/aws/services/aws-telco-network-builder.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Trusted-Advisor_64@5x.png",
+    "service": "aws-trusted-advisor",
+    "icon": "./v2/assets/aws/services/aws-trusted-advisor.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-User-Notifications_64@5x.png",
+    "service": "aws-user-notifications",
+    "icon": "./v2/assets/aws/services/aws-user-notifications.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_AWS-Well-Architected-Tool_64@5x.png",
+    "service": "aws-well-architected-tool",
+    "icon": "./v2/assets/aws/services/aws-well-architected-tool.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_Amazon-CloudWatch_64@5x.png",
+    "service": "cloudwatch",
+    "icon": "./v2/assets/aws/cloudwatch.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_Amazon-Managed-Grafana_64@5x.png",
+    "service": "amazon-managed-grafana",
+    "icon": "./v2/assets/aws/services/amazon-managed-grafana.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Management-Tools/64/Arch_Amazon-Managed-Service-for-Prometheus_64@5x.png",
+    "service": "amazon-managed-service-for-prometheus",
+    "icon": "./v2/assets/aws/services/amazon-managed-service-for-prometheus.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Deadline-Cloud_64@5x.png",
+    "service": "aws-deadline-cloud",
+    "icon": "./v2/assets/aws/services/aws-deadline-cloud.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-Appliances-&-Software_64@5x.png",
+    "service": "aws-elemental-appliances-software",
+    "icon": "./v2/assets/aws/services/aws-elemental-appliances-software.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-Conductor_64@5x.png",
+    "service": "aws-elemental-conductor",
+    "icon": "./v2/assets/aws/services/aws-elemental-conductor.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-Delta_64@5x.png",
+    "service": "aws-elemental-delta",
+    "icon": "./v2/assets/aws/services/aws-elemental-delta.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-Link_64@5x.png",
+    "service": "aws-elemental-link",
+    "icon": "./v2/assets/aws/services/aws-elemental-link.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-Live_64@5x.png",
+    "service": "aws-elemental-live",
+    "icon": "./v2/assets/aws/services/aws-elemental-live.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-MediaConnect_64@5x.png",
+    "service": "aws-elemental-mediaconnect",
+    "icon": "./v2/assets/aws/services/aws-elemental-mediaconnect.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-MediaConvert_64@5x.png",
+    "service": "aws-elemental-mediaconvert",
+    "icon": "./v2/assets/aws/services/aws-elemental-mediaconvert.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-MediaLive_64@5x.png",
+    "service": "aws-elemental-medialive",
+    "icon": "./v2/assets/aws/services/aws-elemental-medialive.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-MediaPackage_64@5x.png",
+    "service": "aws-elemental-mediapackage",
+    "icon": "./v2/assets/aws/services/aws-elemental-mediapackage.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-MediaStore_64@5x.png",
+    "service": "aws-elemental-mediastore",
+    "icon": "./v2/assets/aws/services/aws-elemental-mediastore.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-MediaTailor_64@5x.png",
+    "service": "aws-elemental-mediatailor",
+    "icon": "./v2/assets/aws/services/aws-elemental-mediatailor.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Elemental-Server_64@5x.png",
+    "service": "aws-elemental-server",
+    "icon": "./v2/assets/aws/services/aws-elemental-server.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Thinkbox-Deadline_64@5x.png",
+    "service": "aws-thinkbox-deadline",
+    "icon": "./v2/assets/aws/services/aws-thinkbox-deadline.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Thinkbox-Frost_64@5x.png",
+    "service": "aws-thinkbox-frost",
+    "icon": "./v2/assets/aws/services/aws-thinkbox-frost.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Thinkbox-Krakatoa_64@5x.png",
+    "service": "aws-thinkbox-krakatoa",
+    "icon": "./v2/assets/aws/services/aws-thinkbox-krakatoa.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Thinkbox-Stoke_64@5x.png",
+    "service": "aws-thinkbox-stoke",
+    "icon": "./v2/assets/aws/services/aws-thinkbox-stoke.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_AWS-Thinkbox-XMesh_64@5x.png",
+    "service": "aws-thinkbox-xmesh",
+    "icon": "./v2/assets/aws/services/aws-thinkbox-xmesh.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_Amazon-Interactive-Video-Service_64@5x.png",
+    "service": "amazon-interactive-video-service",
+    "icon": "./v2/assets/aws/services/amazon-interactive-video-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Media-Services/64/Arch_Amazon-Kinesis-Video-Streams_64@5x.png",
+    "service": "amazon-kinesis-video-streams",
+    "icon": "./v2/assets/aws/services/amazon-kinesis-video-streams.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-Application-Discovery-Service_64@5x.png",
+    "service": "aws-application-discovery-service",
+    "icon": "./v2/assets/aws/services/aws-application-discovery-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-Application-Migration-Service_64@5x.png",
+    "service": "aws-application-migration-service",
+    "icon": "./v2/assets/aws/services/aws-application-migration-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-Data-Transfer-Terminal_64@5x.png",
+    "service": "aws-data-transfer-terminal",
+    "icon": "./v2/assets/aws/services/aws-data-transfer-terminal.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-DataSync_64@5x.png",
+    "service": "aws-datasync",
+    "icon": "./v2/assets/aws/services/aws-datasync.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-Mainframe-Modernization_64@5x.png",
+    "service": "aws-mainframe-modernization",
+    "icon": "./v2/assets/aws/services/aws-mainframe-modernization.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-Migration-Evaluator_64@5x.png",
+    "service": "aws-migration-evaluator",
+    "icon": "./v2/assets/aws/services/aws-migration-evaluator.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-Transfer-Family_64@5x.png",
+    "service": "aws-transfer-family",
+    "icon": "./v2/assets/aws/services/aws-transfer-family.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Migration-Modernization/64/Arch_AWS-Transform_64@5x.png",
+    "service": "aws-transform",
+    "icon": "./v2/assets/aws/services/aws-transform.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-App-Mesh_64@5x.png",
+    "service": "aws-app-mesh",
+    "icon": "./v2/assets/aws/services/aws-app-mesh.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Client-VPN_64@5x.png",
+    "service": "aws-client-vpn",
+    "icon": "./v2/assets/aws/services/aws-client-vpn.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Cloud-Map_64@5x.png",
+    "service": "aws-cloud-map",
+    "icon": "./v2/assets/aws/services/aws-cloud-map.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Cloud-WAN_64@5x.png",
+    "service": "aws-cloud-wan",
+    "icon": "./v2/assets/aws/services/aws-cloud-wan.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Direct-Connect_64@5x.png",
+    "service": "directconnect",
+    "icon": "./v2/assets/aws/directconnect.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Global-Accelerator_64@5x.png",
+    "service": "globalaccelerator",
+    "icon": "./v2/assets/aws/globalaccelerator.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Interconnect_64@5x.png",
+    "service": "aws-interconnect",
+    "icon": "./v2/assets/aws/services/aws-interconnect.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-PrivateLink_64@5x.png",
+    "service": "aws-privatelink",
+    "icon": "./v2/assets/aws/services/aws-privatelink.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-RTB-Fabric_64@5x.png",
+    "service": "aws-rtb-fabric",
+    "icon": "./v2/assets/aws/services/aws-rtb-fabric.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Site-to-Site-VPN_64@5x.png",
+    "service": "aws-site-to-site-vpn",
+    "icon": "./v2/assets/aws/services/aws-site-to-site-vpn.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Transit-Gateway_64@5x.png",
+    "service": "aws-transit-gateway",
+    "icon": "./v2/assets/aws/services/aws-transit-gateway.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_AWS-Verified-Access_64@5x.png",
+    "service": "aws-verified-access",
+    "icon": "./v2/assets/aws/services/aws-verified-access.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_Amazon-API-Gateway_64@5x.png",
+    "service": "apigateway",
+    "icon": "./v2/assets/aws/apigateway.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_Amazon-Application-Recovery-Controller_64@5x.png",
+    "service": "amazon-application-recovery-controller",
+    "icon": "./v2/assets/aws/services/amazon-application-recovery-controller.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_Amazon-CloudFront_64@5x.png",
+    "service": "cloudfront",
+    "icon": "./v2/assets/aws/cloudfront.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_Amazon-Route-53_64@5x.png",
+    "service": "route53",
+    "icon": "./v2/assets/aws/route53.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_Amazon-VPC-Lattice_64@5x.png",
+    "service": "amazon-vpc-lattice",
+    "icon": "./v2/assets/aws/services/amazon-vpc-lattice.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_Amazon-Virtual-Private-Cloud_64@5x.png",
+    "service": "vpc",
+    "icon": "./v2/assets/aws/vpc.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Networking-Content-Delivery/64/Arch_Elastic-Load-Balancing_64@5x.png",
+    "service": "elb",
+    "icon": "./v2/assets/aws/elb.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Quantum-Technologies/64/Arch_Amazon-Braket_64@5x.png",
+    "service": "amazon-braket",
+    "icon": "./v2/assets/aws/services/amazon-braket.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Satellite/64/Arch_AWS-Ground-Station_64@5x.png",
+    "service": "aws-ground-station",
+    "icon": "./v2/assets/aws/services/aws-ground-station.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Artifact_64@5x.png",
+    "service": "aws-artifact",
+    "icon": "./v2/assets/aws/services/aws-artifact.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Audit-Manager_64@5x.png",
+    "service": "aws-audit-manager",
+    "icon": "./v2/assets/aws/services/aws-audit-manager.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Certificate-Manager_64@5x.png",
+    "service": "aws-certificate-manager",
+    "icon": "./v2/assets/aws/services/aws-certificate-manager.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-CloudHSM_64@5x.png",
+    "service": "aws-cloudhsm",
+    "icon": "./v2/assets/aws/services/aws-cloudhsm.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Directory-Service_64@5x.png",
+    "service": "aws-directory-service",
+    "icon": "./v2/assets/aws/services/aws-directory-service.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Firewall-Manager_64@5x.png",
+    "service": "aws-firewall-manager",
+    "icon": "./v2/assets/aws/services/aws-firewall-manager.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-IAM-Identity-Center_64@5x.png",
+    "service": "aws-iam-identity-center",
+    "icon": "./v2/assets/aws/services/aws-iam-identity-center.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Identity-and-Access-Management_64@5x.png",
+    "service": "iam",
+    "icon": "./v2/assets/aws/iam.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Key-Management-Service_64@5x.png",
+    "service": "kms",
+    "icon": "./v2/assets/aws/kms.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Network-Firewall_64@5x.png",
+    "service": "aws-network-firewall",
+    "icon": "./v2/assets/aws/services/aws-network-firewall.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Payment-Cryptography_64@5x.png",
+    "service": "aws-payment-cryptography",
+    "icon": "./v2/assets/aws/services/aws-payment-cryptography.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Private-Certificate-Authority_64@5x.png",
+    "service": "aws-private-certificate-authority",
+    "icon": "./v2/assets/aws/services/aws-private-certificate-authority.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Resource-Access-Manager_64@5x.png",
+    "service": "aws-resource-access-manager",
+    "icon": "./v2/assets/aws/services/aws-resource-access-manager.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Secrets-Manager_64@5x.png",
+    "service": "secretsmanager",
+    "icon": "./v2/assets/aws/secretsmanager.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Security-Agent_64@5x.png",
+    "service": "aws-security-agent",
+    "icon": "./v2/assets/aws/services/aws-security-agent.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Security-Hub_64@5x.png",
+    "service": "aws-security-hub",
+    "icon": "./v2/assets/aws/services/aws-security-hub.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Security-Incident-Response_64@5x.png",
+    "service": "aws-security-incident-response",
+    "icon": "./v2/assets/aws/services/aws-security-incident-response.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Shield_64@5x.png",
+    "service": "aws-shield",
+    "icon": "./v2/assets/aws/services/aws-shield.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-Signer_64@5x.png",
+    "service": "aws-signer",
+    "icon": "./v2/assets/aws/services/aws-signer.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_AWS-WAF_64@5x.png",
+    "service": "aws-waf",
+    "icon": "./v2/assets/aws/services/aws-waf.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-Cloud-Directory_64@5x.png",
+    "service": "amazon-cloud-directory",
+    "icon": "./v2/assets/aws/services/amazon-cloud-directory.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-Cognito_64@5x.png",
+    "service": "amazon-cognito",
+    "icon": "./v2/assets/aws/services/amazon-cognito.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-Detective_64@5x.png",
+    "service": "amazon-detective",
+    "icon": "./v2/assets/aws/services/amazon-detective.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-GuardDuty_64@5x.png",
+    "service": "amazon-guardduty",
+    "icon": "./v2/assets/aws/services/amazon-guardduty.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-Inspector_64@5x.png",
+    "service": "amazon-inspector",
+    "icon": "./v2/assets/aws/services/amazon-inspector.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-Macie_64@5x.png",
+    "service": "amazon-macie",
+    "icon": "./v2/assets/aws/services/amazon-macie.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-Security-Lake_64@5x.png",
+    "service": "amazon-security-lake",
+    "icon": "./v2/assets/aws/services/amazon-security-lake.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Security-Identity/64/Arch_Amazon-Verified-Permissions_64@5x.png",
+    "service": "amazon-verified-permissions",
+    "icon": "./v2/assets/aws/services/amazon-verified-permissions.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_AWS-Backup_64@5x.png",
+    "service": "backup",
+    "icon": "./v2/assets/aws/backup.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_AWS-Elastic-Disaster-Recovery_64@5x.png",
+    "service": "aws-elastic-disaster-recovery",
+    "icon": "./v2/assets/aws/services/aws-elastic-disaster-recovery.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_AWS-Snowball-Edge_64@5x.png",
+    "service": "aws-snowball-edge",
+    "icon": "./v2/assets/aws/services/aws-snowball-edge.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_AWS-Snowball_64@5x.png",
+    "service": "aws-snowball",
+    "icon": "./v2/assets/aws/services/aws-snowball.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_AWS-Storage-Gateway_64@5x.png",
+    "service": "aws-storage-gateway",
+    "icon": "./v2/assets/aws/services/aws-storage-gateway.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-EFS_64@5x.png",
+    "service": "efs",
+    "icon": "./v2/assets/aws/efs.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-Elastic-Block-Store_64@5x.png",
+    "service": "amazon-elastic-block-store",
+    "icon": "./v2/assets/aws/services/amazon-elastic-block-store.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-FSx-for-Lustre_64@5x.png",
+    "service": "amazon-fsx-for-lustre",
+    "icon": "./v2/assets/aws/services/amazon-fsx-for-lustre.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-FSx-for-NetApp-ONTAP_64@5x.png",
+    "service": "amazon-fsx-for-netapp-ontap",
+    "icon": "./v2/assets/aws/services/amazon-fsx-for-netapp-ontap.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-FSx-for-OpenZFS_64@5x.png",
+    "service": "amazon-fsx-for-openzfs",
+    "icon": "./v2/assets/aws/services/amazon-fsx-for-openzfs.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-FSx-for-WFS_64@5x.png",
+    "service": "amazon-fsx-for-wfs",
+    "icon": "./v2/assets/aws/services/amazon-fsx-for-wfs.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-FSx_64@5x.png",
+    "service": "fsx",
+    "icon": "./v2/assets/aws/fsx.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-File-Cache_64@5x.png",
+    "service": "amazon-file-cache",
+    "icon": "./v2/assets/aws/services/amazon-file-cache.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-S3-on-Outposts_64@5x.png",
+    "service": "amazon-s3-on-outposts",
+    "icon": "./v2/assets/aws/services/amazon-s3-on-outposts.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service-Glacier_64@5x.png",
+    "service": "glacier",
+    "icon": "./v2/assets/aws/glacier.png"
+  },
+  {
+    "archivePath": "Architecture-Service-Icons_07312026/Arch_Storage/64/Arch_Amazon-Simple-Storage-Service_64@5x.png",
+    "service": "s3",
+    "icon": "./v2/assets/aws/s3.png"
+  }
+]

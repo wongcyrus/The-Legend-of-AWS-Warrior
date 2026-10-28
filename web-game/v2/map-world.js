@@ -1,6 +1,8 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js";
 import { instances, normalized } from "./assets.js?v=20261027-maps-1";
 import { mapScenery } from "./maps.js?v=20261027-maps-1";
+import { servicePlaque } from "./aws-world.js?v=20261028-voice-1";
+import { CLOUD_REGIONS, AWS_LANDMARKS } from "./aws-theme.js?v=20261028-voice-1";
 
 export function buildGates(world) {
   for (const gate of world.map.gates) {
@@ -17,6 +19,9 @@ export function buildGates(world) {
         side: THREE.DoubleSide, depthWrite: false }), gate.x, 0.08, gate.z);
     circle.rotation.x = -Math.PI / 2;
     world.sign(gate.x - 7, gate.z - 4, gate.label);
+    const theme = CLOUD_REGIONS[gate.to];
+    servicePlaque(world, world.scene, theme.service,
+      { x: gate.x, y: 12.2, z: gate.z, width: 9, subtitle: theme.subtitle });
   }
 }
 
@@ -69,7 +74,8 @@ export function buildExpedition(world) {
       snow.scale.set(b.width * 0.2, 1, b.depth * 0.2);
     }
   }
-  const scenery = mapScenery(map);
+  const scenery = mapScenery(map).filter(point =>
+    !AWS_LANDMARKS[map.id].some(landmark => Math.hypot(point.x - landmark.x, point.z - landmark.z) < 9));
   world.scenery.trees = map.id === "mountains" ? scenery.filter((_, i) => i % 3 === 0) : [];
   instances(world.scene, normalized(world.models["rock-small"], map.id === "desert" ? 1.2 : 2), scenery);
   if (map.id === "mountains") {

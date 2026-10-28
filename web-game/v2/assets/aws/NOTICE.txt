@@ -1,0 +1,38 @@
+AWS Architecture Icons
+
+Source: https://aws.amazon.com/architecture/icons/
+Package: Icon-package_07312026
+Download: https://d1.awsstatic.com/onedam/marketing-channels/website/public/shared/architecture-icon-release/Icon-package_07312026.5846e92413caa21490223536cc97f1269e44fa92.zip
+
+302 unmodified 64@5x PNG discovery icons, including Amazon S3, Amazon EC2,
+AWS Identity and Access Management, Amazon VPC, AWS Lambda, Amazon DynamoDB,
+Amazon EC2 Auto Scaling, Amazon ECS, Amazon EKS, Amazon ECR, AWS Batch,
+Amazon Lightsail, Amazon CloudFront, Amazon Route 53, Amazon API Gateway,
+Elastic Load Balancing, AWS Direct Connect, AWS Global Accelerator, Amazon RDS,
+Amazon Aurora, Amazon EFS, Amazon FSx, Amazon S3 Glacier, AWS Backup,
+AWS Secrets Manager, AWS Key Management Service and Amazon CloudWatch.
+Downloaded from AWS on 2026-10-27; additional icons extracted on 2026-10-28
+from the same official package. All distinct offerings in its service-icon
+collection are included. Duplicate category entries and Marketplace light/dark
+artwork share one discovery. service-manifest.json maps all 305
+source entries to their canonical discovery and selected local icon.
+This archive includes tools, programs, and historical offerings; inclusion
+does not establish current service availability.
+
+Copyright Amazon Web Services, Inc. or its affiliates. All rights reserved.
+These AWS assets are not covered by this project's license or the CC0 licenses
+of other game assets. See the official source for AWS icon usage guidance.
+They appear on individual educational world signs, building plaques,
+mission labels and click-to-read service descriptions.
+AWS names and marks belong to their respective owners.
+
+This is an independent educational game, not an AWS product.
+Use of these icons does not imply AWS sponsorship, certification or endorsement.
+World service assignments are thematic, not task prerequisites or service unlocks.
+
+Introductions are short educational summaries, not AWS product documentation.
+Product references include the AWS product directory:
+https://aws.amazon.com/api/dirs/items/search?item.directoryId=aws-products&size=1000&item.locale=en_US
+and official AWS product pages linked from the descriptions.
+Always consult AWS for
+current availability, naming, capabilities, and pricing.
