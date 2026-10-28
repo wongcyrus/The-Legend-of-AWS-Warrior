@@ -1,0 +1,68 @@
+{
+  "s3": {
+    "version": "1",
+    "label": "Amazon S3",
+    "readingTexts": {
+      "en-US": "Amazon S3 stores data as objects in buckets. Each object has a key that identifies it. I can use S3 for game screenshots and backups, and keep access private with permissions.",
+      "zh-HK": "Amazon S3 用 bucket 儲存物件，每個物件都有一個 key 去識別。我可以用 S3 儲存遊戲截圖同備份，再用權限設定保持資料私隱。"
+    },
+    "facts": ["Amazon S3 stores objects in buckets, addressed by object keys.", "Use it for images, backups, static assets and other object data, not as a relational database.", "Buckets and objects are private by default. Access is granted with IAM and bucket policies; presigned URLs grant temporary access.", "Block Public Access helps prevent unintended public access."],
+    "requiredConcepts": ["object storage", "buckets and keys", "private access"],
+    "misconceptions": ["S3 runs application servers", "all buckets are public", "S3 is a relational database"]
+  },
+  "ec2": {
+    "version": "1",
+    "label": "Amazon EC2",
+    "readingTexts": {
+      "en-US": "Amazon EC2 provides virtual servers in the cloud. I can choose the operating system, install my software, and manage its updates. Security groups control the server's network traffic.",
+      "zh-HK": "Amazon EC2 提供雲端虛擬伺服器。我可以揀作業系統，安裝自己需要嘅軟件，同埋管理更新。Security group 用嚟控制伺服器嘅網絡流量。"
+    },
+    "facts": ["Amazon EC2 provides virtual server instances with a choice of compute capacity.", "Customers configure the operating system and application software and remain responsible for guest OS patching.", "Security groups control instance network traffic. IAM roles provide temporary AWS credentials.", "Use EC2 when an application needs control over its server environment."],
+    "requiredConcepts": ["virtual servers", "operating system control", "security groups"],
+    "misconceptions": ["EC2 is object storage", "AWS automatically patches every guest OS"]
+  },
+  "iam": {
+    "version": "1",
+    "label": "AWS IAM",
+    "readingTexts": {
+      "en-US": "AWS IAM controls who can do what with AWS resources. I give each user or workload only the permissions it needs. IAM roles provide temporary credentials, so I do not need to put permanent access keys in my application.",
+      "zh-HK": "AWS IAM 控制邊個可以對 AWS 資源做啲乜。我只會畀用戶或者應用程式所需嘅權限。IAM role 可以提供臨時憑證，唔使喺程式入面放永久 access key。"
+    },
+    "facts": ["AWS IAM controls who can perform actions on AWS resources.", "Policies grant permissions to identities such as roles. Prefer least privilege.", "IAM roles can provide temporary credentials to workloads instead of embedded access keys.", "An applicable explicit deny overrides an allow."],
+    "requiredConcepts": ["permissions", "least privilege", "roles and temporary credentials"],
+    "misconceptions": ["IAM stores application objects", "an allow overrides explicit deny", "embed permanent credentials in apps"]
+  },
+  "vpc": {
+    "version": "1",
+    "label": "Amazon VPC",
+    "readingTexts": {
+      "en-US": "Amazon VPC gives my application a logically isolated network. Subnets divide its address range so I can organize resources such as web servers and databases. Route tables decide where traffic goes, while security groups and network ACLs filter traffic.",
+      "zh-HK": "Amazon VPC 為應用程式提供邏輯上隔離嘅網絡。Subnet 將網絡地址範圍分開，方便我安排網頁伺服器同資料庫。Route table 決定流量去邊，而 security group 同 network ACL 就用嚟過濾流量。"
+    },
+    "facts": ["Amazon VPC provides a logically isolated network in an AWS Region.", "Subnets divide its IP address range and each subnet resides in one Availability Zone.", "Route tables determine traffic routing; security groups and network ACLs filter traffic.", "A public subnet has a route to an internet gateway; an instance also needs appropriate addressing and security rules for direct internet access."],
+    "requiredConcepts": ["isolated network", "subnets", "routing and traffic controls"],
+    "misconceptions": ["a subnet spans all Availability Zones", "a route alone makes every instance publicly accessible"]
+  },
+  "lambda": {
+    "version": "1",
+    "label": "AWS Lambda",
+    "readingTexts": {
+      "en-US": "AWS Lambda runs functions in response to events without me managing servers. AWS manages the execution infrastructure. My function uses an execution role to access other AWS services, and I store lasting data outside the function.",
+      "zh-HK": "AWS Lambda 喺事件發生時執行 function，我唔使自己管理伺服器。AWS 會管理執行環境。Function 用 execution role 存取其他 AWS 服務，而需要長期保存嘅資料就放喺外部儲存服務。"
+    },
+    "facts": ["AWS Lambda runs functions in response to events without managing servers.", "AWS manages execution infrastructure and scales execution capacity subject to concurrency limits.", "Functions use an execution role for access to other AWS services.", "Execution is time bounded; durable state belongs in external storage rather than relying on a reused execution environment."],
+    "requiredConcepts": ["event driven functions", "no server management", "execution role"],
+    "misconceptions": ["functions run forever", "local memory is durable shared state", "Lambda needs no permissions"]
+  },
+  "dynamodb": {
+    "version": "1",
+    "label": "Amazon DynamoDB",
+    "readingTexts": {
+      "en-US": "Amazon DynamoDB is a managed NoSQL database. Tables store items identified by a partition key and sometimes a sort key. I design keys and indexes around how my application reads and writes data.",
+      "zh-HK": "Amazon DynamoDB 係託管嘅 NoSQL 資料庫。Table 入面嘅 item 用 partition key，有時再加 sort key 去識別。我會按應用程式讀寫資料嘅方式設計 key 同 index。"
+    },
+    "facts": ["Amazon DynamoDB is a managed NoSQL key-value and document database.", "Tables store items identified by a partition key and optionally a sort key.", "Design keys and indexes around access patterns.", "Conditional writes and transactions support concurrency control; DynamoDB is not a relational SQL join engine."],
+    "requiredConcepts": ["NoSQL database", "items and keys", "access patterns"],
+    "misconceptions": ["DynamoDB is object file storage", "DynamoDB requires managing database servers", "SQL joins are its primary access pattern"]
+  }
+}

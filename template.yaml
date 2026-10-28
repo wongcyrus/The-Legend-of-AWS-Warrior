@@ -1,11 +1,32 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  CloudProjectMarker is a project grader for cloud projects.
+  CloudProjectMarker grades cloud projects, with opt-in AgentCore oral service
+  practice isolated from existing task marks.
 Metadata:
   AWSToolsMetrics:
     AWSAgentToolkit: aws-cloudformation@3
 Parameters:
+  EnableVoicePractice:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable QR-linked oral practice; upload the agent artifact before enabling.
+  VoiceAgentCodeBucket:
+    Type: String
+    Default: voice-agent-not-configured
+    AllowedPattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+    Description: Private same-region bucket containing the packaged AgentCore Node.js code.
+  VoiceAgentCodeKey:
+    Type: String
+    Default: not-configured.zip
+    MinLength: 1
+    Description: Immutable S3 key produced by admin/package_voice_agent.sh.
+  VoiceModelId:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+    AllowedPattern: "amazon[.][a-zA-Z0-9.:-]+"
+    Description: In-region Amazon Bedrock model ID; confirm access before enabling.
   SecretHash:
     Type: String
     Description: Secret Hash value for the project
@@ -28,7 +49,17 @@ Parameters:
       - cron(0 * * * ? *)
       - cron(0 0 * * ? *)
 
+Rules:
+  VoiceAgentArtifactRequired:
+    RuleCondition: !Equals [!Ref EnableVoicePractice, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref VoiceAgentCodeBucket, voice-agent-not-configured]]
+        AssertDescription: Upload the AgentCore artifact and provide its bucket before enabling voice practice.
+      - Assert: !Not [!Equals [!Ref VoiceAgentCodeKey, not-configured.zip]]
+        AssertDescription: Provide the immutable AgentCore artifact key.
+
 Conditions:
+  VoicePracticeEnabled: !Equals [!Ref EnableVoicePractice, "true"]
   isEnableScheduleGrader: !Equals [ !Ref ScheduleGrader, enable ]
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
@@ -42,6 +73,374 @@ Globals:
     Tracing: Active
 
 Resources:
+  VoicePracticeTable:
+    Type: AWS::DynamoDB::Table
+    Condition: VoicePracticeEnabled
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Isolate oral attempts, approved question banks and unique completion from task marks.
+        must: [Enforce expiry in application code; TTL is delayed cleanup, Never store raw API keys]
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: PK, AttributeType: S}
+        - {AttributeName: SK, AttributeType: S}
+      KeySchema:
+        - {AttributeName: PK, KeyType: HASH}
+        - {AttributeName: SK, KeyType: RANGE}
+      SSESpecification: {SSEEnabled: true}
+      PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: true}
+      TimeToLiveSpecification: {AttributeName: expiresAt, Enabled: true}
+
+  VoiceAudioBucket:
+    Type: AWS::S3::Bucket
+    Condition: VoicePracticeEnabled
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Retired recording storage; preserve privacy and expire existing objects after removal of audio uploads.
+        must: [Private and TLS-only, Expire recordings and transcripts after one day]
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      VersioningConfiguration: {Status: Enabled}
+      LifecycleConfiguration:
+        Rules:
+          - Id: ShortAudioRetention
+            Status: Enabled
+            ExpirationInDays: 1
+            NoncurrentVersionExpiration: {NoncurrentDays: 1}
+            AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}
+
+  VoiceAudioBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: VoicePracticeEnabled
+    Properties:
+      Bucket: !Ref VoiceAudioBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource: [!GetAtt VoiceAudioBucket.Arn, !Sub "${VoiceAudioBucket.Arn}/*"]
+            Condition: {Bool: {"aws:SecureTransport": "false"}}
+
+  VoiceAgentRole:
+    Type: AWS::IAM::Role
+    Condition: VoicePracticeEnabled
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Bounded generation and grading only; no tools or access to student tables.
+        must: [Restrict inference to configured model, Only same-account AgentCore may assume]
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: bedrock-agentcore.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {aws:SourceAccount: !Ref AWS::AccountId}
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/*"
+      Policies:
+        - PolicyName: ModelAndCode
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${VoiceModelId}"
+              - Effect: Allow
+                Action: [s3:GetObject, s3:GetObjectVersion]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${VoiceAgentCodeBucket}/${VoiceAgentCodeKey}"
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:DescribeLogStreams, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+              - Effect: Allow
+                Action: [kms:DescribeKey, kms:Encrypt, kms:Decrypt, kms:GenerateDataKey, kms:ReEncryptFrom, kms:ReEncryptTo]
+                Resource: !GetAtt VoiceLogKey.Arn
+                Condition: {StringEquals: {kms:ViaService: !Sub "logs.${AWS::Region}.amazonaws.com"}}
+
+  VoiceAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Condition: VoicePracticeEnabled
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Custom bounded HTTP agent deployed via CloudFormation, not the CDK-based CLI.
+        must: [Authenticated IAM invocation from backend only, No browser credentials or reward tools]
+    Properties:
+      AgentRuntimeName: !Join ["_", !Split ["-", !Sub "${AWS::StackName}_voice"]]
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3: {Bucket: !Ref VoiceAgentCodeBucket, Prefix: !Ref VoiceAgentCodeKey}
+          Runtime: NODE_22
+          EntryPoint: [server.js]
+      RoleArn: !GetAtt VoiceAgentRole.Arn
+      NetworkConfiguration: {NetworkMode: PUBLIC}
+      ProtocolConfiguration: HTTP
+      EnvironmentVariables:
+        VOICE_MODEL_ID: !Ref VoiceModelId
+
+  VoiceAgentEndpoint:
+    Type: AWS::BedrockAgentCore::RuntimeEndpoint
+    Condition: VoicePracticeEnabled
+    DependsOn: VoiceAgentLogGroup
+    Properties:
+      AgentRuntimeId: !GetAtt VoiceAgentRuntime.AgentRuntimeId
+      AgentRuntimeVersion: !GetAtt VoiceAgentRuntime.AgentRuntimeVersion
+      Name: live
+
+  VoicePracticeFunction:
+    Type: AWS::Serverless::Function
+    Condition: VoicePracticeEnabled
+    DependsOn: VoiceAgentLogGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Capability-scoped phone input and authenticated desktop reading, wallet and cast routes; async grading avoids API timeouts.
+        must: [Browser STT only with no recording or Transcribe access, Server validates reading grades and rewards, Do not alter AWS task marks or historical participation, Atomic idempotent activity rewards and wallet casts with capacity 100, Completion summaries use authenticated owner only and exclude speech and capabilities]
+    Properties:
+      CodeUri: ./src/VoicePractice
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Timeout: 300
+      MemorySize: 512
+      ReservedConcurrentExecutions: 5
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 300
+        MaximumRetryAttempts: 1
+        DestinationConfig:
+          OnFailure:
+            Type: SQS
+            Destination: !GetAtt VoiceFailureQueue.Arn
+      Environment:
+        Variables:
+          VOICE_TABLE: !Ref VoicePracticeTable
+          VOICE_AGENT_RUNTIME_ARN: !GetAtt VoiceAgentRuntime.AgentRuntimeArn
+          VOICE_AGENT_QUALIFIER: live
+          VOICE_MODEL_ID: !Ref VoiceModelId
+          API_KEY_LOOKUP_TABLE: !Ref ApiKeyLookupTable
+          VOICE_WEB_ORIGIN: !Sub "https://${CloudFrontDistribution.DomainName}"
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Query]
+              Resource: !GetAtt VoicePracticeTable.Arn
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt ApiKeyLookupTable.Arn
+            - Effect: Allow
+              Action: [kms:DescribeKey, kms:Encrypt, kms:Decrypt, kms:GenerateDataKey, kms:ReEncryptFrom, kms:ReEncryptTo]
+              Resource: !GetAtt VoiceLogKey.Arn
+              Condition: {StringEquals: {kms:ViaService: !Sub "logs.${AWS::Region}.amazonaws.com"}}
+            - Effect: Allow
+              Action: bedrock-agentcore:InvokeAgentRuntime
+              Resource: [!GetAtt VoiceAgentRuntime.AgentRuntimeArn, !Sub "${VoiceAgentRuntime.AgentRuntimeArn}/runtime-endpoint/live"]
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-VoicePracticeFunction-*"
+      Events:
+        DesktopWallet:
+          Type: Api
+          Properties: {Path: /voice/wallet, Method: GET, RestApiId: !Ref ApiGatewayApi}
+        DesktopCast:
+          Type: Api
+          Properties: {Path: /voice/casts, Method: POST, RestApiId: !Ref ApiGatewayApi}
+        DesktopCompletions:
+          Type: Api
+          Properties: {Path: /voice/completions, Method: GET, RestApiId: !Ref ApiGatewayApi}
+        CreateSession:
+          Type: Api
+          Properties: {Path: /voice/sessions, Method: POST, RestApiId: !Ref ApiGatewayApi}
+        DesktopSession:
+          Type: Api
+          Properties: {Path: "/voice/sessions/{id}", Method: GET, RestApiId: !Ref ApiGatewayApi}
+        DesktopAction:
+          Type: Api
+          Properties: {Path: "/voice/sessions/{id}/{action}", Method: POST, RestApiId: !Ref ApiGatewayApi}
+        MobileGet:
+          Type: Api
+          Properties:
+            Path: "/voice/mobile/{action}"
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+            Auth: {ApiKeyRequired: false}
+        MobilePost:
+          Type: Api
+          Properties:
+            Path: "/voice/mobile/{action}"
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+            Auth: {ApiKeyRequired: false}
+
+  VoicePracticeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: VoicePracticeEnabled
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${VoicePracticeFunction}"
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt VoiceLogKey.Arn
+
+  VoiceFailureQueue:
+    Type: AWS::SQS::Queue
+    Condition: VoicePracticeEnabled
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Retain exhausted asynchronous worker failures for operator diagnosis without automatic model loops.
+        must: [Worker events contain identifiers only, Do not put recordings or transcripts on the queue]
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 345600
+
+  VoiceAgentLogGroup:
+    Type: Custom::VoiceAgentLogSettings
+    Condition: VoicePracticeEnabled
+    DependsOn: VoiceLogConfiguratorLogGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: AgentCore creates its default log group itself; configure it instead of racing creation.
+        must: [Encrypt both default and live endpoint logs before exposing backend, Preserve logs on deletion]
+    Properties:
+      ServiceToken: !GetAtt VoiceLogConfigurator.Arn
+      LogGroupNames:
+        - !Sub "/aws/bedrock-agentcore/runtimes/${VoiceAgentRuntime.AgentRuntimeId}-DEFAULT"
+        - !Sub "/aws/bedrock-agentcore/runtimes/${VoiceAgentRuntime.AgentRuntimeId}-live"
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt VoiceLogKey.Arn
+
+  VoiceLogConfiguratorRole:
+    Type: AWS::IAM::Role
+    Condition: VoicePracticeEnabled
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Configure only this runtime's service-created log groups.
+        must: [No log reading or deletion permissions, No access to student data]
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ConfigureRuntimeLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:AssociateKmsKey, logs:PutRetentionPolicy]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/${VoiceAgentRuntime.AgentRuntimeId}-*"
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-VoiceLogConfigurator-*"
+              - Effect: Allow
+                Action: [kms:DescribeKey, kms:Encrypt, kms:Decrypt, kms:GenerateDataKey, kms:ReEncryptFrom, kms:ReEncryptTo]
+                Resource: !GetAtt VoiceLogKey.Arn
+                Condition: {StringEquals: {kms:ViaService: !Sub "logs.${AWS::Region}.amazonaws.com"}}
+
+  VoiceLogConfigurator:
+    Type: AWS::Lambda::Function
+    Condition: VoicePracticeEnabled
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Idempotently set encryption and retention on AgentCore-owned log groups.
+        must: [Never delete logs, Return CloudFormation response for every operation]
+    Properties:
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt VoiceLogConfiguratorRole.Arn
+      Timeout: 60
+      ReservedConcurrentExecutions: 1
+      Code:
+        ZipFile: |
+          const {CloudWatchLogsClient, CreateLogGroupCommand, AssociateKmsKeyCommand,
+            PutRetentionPolicyCommand} = require("@aws-sdk/client-cloudwatch-logs");
+          const logs = new CloudWatchLogsClient({});
+          exports.handler = async (event) => {
+            let Status = "SUCCESS";
+            let Reason = "Runtime log settings applied.";
+            const properties = event.ResourceProperties;
+            try {
+              if (event.RequestType !== "Delete") {
+                for (const logGroupName of properties.LogGroupNames) {
+                  try {
+                    await logs.send(new CreateLogGroupCommand({
+                      logGroupName, kmsKeyId: properties.KmsKeyId
+                    }));
+                  } catch (error) {
+                    if (error.name !== "ResourceAlreadyExistsException") throw error;
+                  }
+                  await logs.send(new AssociateKmsKeyCommand({
+                    logGroupName, kmsKeyId: properties.KmsKeyId
+                  }));
+                  await logs.send(new PutRetentionPolicyCommand({
+                    logGroupName, retentionInDays: Number(properties.RetentionInDays)
+                  }));
+                }
+              }
+            } catch (error) {
+              Status = "FAILED";
+              Reason = ("Unable to configure runtime logs: " + error.name + ": " + error.message).slice(0, 1000);
+            }
+            const body = JSON.stringify({
+              Status, Reason, PhysicalResourceId: event.PhysicalResourceId || properties.LogGroupNames[0],
+              StackId: event.StackId, RequestId: event.RequestId,
+              LogicalResourceId: event.LogicalResourceId
+            });
+            const response = await fetch(event.ResponseURL, {
+              method: "PUT", headers: {"content-type": ""}, body
+            });
+            if (!response.ok) throw new Error("CloudFormation response failed");
+          };
+
+  VoiceLogConfiguratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: VoicePracticeEnabled
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${VoiceLogConfigurator}"
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt VoiceLogKey.Arn
+
+  VoiceLogKey:
+    Type: AWS::KMS::Key
+    Condition: VoicePracticeEnabled
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Encrypt restricted voice processing logs; never intentionally log transcripts.
+        must: [Restrict log-service use by encryption context, Retain key while encrypted logs exist]
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"}
+            Action: "kms:*"
+            Resource: "*"
+          - Effect: Allow
+            Principal: {Service: !Sub "logs.${AWS::Region}.amazonaws.com"}
+            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncryptFrom, kms:ReEncryptTo, kms:GenerateDataKey, kms:DescribeKey]
+            Resource: "*"
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-VoicePracticeFunction-*"
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-VoiceLogConfigurator-*"
+
   TestResultBucket:
     Type: AWS::S3::Bucket
 
@@ -214,6 +613,7 @@ Resources:
       TracingEnabled: true
       Auth:
         ApiKeyRequired: true
+        AddApiKeyRequiredToCorsPreflight: false
 
   # Gateway Responses to add CORS headers to error responses
   ApiGatewayResponse4XX:
@@ -690,6 +1090,19 @@ Resources:
       AutoConfigurationEnabled: "true"
 
 Outputs:
+  VoicePracticeTableName:
+    Condition: VoicePracticeEnabled
+    Description: Question review and oral practice records; not the AWS task grade table.
+    Value: !Ref VoicePracticeTable
+  VoicePracticeRuntimeArn:
+    Condition: VoicePracticeEnabled
+    Value: !GetAtt VoiceAgentRuntime.AgentRuntimeArn
+  VoicePracticeAudioBucketName:
+    Condition: VoicePracticeEnabled
+    Value: !Ref VoiceAudioBucket
+  VoicePracticeFunctionName:
+    Condition: VoicePracticeEnabled
+    Value: !Ref VoicePracticeFunction
   WebApiEndpoint:
     Description: API Gateway endpoint URL
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/"
