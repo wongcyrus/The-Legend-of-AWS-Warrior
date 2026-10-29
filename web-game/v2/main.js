@@ -61,7 +61,11 @@ class BasicCharacterController extends player_entity.BasicCharacterController {
       this._velocity.z = THREE.MathUtils.clamp(this._velocity.z, -4, 4);
     }
     try { super.Update(dt); }
-    finally { keys.shift = shift; this._acceleration.z = acceleration; }
+    finally {
+      if (this.tapAttack) { keys.space = false; this.tapAttack = false; }
+      keys.shift = shift;
+      this._acceleration.z = acceleration;
+    }
   }
 
   _FindIntersections(position) {
@@ -105,6 +109,22 @@ class BasicCharacterControllerInput extends player_input.BasicCharacterControlle
       if (event.code === "KeyQ") game.tryDodge();
       else if (event.code === "KeyF") game.openNearbyChest();
       else game.selectWeapon({ Digit1: "Sword", Digit2: "Axe", Digit0: "Unarmed" }[event.code]);
+      return;
+    }
+    const spellSlots = { Digit3: "lightning", Digit4: "fireball", Digit5: "frost", Digit6: "storm", Digit7: "shockwave" };
+    if (!event.repeat && Object.hasOwn(spellSlots, event.code)) {
+      event.preventDefault();
+      if (!this._params.game.progressChanging) this._params.game.toggleSpell?.(spellSlots[event.code]);
+      return;
+    }
+    if (!event.repeat && (event.code === "KeyC" || event.code === "KeyV") &&
+        !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      const game = this._params.game;
+      if (game.progressChanging) return;
+      const step = event.shiftKey ? -1 : 1;
+      if (event.code === "KeyC") game.cycleWeapon?.(step);
+      else game.cycleShield?.(step);
       return;
     }
     if (event.target?.closest?.("button, a, summary")) return;
@@ -795,6 +815,7 @@ class Game {
       document.getElementById("magic-badges").textContent = "Infinitive Magic Mode";
       const cast = document.getElementById("magic-cast");
       cast.disabled = !this.ready || busy || Boolean(pending) || !selected.length;
+      cast.classList?.toggle("ultimate-ready", ultimate);
       cast.textContent = ultimate ? "全域部署 · Free (X)" : "Cast: free (X)";
       cast.title = "Infinitive Magic Mode - no MP cost or cooldown";
       document.querySelectorAll("[data-spell]").forEach(button => {
@@ -807,6 +828,7 @@ class Game {
     const matchesPending = matches(selected);
     const cast = document.getElementById("magic-cast");
     cast.disabled = unavailable || !selected.length || !matchesPending || (!pending && balance < cost);
+    cast.classList?.toggle("ultimate-ready", ultimate);
     cast.textContent = busy ? "Reserving MP..." : checking ? "Checking MP..." :
       cooldown > 0 ? `Cooldown ${cooldown.toFixed(1)}s` : pending ? "Retry reserved cast (X)" :
         `${ultimate ? "全域部署 ·" : "Cast:"} ${cost} MP (X)`;
@@ -1082,6 +1104,49 @@ class Game {
     return true;
   }
 
+  cycleWeapon(step = 1) {
+    return this.selectWeapon(nextWeapon(Object.keys(WEAPONS), this.weapon, step));
+  }
+
+  cycleShield(step = 1) {
+    return this.selectShield(nextWeapon(["None", ...Object.keys(SHIELDS)], this.shield, step));
+  }
+
+  toggleSpell(id) {
+    if (!Object.hasOwn(SPELLS, id) || this.voiceWallet?.busy ||
+        this.voiceWallet?.checking > 0 || this.voiceWallet?.pending) return false;
+    const selected = new Set(this.selectedSpells ?? [this.spell]);
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+    this.selectedSpells = [...selected];
+    if (selected.size) this.spell = this.selectedSpells[0];
+    document.querySelectorAll("[data-spell]").forEach(item =>
+      item.setAttribute("aria-pressed", String(selected.has(item.dataset.spell))));
+    this.updateMagicUI();
+    this.saveCheckpoint();
+    return true;
+  }
+
+  triggerControlAction(action) {
+    if (this.progressChanging) return false;
+    if (action === "attack") {
+      if (!this.ready || this.traveling || !this.player?.GetComponent("HealthComponent")?.IsAlive() ||
+          this.guard.active || this.dodge.active) return false;
+      const input = this.player.GetComponent("BasicCharacterControllerInput");
+      const controller = this.player.GetComponent("BasicCharacterController");
+      input._keys.space = true;
+      if (controller) controller.tapAttack = true;
+      return true;
+    }
+    if (action === "magic") return Boolean(this.castMagic());
+    if (action === "dodge") return this.tryDodge();
+    if (action === "task") { this.talkToGuide(); return true; }
+    if (action === "chest") return this.openNearbyChest();
+    if (action === "gate") return this.useGate();
+    if (action === "weapon") return this.cycleWeapon(1);
+    if (action === "shield") return this.cycleShield(1);
+    return false;
+  }
+
   scrollEquipment(event) {
     if (!event.deltaY || event.target.closest(".v2-ui, dialog") || document.querySelector("dialog[open]") ||
         !this.ready || this.traveling || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) return;
@@ -1232,30 +1297,31 @@ class Game {
     manual.addEventListener("close", () => this.renderer?.domElement.focus());
     this.spell = "lightning";
     this.magicLevel = 1;
-    for (const [id, spell] of Object.entries(SPELLS)) {
+    Object.entries(SPELLS).forEach(([id, spell], index) => {
       const button = document.createElement("button");
+      const slotKey = index + 3;
       button.type = "button"; button.textContent = `${spell.label} · ${spell.cost} MP`;
-      button.title = `${spell.service}: ${spell.tradeoff}`;
+      button.title = `[${slotKey}] ${spell.service}: ${spell.tradeoff}`;
       button.style.borderLeft = `4px solid #${spell.color.toString(16).padStart(6, "0")}`;
       button.dataset.spell = id;
+      button.dataset.slot = String(slotKey);
       button.setAttribute("aria-pressed", String(id === this.spell));
       button.onclick = () => {
-        const selected = new Set(this.selectedSpells ?? [this.spell]);
-        if (selected.has(id)) selected.delete(id); else selected.add(id);
-        this.selectedSpells = [...selected];
-        if (selected.size) this.spell = this.selectedSpells[0];
-        document.querySelectorAll("[data-spell]").forEach(item =>
-          item.setAttribute("aria-pressed", String(selected.has(item.dataset.spell))));
-        this.updateMagicUI();
-        this.saveCheckpoint();
+        this.toggleSpell(id);
         this.renderer?.domElement.focus();
       };
       document.getElementById("magic-bar").appendChild(button);
-    }
+    });
     document.getElementById("magic-cast").onclick = () => {
       this.castMagic();
       this.renderer?.domElement.focus();
     };
+    document.querySelectorAll?.("[data-control-action]")?.forEach(item => {
+      item.onclick = () => {
+        this.triggerControlAction(item.dataset.controlAction);
+        this.renderer?.domElement.focus();
+      };
+    });
     const soundButton = document.getElementById("sound-button");
     const soundVolume = document.getElementById("sound-volume");
     const voiceSelect = document.getElementById("attack-voice");

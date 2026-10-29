@@ -364,3 +364,84 @@ test('timed perfect parry negates heavy blows, reflects ranged spikes and stagge
   enemyHealth._OnDamage({ value: 40 });
   assert.equal(enemyHealth._health, 50, 'staggered enemy takes +25% bonus damage');
 });
+
+test('keyboard shortcuts 3-7 toggle cloud arts, C/V cycle gear, and control bar chips trigger actions', () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const spellButtons = Object.keys(SPELLS).map(id => ({
+    dataset: { spell: id },
+    setAttribute(name, value) { this[name] = value; },
+  }));
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+    WEAPONS, SHIELDS, SPELLS, nextWeapon,
+    document: { querySelectorAll: () => spellButtons },
+  });
+  const Input = runInNewContext(
+    main.match(/class BasicCharacterControllerInput[\s\S]*?(?=\nclass SpatialGridController)/)[0] +
+    '\nBasicCharacterControllerInput;',
+    { player_input: { BasicCharacterControllerInput: class { _onKeyDown() {} } } }
+  );
+
+  const keys = { space: false };
+  const game = {
+    ready: true,
+    progressChanging: false,
+    traveling: false,
+    weapon: 'Sword',
+    shield: 'Shield_Round',
+    spell: 'lightning',
+    selectedSpells: null,
+    guard: { active: false },
+    dodge: { active: false },
+    voiceWallet: { busy: false, checking: 0, pending: null },
+    player: {
+      GetComponent: name => name === 'HealthComponent' ? { IsAlive: () => true } : { _keys: keys },
+    },
+    selectWeapon(name) { this.weapon = name; return true; },
+    selectShield(name) { this.shield = name; return true; },
+    cycleWeapon: Game.prototype.cycleWeapon,
+    cycleShield: Game.prototype.cycleShield,
+    toggleSpell: Game.prototype.toggleSpell,
+    triggerControlAction: Game.prototype.triggerControlAction,
+    updateMagicUI() {},
+    saveCheckpoint() {},
+    castMagic: () => true,
+    tryDodge: () => true,
+    talkToGuide() { this.talked = true; },
+    openNearbyChest: () => true,
+    useGate: () => true,
+  };
+
+  const input = new Input();
+  input._params = { game };
+  const press = (code, extra = {}) => input._onKeyDown({
+    code, repeat: false, target: { closest: () => null }, preventDefault() {}, ...extra,
+  });
+
+  press('Digit5');
+  assert.deepEqual([...game.selectedSpells], ['lightning', 'frost']);
+  assert.equal(spellButtons.find(b => b.dataset.spell === 'frost')['aria-pressed'], 'true');
+  press('Digit3');
+  assert.deepEqual([...game.selectedSpells], ['frost']);
+  assert.equal(game.spell, 'frost');
+
+  press('KeyC');
+  assert.equal(game.weapon, 'Axe');
+  press('KeyC', { shiftKey: true });
+  assert.equal(game.weapon, 'Sword');
+
+  press('KeyV');
+  assert.equal(game.shield, 'Shield_Round_2');
+  press('KeyV', { shiftKey: true });
+  assert.equal(game.shield, 'Shield_Round');
+
+  assert.equal(game.triggerControlAction('attack'), true);
+  assert.equal(keys.space, true);
+  assert.equal(game.triggerControlAction('magic'), true);
+  assert.equal(game.triggerControlAction('dodge'), true);
+  assert.equal(game.triggerControlAction('task'), true);
+  assert.equal(game.talked, true);
+  assert.equal(game.triggerControlAction('chest'), true);
+  assert.equal(game.triggerControlAction('gate'), true);
+  assert.equal(game.triggerControlAction('weapon'), true);
+  assert.equal(game.weapon, 'Axe');
+});
