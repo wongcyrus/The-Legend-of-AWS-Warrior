@@ -227,23 +227,31 @@ dialog input { width: 100%; padding: 10px; background: #0f272c; color: #fff; bor
   left: 50%;
   transform: translateX(-50%);
   width: min(88vw, 760px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
   text-align: center;
-  font-size: clamp(1.2rem, 3.6vw, 2.5rem);
+  font-size: clamp(1.15rem, 3.2vw, 2.2rem);
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   color: #fff;
   text-shadow: 0 2px 6px #111, 0 0 12px var(--art-color, #076b9d);
   border-block: 2px solid var(--art-color, #076b9d);
   background: linear-gradient(90deg, transparent, #101b29e6 20%, #101b29e6 80%, transparent);
-  padding: 0.3em 0;
+  padding: 0.4em 0.6em;
   pointer-events: none;
   opacity: 0;
   z-index: 20;
 }
-#cloud-art-title span, #cloud-art-title small { display: block; }
-#cloud-art-title small { margin-top: 0.4em; font-size: 0.48em; letter-spacing: 0.08em; }
+#cloud-art-title span, #cloud-art-title small { display: block; line-height: 1.25; }
+#cloud-art-title .banner-english { font-size: 0.85em; letter-spacing: 0.08em; color: #ffe7b8; }
+#cloud-art-title .banner-chinese { font-size: 1.05em; letter-spacing: 0.14em; color: #fff; }
 #manual-button { display: inline-flex; align-items: center; justify-content: center; }
 #attack-voice { max-width: 160px; }
-.magic-bar [aria-pressed="true"]::before { content: "✓ "; color: #fff; }
+.magic-bar button .spell-btn-en, .magic-bar button .spell-btn-zh { display: block; line-height: 1.3; }
+.magic-bar button .spell-btn-en { font-weight: 700; color: #ffe7b8; font-size: 9.5px; }
+.magic-bar button .spell-btn-zh { color: #f7eed9; font-size: 10px; margin-top: 1px; }
+.magic-bar [aria-pressed="true"] .spell-btn-en::before { content: "✓ "; color: #fff; }
 #magic-selection { font-size: 11px; margin: 6px 0; }
-#cloud-art-title.combo-banner { font-size: clamp(1rem, 2.7vw, 2rem); letter-spacing: 0.04em; }
+#cloud-art-title.combo-banner { font-size: clamp(0.95rem, 2.4vw, 1.8rem); letter-spacing: 0.04em; }

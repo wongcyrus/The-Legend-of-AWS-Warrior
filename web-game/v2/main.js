@@ -931,11 +931,13 @@ class Game {
       this.magicStatus(`${chineseName} cast! ${free ? "Infinitive Magic Mode - no MP spent." : `Spent ${cost} MP.`}`);
       const title = document.getElementById("cloud-art-title");
       if (title) {
-        const chinese = document.createElement("span"), english = document.createElement("small");
-        chinese.textContent = chineseName;
+        const english = document.createElement("span"), chinese = document.createElement("span");
+        english.className = "banner-english";
+        chinese.className = "banner-chinese";
         english.textContent = englishName;
+        chinese.textContent = chineseName;
         title.classList.toggle("combo-banner", combined);
-        title.replaceChildren(chinese, english);
+        title.replaceChildren(english, chinese);
         title.style.setProperty("--art-color", `#${SPELLS[spell].color.toString(16).padStart(6, "0")}`);
         title.getAnimations().forEach(animation => animation.cancel());
         title.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.75 }, { opacity: 0 }],
@@ -1315,7 +1317,14 @@ class Game {
     Object.entries(SPELLS).forEach(([id, spell], index) => {
       const button = document.createElement("button");
       const slotKey = index + 3;
-      button.type = "button"; button.textContent = `${spell.label} · ${spell.cost} MP`;
+      button.type = "button";
+      const enLine = document.createElement("span"), zhLine = document.createElement("span");
+      enLine.className = "spell-btn-en";
+      enLine.textContent = `${spell.englishLabel} · ${spell.cost} MP`;
+      zhLine.className = "spell-btn-zh";
+      zhLine.textContent = spell.label;
+      button.replaceChildren?.(enLine, zhLine);
+      if (!button.replaceChildren) button.textContent = `${spell.englishLabel} · ${spell.cost} MP\n${spell.label}`;
       button.title = `[${slotKey}] ${spell.service}: ${spell.tradeoff}`;
       button.style.borderLeft = `4px solid #${spell.color.toString(16).padStart(6, "0")}`;
       button.dataset.spell = id;

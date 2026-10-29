@@ -975,7 +975,7 @@ try {
   assert.equal(arts.characterCopies && arts.tripleAttacks, true);
   assert.ok(arts.lowDetail < arts.normalDetail);
   assert.equal(arts.levels, 0);
-  assert.equal(arts.title, "領域展開・無量儲存Domain: Infinite Storage");
+  assert.equal(arts.title, "Domain: Infinite Storage領域展開・無量儲存");
   assert.equal(await desktop.evaluate(`document.querySelector('#manual-button').textContent.trim()`), "");
   assert.equal(await desktop.evaluate(`document.querySelector('#manual-button svg').getAttribute('aria-hidden')`), "true");
 
@@ -1162,7 +1162,7 @@ try {
   assert.equal(avatar.zoomUnchanged,true);
   assert.equal(backend.wallet.balance, 13);
   assert.ok(avatar.cooldown > 59);
-  assert.match(await desktop.evaluate(`document.querySelector('#cloud-art-title').textContent`), /全域部署.*Global Deployment/);
+  assert.match(await desktop.evaluate(`document.querySelector('#cloud-art-title').textContent`), /Global Deployment.*全域部署/);
   assert.equal(await desktop.evaluate("attackAnnouncements.at(-1).text"), "全域部署。Global Deployment");
   const stationary = await desktop.evaluate(`(async () => {
     const game=__game, controller=game.player.GetComponent('BasicCharacterController');
