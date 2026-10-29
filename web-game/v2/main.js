@@ -25,7 +25,7 @@ import { WorldEvents } from "./world-events.js?v=20261029-v2-features-1";
 import { createRenderer, WebGLUnavailableError } from "./renderer.js";
 import { findMeleeTargets, findMovementBlockers } from "./combat.js?v=20261027-equipment-1";
 import { GuidePatrol, guideArchetype } from "./guides.js?v=20261029-guides-1";
-import { SoundEffects } from "./audio.js?v=20261029-cloud-avatar-1";
+import { SoundEffects } from "./audio.js?v=20261030-male-tts-1";
 import { WEAPONS, FINISHES, AdventureProgress, DodgeMotion } from "./adventure.js?v=20261027-equipment-1";
 import { CombatFeedback } from "./feedback.js";
 import { findMonsterSpawn, MonsterRespawns } from "./spawning.js?v=20261027-maps-1";

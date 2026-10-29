@@ -33,6 +33,13 @@ const EFFECTS = {
 };
 const COOLDOWNS = { yeti: 0.6, bat: 0.35, cactus: 0.3, spike: 0.12, slam: 0.15,
   equip: 0.08, evade: 0.12, block: 0.1, guardBreak: 0.2 };
+const MALE_VOICE_PATTERN = /\b(male|man|wanlung|wan\s*lung|aasing|aa\s*sing|danny|kangkang|yunxi|yunjian|yunyang)\b|男|雲龍|云龙|阿成/i;
+const FEMALE_VOICE_PATTERN = /\b(female|woman|girl|hiumaan|hiugaai|sin[-\s]?ji|ting[-\s]?ting|mei[-\s]?jia)\b|女|曉曼|曉佳/i;
+
+export function isMaleVoice(voice) {
+  const label = `${voice?.name || ""} ${voice?.voiceURI || ""}`;
+  return MALE_VOICE_PATTERN.test(label) && !FEMALE_VOICE_PATTERN.test(label);
+}
 
 export class SoundEffects {
   constructor({ storage = globalThis.localStorage,
@@ -124,11 +131,13 @@ export class SoundEffects {
       this.stopSpeech();
       const utterance = new this.Utterance(name.replace(/・/g, "，"));
       const cantonese = this.cantoneseVoices();
+      const maleVoice = cantonese.find(isMaleVoice);
       utterance.voice = cantonese.find(voice => voice.voiceURI === this.voiceURI) ||
-        cantonese.find(voice => voice.localService) || cantonese[0] || null;
+        maleVoice || cantonese.find(voice => voice.localService) || cantonese[0] || null;
       utterance.lang = utterance.voice?.lang || "zh-HK";
       utterance.volume = this.volume;
-      utterance.rate = 0.95;
+      utterance.rate = 0.92;
+      utterance.pitch = isMaleVoice(utterance.voice) ? 0.88 : 0.65;
       this.utterance = utterance;
       this.synthesis.speak(utterance);
       return true;

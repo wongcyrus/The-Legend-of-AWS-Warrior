@@ -252,6 +252,9 @@ test('Cantonese voice choice persists, excludes other languages and falls back w
     synthesis: { getVoices: () => voices, speak: value => spoken.push(value), cancel() {} },
     Utterance: class { constructor(text) { this.text = text; } } };
   const sound = new SoundEffects(options);
+  sound.speakAttack('事件雷切');
+  assert.equal(spoken.at(-1).voice, voices[1], 'auto voice selection prefers male Cantonese voice');
+  assert.ok(spoken.at(-1).pitch < 1, 'attack TTS uses deeper male warrior pitch');
   assert.equal(sound.selectVoice('other'), false);
   assert.equal(sound.selectVoice('cantonese-m'), true);
   const restored = new SoundEffects(options);
