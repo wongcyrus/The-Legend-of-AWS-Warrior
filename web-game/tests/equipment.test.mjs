@@ -127,12 +127,14 @@ test('equipment has accessible icon bars instead of dropdown menus', () => {
 test('equipment panel omits repeated controls and only shows active guard and dodge status', () => {
   const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
   const hud = html.match(/<div class="v2-ui player-hud">[\s\S]*?(?=<footer)/)[0];
-  assert.doesNotMatch(hud, /Hold R|Q:|Walk to|Click \/ scroll|equipped at start/);
+  assert.doesNotMatch(hud, /Hold R|Q:|Walk to|Click \/ scroll|equipped at start|cloud-art-title/);
   assert.doesNotMatch(html, /block-button/);
   assert.doesNotMatch(html, /id="(?:weapon-summary|magic-summary|magic-tactics|magic-help|magic-feedback)"/);
   assert.match(html, /<kbd>R<\/kbd> Block/);
   assert.match(html, /<kbd>Q<\/kbd> Dodge/);
-  assert.match(html, /Walk into gates to travel/);
+  assert.doesNotMatch(html, /Walk into gates to travel/);
+  const css = readFileSync(new URL('../v2/style.css', import.meta.url), 'utf8');
+  assert.match(css, /#cloud-art-title\s*\{[\s\S]*?top:\s*96px;[\s\S]*?left:\s*50%;[\s\S]*?transform:\s*translateX\(-50%\);/);
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(main, /block-button|blockButton/);
   const source = main.match(/    document.getElementById\("shield-state"\).textContent[\s\S]*?(?=\n    const chest =)/)[0];

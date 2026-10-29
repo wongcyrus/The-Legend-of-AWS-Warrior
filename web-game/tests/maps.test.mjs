@@ -226,8 +226,7 @@ test('map transitions reject invalid, premature or busy travel without altering 
 test('T is a separate gate action and E remains the guide interaction', () => {
   const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(html, /travel-button|click Travel/);
-  assert.match(html, /Walk into gates to travel/);
+  assert.doesNotMatch(html, /travel-button|click Travel|Walk into gates to travel/);
   assert.doesNotMatch(main, /travel-button/);
   assert.match(main, /event.code === "KeyT"[\s\S]*?this._params.game.useGate\(\)/);
   assert.match(main, /event.code === "KeyE"[\s\S]*?this._params.game.talkToGuide\(\)/);
