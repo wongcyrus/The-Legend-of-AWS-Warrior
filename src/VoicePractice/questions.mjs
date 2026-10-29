@@ -1,4 +1,5 @@
 import { languageConfig } from "./content.mjs";
+import { taskAvailableAt } from "./economy.mjs";
 
 const text = (value, max) => typeof value === "string" && value.trim().length > 0 && value.length <= max;
 const identifier = value => text(value, 100) && /^[a-zA-Z0-9_-]+$/.test(value);
@@ -61,7 +62,7 @@ export function gradeAnswer(value, question, transcript) {
   return validateAnswerGrade({ score, breakdown: { understanding: score }, feedback: value.feedback });
 }
 
-export function createQuestions({ store, config, services, fail }) {
+export function createQuestions({ store, config, services, fail, now }) {
   const approved = async serviceId => {
     const rows = await store.listQuestions?.(serviceId) ?? [];
     return rows.filter(row => row.status === "approved").flatMap(row => {
@@ -84,7 +85,9 @@ export function createQuestions({ store, config, services, fail }) {
     const progress = await Promise.all(options.map(question => store.get({
       PK: `PLAYER#${owner}`, SK: `ACTIVITY#${questionActivityId(serviceId, question.id)}`,
     })));
-    return options.find((_, index) => !progress[index]?.completed) ?? options[0];
+    const eligible = options.filter((_, index) => taskAvailableAt(progress[index]) <= now());
+    if (!eligible.length) fail(409, `All Q&A questions for this service are on a one-week cooldown. Available again ${new Date(Math.min(...progress.map(taskAvailableAt)) * 1000).toISOString()}. Return to the game to discover another service.`);
+    return eligible.find(question => !progress[options.indexOf(question)]?.completed) ?? eligible[0];
   };
   return { activities, choose };
 }

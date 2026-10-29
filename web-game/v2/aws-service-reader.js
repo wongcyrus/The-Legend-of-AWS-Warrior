@@ -1,5 +1,5 @@
 import { AWS_SERVICES } from "./aws-theme.js?v=20261028-voice-1";
-import { bindVoicePractice } from "./voice-practice.js?v=20261029-qa-1";
+import { bindVoicePractice } from "./voice-practice.js?v=20261029-facing-2";
 
 export const READ_SERVICES_KEY = "aws-warrior:v2:read-services";
 

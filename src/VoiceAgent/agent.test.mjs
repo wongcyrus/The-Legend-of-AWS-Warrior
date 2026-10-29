@@ -147,6 +147,52 @@ test("grade_answer strictly validates input rubric and uses only the approved bo
   }
 });
 
+test("Q&A retries reference-answer leakage once without crediting an unanswered concept", async () => {
+  const question = {
+    id: "network-boundary", prompt: "What does a VPC provide, and what network setting can you control?",
+    concepts: [
+      { id: "network", description: "A logically isolated virtual network.", weight: 60 },
+      { id: "control", description: "Control an address range or security group setting.", weight: 40 },
+    ],
+    misconceptions: [], acceptableAnswers: [],
+    referenceAnswer: "A VPC provides an isolated virtual network. I can configure security groups.",
+  };
+  const transcript = "可以控制cider address同埋security group設定";
+  const leaked = { concepts: [
+    { id: "network", verdict: "met", evidence: "A VPC provides an isolated virtual network." },
+    { id: "control", verdict: "met", evidence: transcript },
+  ], feedback: "You explained both concepts." };
+  const corrected = { concepts: [
+    { id: "network", verdict: "missing", evidence: "" },
+    leaked.concepts[1],
+  ], feedback: "你提到可以控制嘅設定，仲需要解釋 VPC 提供嘅網絡。" };
+  const commands = [];
+  const agent = createAgent({ modelId: "test", send: async command => {
+    commands.push(command);
+    return response(commands.length === 1 ? leaked : corrected);
+  } });
+  const payload = { operation: "grade_answer", question, transcript, language: "zh-HK" };
+  assert.deepEqual(await agent(payload), corrected);
+  assert.equal(commands.length, 2);
+  assert.match(commands[0].input.system[0].text, /NEVER quote question.prompt/);
+  assert.match(commands[0].input.system[0].text, /meets ONLY \(2\); \(1\) is missing/);
+  assert.match(commands[1].input.system[0].text, /previous assessment failed output validation/);
+  assert.deepEqual(commands[1].input.messages, commands[0].input.messages);
+  assert.equal(commands[1].input.inferenceConfig.maxTokens, 1800);
+
+  let calls = 0;
+  const invalid = createAgent({ modelId: "test", send: async () => { calls++; return response(leaked); } });
+  await assert.rejects(() => invalid(payload), /evidence must quote/);
+  assert.equal(calls, 2);
+  calls = 0;
+  const unavailable = createAgent({ modelId: "test", send: async () => {
+    calls++;
+    throw Object.assign(new Error("Access denied"), { name: "AccessDeniedException" });
+  } });
+  await assert.rejects(() => unavailable(payload), /Access denied/);
+  assert.equal(calls, 1);
+});
+
 test("reading operation grades only current bilingual passage coverage in one bounded model call", async () => {
   const commands = [];
   const result = { score: 85, breakdown: { coverage: 60, content: 25 }, feedback: "You covered most of the passage." };

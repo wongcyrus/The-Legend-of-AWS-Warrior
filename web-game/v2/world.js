@@ -2,7 +2,7 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.m
 import { instances, normalized } from "./assets.js?v=20261027-maps-1";
 import { BUILDINGS, LAKE, RUIN_WALLS, CHESTS, BOSS, SECRET_PATH, createScenery, isWalkable, seededRandom } from "./layout.js";
 import { MAPS, isMapWalkable } from "./maps.js?v=20261027-maps-1";
-import { buildExpedition, buildGates } from "./map-world.js?v=20261028-all-discoveries-1";
+import { buildExpedition, buildGates } from "./map-world.js?v=20261029-gates-weekly-1";
 import { servicePlaque, buildServiceLandmarks } from "./aws-world.js?v=20261028-voice-1";
 import { BUILDING_SERVICES, AWS_LANDMARKS, plaqueObscuresPlayer } from "./aws-theme.js?v=20261028-voice-1";
 
@@ -332,7 +332,7 @@ export class World {
     if (camera && player) {
       for (const plaque of this.servicePlaques) {
         plaque.getWorldPosition(this.plaquePoint);
-        if (plaque.userData.awsLandmark) {
+        if (plaque.userData.awsLandmark || plaque.parent === this.scene) {
           plaque.rotation.y = Math.atan2(camera.position.x - this.plaquePoint.x,
             camera.position.z - this.plaquePoint.z);
         }

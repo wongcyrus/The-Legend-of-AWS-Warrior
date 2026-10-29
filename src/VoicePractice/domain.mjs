@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from 
 import { readFileSync } from "node:fs";
 import { activities, validateGrade } from "./activities.mjs";
 import { activityLanguages, defaultActivityLanguage, languageConfig } from "./content.mjs";
-import { createEconomy } from "./economy.mjs";
+import { createEconomy, activityKey, taskAvailableAt } from "./economy.mjs";
 import { createGameSaves } from "./game-save.mjs";
 import { createQuestions, gradeAnswer, isAnswerTranscript, questionActivityId, questionRubric, validateAnswerGrade } from "./questions.mjs";
 
@@ -71,7 +71,7 @@ export function createService(deps) {
   const serviceLabel = s => s.serviceLabel ?? services.get(s.serviceId) ?? lessons[s.serviceId]?.label ?? s.serviceId;
   const now = () => Math.floor((deps.now?.() ?? Date.now()) / 1000);
   const economy = createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey, activities: catalog });
-  const questions = createQuestions({ store, config, services, fail });
+  const questions = createQuestions({ store, config, services, fail, now });
   const gameSaves = createGameSaves({ store, now, fail, passedTestsFor: deps.passedTestsFor });
   const load = async id => {
     if (!uuid(id)) fail(404, "Session not found");
@@ -180,6 +180,10 @@ export function createService(deps) {
       fail(400, "A spoken answer is required");
     const hash = digest(`browser:${transcript}${language !== "en-US" ? `:${language}` : ""}`);
     const old = await store.get(attemptKey(s.id, hash));
+    if (gradedSession(s) && (!old || old.state === "failed")) {
+      const availableAt = taskAvailableAt(await store.get(activityKey(s.owner, s.activityId)));
+      if (availableAt > now()) fail(409, `This task is on a one-week cooldown. Available again ${new Date(availableAt * 1000).toISOString()}. Return to the game or choose a different task.`);
+    }
     if (gradedSession(s) && old?.state === "failed" && s.status === "ready") {
       if ((old.processingRetries ?? 0) >= 3) fail(503, "Voice assessment is unavailable; start a new practice later");
       const retry = { ...old, state: "pending", evaluationStarted: false, leaseUntil: 0,

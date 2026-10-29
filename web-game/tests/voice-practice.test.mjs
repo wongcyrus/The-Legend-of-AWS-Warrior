@@ -19,9 +19,11 @@ test('voice pages have one refresh control and one status message per device', (
   const phone = readFileSync(new URL('../voice-practice.html', import.meta.url), 'utf8');
   assert.doesNotMatch(pc, /id="pc-refresh"|id="pc-submit-status"|Reading marks a discovery|Magic power and badge cost/);
   assert.doesNotMatch(phone, /id="mobile-submit-status"/);
-  assert.match(pc, /id="voice-check"[^>]*>Refresh passage or result</);
+  assert.match(pc, /id="voice-check"[^>]*hidden[^>]*>Retry connection</);
+  assert.doesNotMatch(readFileSync(new URL('../v2/voice-practice.js', import.meta.url), 'utf8'),
+    /Refresh question or result|Refresh passage or result/);
   for (const [html, prefix] of [[pc, 'pc'], [phone, 'mobile']]) {
-    assert.match(html, new RegExp(`id="${prefix}-speak"[^>]*>Hold to speak<`));
+    assert.match(html, new RegExp(`id="${prefix}-speak"[^>]*>${prefix === 'pc' ? 'Start speaking' : 'Hold to speak'}<`));
     assert.match(html, new RegExp(`id="${prefix}-send-answer"[^>]*>Submit spoken reading<`));
     assert.equal((html.match(new RegExp(`id="${prefix}-voice-status"`, 'g')) || []).length, 1);
   }
@@ -112,6 +114,7 @@ function mobileFixture({
     constructor() { recognition.instance = this; (recognition.instances ||= []).push(this); }
     start() {
       recognition.started = true;
+      if (!recognition.silentStart) this.onaudiostart?.();
       if (recognition.denied) this.onerror?.({ error: 'not-allowed' });
     }
     stop() { recognition.stopped = true; if (!recognition.delayedEnd) this.onend?.(); }
@@ -147,6 +150,7 @@ test('speech requires a meaningful final transcript and server-only passed resul
   assert.equal(voiceResultPassed({ transcript: 'correct answer' }), false);
   assert.match(voiceStatusMessage('awaiting_question_approval'), /teacher is reviewing.*do not read/i);
   assert.match(unavailableMessage({ status: 404 }), /not enabled/i);
+  assert.equal(unavailableMessage({ status: 404, apiMessage: 'Session not found' }), null);
   assert.match(unavailableMessage({ status: 403, apiMessage: 'Missing Authentication Token' }), /not enabled/i);
   assert.match(unavailableMessage({ status: 422, apiMessage: 'Lesson unavailable' }), /not enabled/i);
   assert.equal(unavailableMessage({ status: 403, apiMessage: 'Forbidden' }), null);
@@ -396,6 +400,19 @@ test('browser end while held restarts recognition without losing or duplicating 
   assert.equal(app.recognition.instances.length, 2);
 });
 
+test('a silent microphone startup times out and late browser callbacks cannot restart capture', async () => {
+  const app = mobileFixture({ recognition: { silentStart: true }, claimStatus: 'ready' });
+  await tick();
+  app.api.speak();
+  const active = app.recognition.instance;
+  await app.advanceRefresh();
+  assert.equal(app.api.isBusy(), false);
+  assert.equal(app.elements.get('mobile-speak').disabled, false);
+  assert.match(app.elements.get('mobile-voice-status').textContent, /Microphone did not start/);
+  assert.equal(active.onend, null);
+  assert.equal(app.timers.size, 0);
+});
+
 test('keyboard release and missing browser end recover without leaving submit stuck', async () => {
   const app = mobileFixture({ recognition: { delayedEnd: true }, claimStatus: 'ready' });
   await tick();
@@ -608,7 +625,9 @@ test('network failures clearly offer a result check and do not invent completion
   assert.equal(app.elements.get('mobile-voice-transcript').textContent, 'Amazon S3 stores game files');
   assert.equal(app.elements.get('mobile-speak').disabled, false);
   assert.equal(app.elements.get('mobile-send-answer').disabled, false);
-  assert.match(app.elements.get('mobile-voice-status').textContent, /HTTP 503.*Refresh passage or result/);
+  assert.match(app.elements.get('mobile-voice-status').textContent, /HTTP 503.*Retry connection/);
+  assert.equal(app.elements.get('mobile-refresh').hidden, false);
+  assert.equal(app.elements.get('mobile-refresh').textContent, 'Retry connection');
 });
 
 test('HTTP 429 distinguishes daily budget, session attempts and temporary gateway throttling', async () => {
@@ -638,7 +657,7 @@ test('desktop ownership fingerprints do not persist API keys and session checks 
 });
 
 function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus = 'completed', unsupported = false,
-  questions = [], availabilityGate } = {}) {
+  questions = [], availabilityGate, returnedService, statusGate, statusError } = {}) {
   const previous = {
     document: globalThis.document, window: globalThis.window, localStorage: globalThis.localStorage,
     sessionStorage: globalThis.sessionStorage, fetch: globalThis.fetch, location: globalThis.location,
@@ -701,9 +720,9 @@ function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus =
     if (options.method === 'POST') {
       const body = JSON.parse(options.body);
       activeSession = { id: 'desktop-session', pairingToken: 'qr-secret', pairCode: '123456',
-        serviceId: 's3', serviceLabel: 'Amazon S3', mode: 'graded_read_aloud', inputDevice: 'desktop',
+        serviceId: returnedService ?? body.serviceId, serviceLabel: 'Amazon S3', mode: 'graded_read_aloud', inputDevice: 'desktop',
         readingTexts: { 'en-US': EN_PASSAGE, 'zh-HK': ZH_PASSAGE }, question: EN_PASSAGE,
-        status: 'ready', expiresAt: 1793195000, attempts: 0, maxAttempts: 6 };
+        status: 'ready', expiresAt: Math.floor(Date.now() / 1000) + 1200, attempts: 0, maxAttempts: 6 };
       if (body.type === 'question_answer') Object.assign(activeSession, {
         mode: 'graded_question_answer', activityId: 'qa:s3:private', questionId: 'private',
         questionTexts: { 'en-US': 'How do you store private screenshots?', 'zh-HK': '你會點樣儲存私人截圖？' },
@@ -711,8 +730,10 @@ function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus =
       });
       return response(activeSession);
     }
+    if (statusGate) await statusGate;
+    if (statusError) return response({ message: statusError.message }, statusError.status);
     return response({ id: 'desktop-session', status: getStatus, paired: true,
-      inputDevice: 'phone', serviceId: 's3', mode: 'graded_read_aloud',
+      inputDevice: 'phone', serviceId: activeSession?.serviceId ?? 's3', mode: 'graded_read_aloud',
       readingTexts: { 'en-US': EN_PASSAGE, 'zh-HK': ZH_PASSAGE }, question: EN_PASSAGE,
       result: { passed: true, score: 85, mpAwarded: 10, feedback: 'Good coverage.' } });
   };
@@ -746,7 +767,11 @@ test('desktop defaults to PC speech without QR and refreshes authoritative walle
     assert.equal(app.created.some(element => element.tagName === 'canvas'), false);
     assert.equal(app.elements.get('pc-voice-question').textContent, EN_PASSAGE);
     assert.equal(app.elements.get('pc-speak').disabled, false);
-    assert.equal(app.elements.get('voice-start').disabled, false);
+    assert.equal(app.elements.get('voice-start').hidden, true);
+    assert.equal(app.elements.get('voice-start').disabled, true);
+    const activeRequests = app.requests.length;
+    await app.elements.get('voice-start').click();
+    assert.equal(app.requests.length, activeRequests);
     assert.equal(app.elements.get('voice-transfer').disabled, false);
     await app.elements.get('voice-check').click();
     await tick();
@@ -774,6 +799,98 @@ test('desktop starts voice for services outside the original six-service pilot',
   } finally { app.restore(); }
 });
 
+test('desktop rejects a task for another service instead of switching away from the game discovery', async () => {
+  const app = desktopFixture({ returnedService: 'vpc' });
+  try {
+    app.controller.open('ec2');
+    await tick();
+    assert.equal(JSON.parse(app.requests[1].options.body).serviceId, 'ec2');
+    assert.equal(app.elements.get('pc-speak').disabled, true);
+    assert.equal(app.saved.has('aws-warrior:voice:desktop'), false);
+  } finally { app.restore(); }
+});
+
+test('missing saved sessions automatically reopen the same service without a retry click', async () => {
+  const app = desktopFixture({ statusError: { status: 404, message: 'Session not found' } });
+  try {
+    app.controller.open('vpc');
+    await tick();
+    app.controller.open('vpc');
+    await tick();
+    assert.equal(JSON.parse(app.saved.get('aws-warrior:voice:desktop')).status, 'ready');
+    assert.equal(app.elements.get('voice-start').hidden, true);
+    assert.equal(app.requests.filter(request => request.url.endsWith('/voice/sessions')).length, 2);
+    assert.equal(JSON.parse(app.requests.at(-1).options.body).serviceId, 'vpc');
+  } finally { app.restore(); }
+});
+
+test('desktop result polling recovers a missing session without exposing a refresh action', async () => {
+  const app = desktopFixture({ statusError: { status: 404, message: 'Session not found' } });
+  try {
+    app.controller.open('vpc');
+    await tick();
+    assert.equal(app.elements.get('voice-check').hidden, true);
+    await app.controller.speech.refresh();
+    assert.equal(app.requests.filter(request => request.url.endsWith('/voice/sessions')).length, 2);
+    assert.equal(JSON.parse(app.requests.at(-1).options.body).serviceId, 'vpc');
+    assert.equal(app.elements.get('voice-check').hidden, true);
+  } finally { app.restore(); }
+});
+
+test('expired saved VPC sessions are not requested again when reopening the task', async () => {
+  const app = desktopFixture();
+  try {
+    app.controller.open('vpc');
+    await tick();
+    const key = 'aws-warrior:voice:desktop';
+    const saved = JSON.parse(app.saved.get(key));
+    app.saved.set(key, JSON.stringify({ ...saved, expiresAt: Math.floor(Date.now() / 1000) - 1 }));
+    app.controller.open('vpc');
+    await tick();
+    assert.equal(app.requests.some(request => request.url.endsWith('/voice/sessions/desktop-session')), false);
+    assert.equal(app.elements.get('voice-start').hidden, true);
+    assert.equal(app.requests.filter(request => request.url.endsWith('/voice/sessions')).length, 2);
+    assert.equal(JSON.parse(app.requests.at(-1).options.body).serviceId, 'vpc');
+  } finally { app.restore(); }
+});
+
+test('expired Q&A automatically reopens Q&A for the same service after checking availability', async () => {
+  const app = desktopFixture({ questions: [approvedQuestion] });
+  try {
+    app.controller.open('s3');
+    await tick();
+    const select = app.elements.get('voice-task-type');
+    select.value = 'question_answer';
+    select.change();
+    await app.elements.get('voice-start').click();
+    const key = 'aws-warrior:voice:desktop';
+    app.saved.set(key, JSON.stringify({ ...JSON.parse(app.saved.get(key)), expiresAt: 1 }));
+    app.controller.open('s3');
+    await tick();
+    assert.deepEqual(JSON.parse(app.requests.at(-1).options.body),
+      { serviceId: 's3', type: 'question_answer', language: 'en-US' });
+    assert.equal(app.elements.get('voice-start').hidden, true);
+  } finally { app.restore(); }
+});
+
+test('an old reading status error cannot overwrite the newly selected Q&A task', async () => {
+  let release;
+  const statusGate = new Promise(resolve => { release = resolve; });
+  const app = desktopFixture({ questions: [{ ...approvedQuestion, serviceId: 'vpc' }], statusGate,
+    statusError: { status: 404, message: 'Session not found' } });
+  try {
+    app.controller.open('vpc');
+    await tick();
+    const checking = app.elements.get('voice-check').click();
+    app.elements.get('voice-task-type').value = 'question_answer';
+    app.elements.get('voice-task-type').change();
+    release();
+    await checking;
+    assert.equal(app.elements.get('voice-start').textContent, 'Start Q&A');
+    assert.equal(app.elements.get('voice-desktop-panel').children.length, 0);
+  } finally { release(); app.restore(); }
+});
+
 test('desktop transfers the same session explicitly and removes consumed QR codes', async () => {
   const app = desktopFixture({ getStatus: 'ready' });
   try {
@@ -792,7 +909,28 @@ test('desktop transfers the same session explicitly and removes consumed QR code
   } finally { app.restore(); }
 });
 
-test('PC uses hold-to-speak and authenticated submission, then shows grade and refreshes MP', async () => {
+test('PC uses click-to-start and click-to-stop without stopping on mouse release', async () => {
+  const app = desktopFixture();
+  try {
+    app.controller.open('s3');
+    await tick();
+    const button = app.elements.get('pc-speak');
+    assert.equal(button.textContent, 'Start speaking');
+    await button.click();
+    button.events.get('pointerup')();
+    button.events.get('lostpointercapture')();
+    assert.equal(app.controller.speech.isBusy(), true);
+    assert.equal(button.textContent, 'Stop speaking');
+    app.recognition.instance.onresult({ results: [Object.assign([{ transcript: EN_PASSAGE }], { isFinal: true })] });
+    assert.equal(app.elements.get('pc-send-answer').disabled, true);
+    await button.click();
+    assert.equal(app.controller.speech.isBusy(), false);
+    assert.equal(button.textContent, 'Start speaking');
+    assert.equal(app.elements.get('pc-send-answer').disabled, false);
+  } finally { app.restore(); }
+});
+
+test('PC uses authenticated submission, then shows grade and refreshes MP', async () => {
   const app = desktopFixture();
   try {
     app.controller.open('s3');
@@ -815,6 +953,21 @@ test('PC uses hold-to-speak and authenticated submission, then shows grade and r
     assert.equal(app.elements.get('voice-desktop-panel').children.length, 0);
     assert.equal(app.game.walletRefreshed, true);
     assert.equal(app.game.readServices.has('s3'), true);
+  } finally { app.restore(); }
+});
+
+test('PC without a working microphone releases controls and can transfer the same task to phone', async () => {
+  const app = desktopFixture();
+  try {
+    app.controller.open('vpc');
+    await tick();
+    app.controller.speech.speak();
+    app.recognition.instance.onerror({ error: 'audio-capture' });
+    assert.equal(app.controller.speech.isBusy(), false);
+    assert.equal(app.elements.get('pc-speak').disabled, false);
+    assert.match(app.elements.get('pc-voice-status').textContent, /No working microphone/);
+    await app.elements.get('voice-transfer').click();
+    assert.match(app.requests.at(-1).url, /desktop-session\/transfer$/);
   } finally { app.restore(); }
 });
 
@@ -924,6 +1077,21 @@ test('missing, retired or other-service questions cannot enable Q&A, and stale a
     assert.equal(stale.elements.get('voice-question-option').disabled, true);
     assert.equal(stale.elements.get('voice-question-availability').textContent, '');
   } finally { stale.restore(); }
+});
+
+test('Q&A on weekly cooldown is shown with its unlock time and cannot be selected', async () => {
+  const app = desktopFixture({ questions: [{ ...approvedQuestion, completed: true, onCooldown: true,
+    availableAt: Math.floor(Date.now() / 1000) + 7 * 86400 }] });
+  try {
+    app.controller.open('s3');
+    await tick();
+    assert.equal(app.elements.get('voice-question-option').disabled, true);
+    assert.match(app.elements.get('voice-question-availability').textContent, /0 available now.*one week.*Next unlock/);
+    const select = app.elements.get('voice-task-type');
+    select.value = 'question_answer';
+    select.change();
+    assert.equal(select.value, 'read_aloud');
+  } finally { app.restore(); }
 });
 
 test('phone Q&A uses translated questions, accepts short answers, and renders a single comprehension result', async () => {

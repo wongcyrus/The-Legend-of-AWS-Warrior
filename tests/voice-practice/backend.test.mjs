@@ -179,6 +179,10 @@ test("Q&A rotates questions within the selected service and never requires compl
   assert.equal(next.serviceId, "s3");
   await f.req(`/voice/sessions/${next.id}/answer`, spoken("S3"));
   await f.run();
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "question_answer" })).statusCode, 409);
+  f.advance(7 * 86400 - 1);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "question_answer" })).statusCode, 409);
+  f.advance(1);
   const repeat = await createAnswer(f);
   assert.equal(repeat.questionId, first.questionId);
   await f.req(`/voice/sessions/${repeat.id}/answer`, spoken("S three"));
@@ -187,6 +191,26 @@ test("Q&A rotates questions within the selected service and never requires compl
   assert.equal((await f.req("/voice/wallet")).data.balance, 60);
   const reading = await createReading(f);
   assert.equal(reading.serviceId, "s3");
+});
+
+test("reading cooldown starts on passing, lasts exactly one week, and renews without duplicate MP", async () => {
+  const f = fixture({ graded: true, catalog: [activities[0]] });
+  const first = await createReading(f);
+  await completeReading(f, first, 50);
+  const other = await createReading(f);
+  await completeReading(f, other, 100);
+  assert.equal((await f.req(`/voice/sessions/${first.id}/answer`, spoken("Another spoken reading", "zh-HK"))).statusCode, 409);
+  const create = () => f.req("/voice/sessions", { serviceId: first.serviceId });
+  assert.equal((await create()).statusCode, 409);
+  const row = (await f.req("/voice/completions")).data.activities[0];
+  assert.equal(row.onCooldown, true);
+  assert.equal(row.availableAt - row.completedAt, 7 * 86400);
+  f.advance(7 * 86400 - 1);
+  assert.equal((await create()).statusCode, 409);
+  f.advance(1);
+  const repeat = await createReading(f);
+  assert.equal((await completeReading(f, repeat, 100)).result.mpAwarded, 0);
+  assert.equal((await create()).statusCode, 409);
 });
 
 test("Q&A first-pass credits are atomic across tabs, languages and question versions", async () => {
@@ -201,6 +225,8 @@ test("Q&A first-pass credits are atomic across tabs, languages and question vers
   const admin = createQuestionAdmin(f.deps.store);
   await admin.importDrafts([{ ...question, status: "draft", version: 2, expectedRevision: 0 }]);
   await admin.setStatus("approve", "s3", question.id, 1);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3", type: "question_answer" })).statusCode, 409);
+  f.advance(7 * 86400);
   const revised = await createAnswer(f);
   assert.equal(revised.activityId, a.activityId);
   await f.req(`/voice/sessions/${revised.id}/answer`, spoken("S3"));
@@ -280,6 +306,7 @@ test("Q&A grading failures are retryable, saved grades recover without rerunning
   assert.equal(result.attempts, 1);
   assert.equal(result.result.mpAwarded, 5);
   assert.equal(f.calls.length, 2, "one failed call and one saved grade, no model rerun for credit");
+  f.advance(7 * 86400);
   const again = await createAnswer(f);
   await f.req(`/voice/sessions/${again.id}/answer`, body);
   await f.run();
@@ -557,24 +584,30 @@ test("queued evaluation safely ignores smoke-test sessions deleted before proces
   assert.ok((await f.req("/voice/completions")).data.activities.every(activity => !activity.completed));
 });
 
-test("all configured activities rotate earlier rounds first and finish safely", async () => {
+test("reading tasks stay within the requested service and finish safely", async () => {
   const f = fixture({ graded: true });
   const owner = digest("alice@example.com"), bank = { ...bankKey("s3", "1"), status: "approved", questions: ["unchanged"], revision: 7 };
   f.rows.set(f.key(bank), structuredClone(bank));
-  const ids = new Set(), services = new Set();
-  let round = 1;
+  const ids = new Set();
+  const ordered = [...activities].sort((a, b) => a.serviceId.localeCompare(b.serviceId) || a.round - b.round);
   for (let i = 0; i < activities.length; i++) {
     // Keep this catalog-exhaustion scenario independent of daily submission limits and wallet capacity.
     if (i && i % 90 === 0) f.advance(86400);
     f.rows.delete(f.key(walletKey(owner)));
-    const s = await createReading(f);
-    assert.ok(s.round >= round);
-    if (s.round !== round) { services.clear(); round = s.round; }
-    assert.equal(services.has(s.serviceId), false);
-    services.add(s.serviceId);
+    const expected = ordered[i];
+    const response = await f.req("/voice/sessions", { serviceId: expected.serviceId });
+    assert.equal(response.statusCode, 200, response.body);
+    const s = response.data;
+    assert.equal(s.serviceId, expected.serviceId);
+    assert.equal(s.activityId, expected.activityId);
     ids.add(s.activityId);
     const result = await completeReading(f, s, 60);
     assert.equal(result.result.mpAwarded, 5);
+    if (ordered[i + 1]?.serviceId !== expected.serviceId) {
+      const completed = await f.req("/voice/sessions", { serviceId: expected.serviceId });
+      assert.equal(completed.statusCode, 409);
+      assert.match(completed.data.message ?? completed.body, /Return to the game/);
+    }
   }
   assert.equal(ids.size, activities.length);
   assert.equal((await f.req("/voice/sessions", { serviceId: "s3" })).statusCode, 409);
@@ -601,7 +634,7 @@ test("authored passages are bounded, bilingual and versioned, with distinct seco
 });
 
 test("cross-tab first pass pays once, later improvements update scores but never pay again", async () => {
-  const f = fixture({ graded: true });
+  const f = fixture({ graded: true, catalog: [activities[0]] });
   const a = await createReading(f), b = await createReading(f), c = await createReading(f);
   assert.equal(a.activityId, b.activityId);
   f.deps.evaluate = () => grade(60);
@@ -609,7 +642,9 @@ test("cross-tab first pass pays once, later improvements update scores but never
   await Promise.all([f.run(), f.run()]);
   const results = await Promise.all([a, b].map(async s => (await f.req(`/voice/sessions/${s.id}`)).data.result));
   assert.deepEqual(results.map(r => r.mpAwarded).sort((x, y) => x - y), [0, 5]);
-  assert.equal((await completeReading(f, c, 100)).result.mpAwarded, 0);
+  assert.equal((await f.req(`/voice/sessions/${c.id}/answer`, spoken())).statusCode, 409);
+  f.advance(7 * 86400);
+  assert.equal((await completeReading(f, await createReading(f), 100)).result.mpAwarded, 0);
   const summary = (await f.req("/voice/completions")).data;
   assert.equal(summary.wallet.balance, 5);
   const activity = summary.activities.find(row => row.activityId === a.activityId);

@@ -17,7 +17,7 @@ test('AWS world themes cover existing buildings and all gate destinations withou
   }
 });
 
-test('discovery panels face the camera horizontally from every side without rotating wall plaques', () => {
+test('discovery and gate panels face the camera on every map without rotating wall plaques', () => {
   const source = readFileSync(new URL('../v2/world.js', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '').replace('export class World', 'class World');
   const World = runInNewContext(source + '\nWorld;', { plaqueObscuresPlayer: () => false });
@@ -26,9 +26,12 @@ test('discovery panels face the camera horizontally from every side without rota
     getWorldPosition(point) { Object.assign(point, { x: 5, y: 4.6, z: 8 }); },
     matrixWorld: { getMaxScaleOnAxis: () => 1 },
   });
-  const sign = panel('s3'), wall = panel(null);
-  const world = { servicePlaques: [sign, wall], plaquePoint: {}, animated: [], detail: {}, map: { limit: 165 } };
-  for (const [x, z] of [[5, 28], [25, 8], [5, -12], [-15, 8], [20, 20]]) {
+  const sign = panel('s3'), wall = panel(null), gate = panel(null), scene = {};
+  gate.parent = scene;
+  const world = { scene, servicePlaques: [sign, wall, gate], plaquePoint: {}, animated: [], detail: {}, map: { limit: 165 } };
+  for (const map of Object.values(MAPS)) {
+    world.map = map;
+    for (const [x, z] of [[5, 28], [25, 8], [5, -12], [-15, 8], [20, 20]]) {
     World.prototype.update.call(world, 0, { x: 0, z: 0 }, { position: { x, y: 35, z } });
     const dx = x - 5, dz = z - 8, length = Math.hypot(dx, dz);
     assert.ok(Math.abs(Math.sin(sign.rotation.y) - dx / length) < 1e-10);
@@ -36,6 +39,8 @@ test('discovery panels face the camera horizontally from every side without rota
     assert.equal(sign.rotation.x, 0);
     assert.equal(sign.rotation.z, 0);
     assert.equal(wall.rotation.y, 0.3);
+    assert.equal(gate.rotation.y, sign.rotation.y);
+    }
   }
 });
 

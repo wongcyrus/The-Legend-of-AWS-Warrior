@@ -21,9 +21,9 @@ export const MAPS = {
     guides: GUIDES, enemies: ENEMY_SPAWNS,
     obstacles: BUILDINGS.map(b => wall(b.x, b.z, 17, 17, 16)),
     gates: [
-      { x: -16, z: -7, to: "mountains", label: "FROSTPEAK HIGHLANDS", color: 0x88d9ff },
-      { x: 16, z: -7, to: "desert", label: "SUNSPIRE DESERT", color: 0xffc475 },
-      { x: 0, z: 40, to: "dungeon", label: "FORGOTTEN VAULT", color: 0xc3a0ff },
+      { x: -136, z: -102, to: "mountains", label: "FROSTPEAK HIGHLANDS", color: 0x88d9ff },
+      { x: 130, z: -110.5, to: "desert", label: "SUNSPIRE DESERT", color: 0xffc475 },
+      { x: 0, z: 150, to: "dungeon", label: "FORGOTTEN VAULT", color: 0xc3a0ff },
     ],
   },
   mountains: {

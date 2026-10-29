@@ -86,7 +86,7 @@ function fakeApi(path, method, body, authorization) {
       question: "How would you store private screenshots?", readingTexts: undefined,
     });
     backend.sessions.set(id, session);
-    return { ...session, expiresAt: 1793195000 };
+    return { ...session, expiresAt: Math.floor(Date.now() / 1000) + 1200 };
   }
   const match = path.match(/\/voice\/sessions\/([^/]+)(?:\/(approve|cancel|transfer|answer))?$/);
   if (match) {
@@ -444,19 +444,34 @@ try {
     document.querySelector('#pc-voice-question').textContent.includes('Amazon S3 stores data')`);
   assert.equal(await desktop.evaluate(`!!document.querySelector('#voice-desktop-panel canvas')`), false);
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-speak').disabled`), false);
+  const micPoint = await desktop.evaluate(`(() => {
+    const button = document.querySelector('#pc-speak'); button.scrollIntoView({block:'center'});
+    const r = button.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2};
+  })()`);
+  await desktop.call("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", buttons: 1,
+    clickCount: 1, ...micPoint });
+  await delay(500);
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-speak').getAttribute('aria-pressed')`), "false");
+  await desktop.call("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", buttons: 0,
+    clickCount: 1, ...micPoint });
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-speak').getAttribute('aria-pressed')`), "true");
+  await delay(500);
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-speak').textContent`), "Stop speaking");
+  await desktop.evaluate(`document.querySelector('#pc-speak').click()`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-speak').getAttribute('aria-pressed')`), "false");
   assert.deepEqual(await desktop.evaluate(`[...document.querySelector('#pc-voice-language').options].map(option=>option.value)`),
     languages.map(language => language.id));
   await desktop.evaluate(`document.querySelector('#pc-voice-language').value='fr-FR';
     document.querySelector('#pc-voice-language').dispatchEvent(new Event('change'));
-    document.querySelector('#pc-speak').dispatchEvent(new KeyboardEvent('keydown',{key:' '}))`);
+    document.querySelector('#pc-speak').click()`);
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-voice-question').textContent`), frenchPassage);
   assert.equal(await desktop.evaluate(`window.__speechInstances.at(-1).lang`), "fr-FR");
-  await desktop.evaluate(`document.querySelector('#pc-speak').dispatchEvent(new KeyboardEvent('keyup',{key:' '}));
+  await desktop.evaluate(`document.querySelector('#pc-speak').click();
     document.querySelector('#pc-voice-language').value='en-US';
     document.querySelector('#pc-voice-language').dispatchEvent(new Event('change'))`);
-  await desktop.evaluate(`document.querySelector('#pc-speak').dispatchEvent(new KeyboardEvent('keydown',{key:' '}))`);
+  await desktop.evaluate(`document.querySelector('#pc-speak').click()`);
   await desktop.evaluate(`window.__speechInstances.at(-1).onresult({results:[Object.assign([{transcript:'Amazon S3 stores data'}],{isFinal:true})]})`);
-  await desktop.evaluate(`document.querySelector('#pc-speak').dispatchEvent(new KeyboardEvent('keyup',{key:' '}))`);
+  await desktop.evaluate(`document.querySelector('#pc-speak').click()`);
   await desktop.evaluate(`document.querySelector('#pc-send-answer').click()`);
   await waitFor(desktop, `document.querySelector('#pc-voice-result').textContent.includes('55/100')`);
   assert.match(await desktop.evaluate(`document.querySelector('#pc-voice-result').textContent`), /MP earned: 0/);
@@ -683,7 +698,12 @@ try {
   await marks.evaluate(`document.querySelector('#voice-marks-key').value=''; document.querySelector('#voice-marks-key').dispatchEvent(new Event('input'))`);
   assert.equal(await marks.evaluate(`document.querySelector('#voice-marks-results').hidden`), true);
   await desktop.call("Page.bringToFront");
-  await desktop.evaluate(`__game.switchMap('mountains');`);
+  await desktop.evaluate(`(() => {
+    const gate = __game.map.gates.find(gate => gate.to === 'mountains');
+    const controller = __game.player.GetComponent('BasicCharacterController');
+    controller._target.position.set(gate.x, 0, gate.z);
+    __game.player.SetPosition(controller._target.position);
+  })()`);
   await waitFor(desktop, "__game.map.id === 'mountains' && !__game.traveling");
   await desktop.evaluate(`__game.selectWeapon('Spear'); __game.gameSave.flush();`);
   await waitFor(desktop, "__game.gameSave.status === 'saved' && __game.gameSave.document.state.equipment.weapon === 'Spear'");
@@ -744,9 +764,9 @@ try {
     document.querySelector('#pc-speak').disabled === false`);
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-voice-question').textContent`), "How would you store private screenshots?");
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-send-answer').textContent`), "Submit answer");
-  await desktop.evaluate(`document.querySelector('#pc-speak').dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:1}));
+  await desktop.evaluate(`document.querySelector('#pc-speak').click();
     window.__speechInstances.at(-1).onresult({results:[Object.assign([{transcript:'S3'}],{isFinal:true})]});
-    document.querySelector('#pc-speak').dispatchEvent(new PointerEvent('pointerup',{pointerId:1}));`);
+    document.querySelector('#pc-speak').click();`);
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-send-answer').disabled`), false);
   await desktop.evaluate(`document.querySelector('#pc-send-answer').click()`);
   await waitFor(desktop, `document.querySelector('#pc-voice-result').textContent.includes('55/100')`);

@@ -41,6 +41,9 @@ function readDesktopState(storage, owner, serviceId) {
       return null;
     }
     if (saved.serviceId !== serviceId) return null;
+    if (Number.isFinite(saved.expiresAt) && saved.expiresAt * 1000 <= Date.now()) {
+      saved.status = "expired";
+    }
     return saved;
   } catch {
     return null;
@@ -57,6 +60,7 @@ function apiUrl(path) {
 }
 
 export function unavailableMessage(error) {
+  if (error?.status === 404 && /session not found/i.test(error.apiMessage || "")) return null;
   const unavailable = error?.status === 404 || error?.status === 501 ||
     (error?.status === 403 && /missing authentication token/i.test(error.apiMessage || "")) ||
     (error?.status === 422 && /lesson unavailable/i.test(error.apiMessage || ""));
@@ -117,7 +121,7 @@ export function voiceStatusMessage(status, questionAnswer = false) {
   return ({
     pairing: "Scan the QR code with your phone to pair this read-aloud practice.",
     claimed: "Phone connected. Open the passage on your phone and read it aloud.",
-    generating_question: "Preparing the reading passage. Use Refresh passage or result to check again.",
+    generating_question: "Preparing the reading passage. It will appear automatically.",
     awaiting_question_approval: "A teacher is reviewing the passage. Do not read it yet; check again manually for an update.",
     ready: "The reading passage is ready. Read it aloud, then check your result.",
     evaluating: "Your reading is being graded. Check again for your grade and MP reward.",
@@ -180,9 +184,9 @@ function drawPairing(panel, state) {
     noKey.textContent = "The QR code contains a short-lived pairing token, not your API key.";
     panel.appendChild(noKey);
   } else if (state.paired || state.status === "ready") {
-    statusParagraph(panel, "This QR has already connected a phone and cannot pair another browser. Continue in the original phone tab, or choose Start a new QR session above.");
+    statusParagraph(panel, "This QR has already connected a phone and cannot pair another browser. Continue this task in the original phone tab.");
   } else {
-    statusParagraph(panel, "This QR is no longer available. Start another practice to get a new QR code.");
+    statusParagraph(panel, "This QR is no longer available. Refresh to check the task status.");
   }
   statusParagraph(panel, state.status === "ready" && state.result?.passed === false
     ? isQuestionAnswer(state) ? "Retry the question in the original phone tab. Refresh, then answer in your own words."
@@ -245,11 +249,17 @@ export function bindVoicePractice(game) {
     owner = current.fingerprint;
     return current;
   };
+  const canStartTask = () => !state || ["failed", "expired", "cancelled"].includes(state.status);
   const updateButtons = () => {
-    start.hidden = state?.status === "completed";
+    start.hidden = !canStartTask();
     start.disabled = start.hidden || starting || speech.isBusy() || state?.status === "evaluating";
-    start.textContent = state?.inputDevice === "phone" ? "Start a new QR session" : state ? "Start another practice" : "Start voice practice";
+    start.textContent = state ? "Retry task" : "Start task";
     check.disabled = !state || starting || speech.isBusy();
+    if (!state || state.status === "completed" || state.status === "expired") check.hidden = true;
+    else if (state.inputDevice === "phone") {
+      check.hidden = false;
+      check.textContent = "Check phone connection";
+    }
     transfer.disabled = starting || !state || state.status !== "ready" ||
       state.inputDevice === "phone" || speech.isBusy();
     transfer.textContent = "Use phone microphone (QR)";
@@ -257,7 +267,7 @@ export function bindVoicePractice(game) {
     taskType.value = selectedType;
     if (!state && selectedType === "question_answer") {
       start.textContent = "Start Q&A";
-      start.disabled ||= !questionActivities.length;
+      start.disabled ||= !questionActivities.some(activity => !activity.onCooldown);
     }
   };
   const loadQuestionAvailability = async () => {
@@ -272,9 +282,10 @@ export function bindVoicePractice(game) {
       questionActivities = (data.activities ?? []).filter(activity =>
         activity.type === "question_answer" && activity.serviceId === serviceId && activity.available === true &&
         Array.isArray(activity.languages) && activity.languages.length);
-      questionOption.disabled = !questionActivities.length;
+      const unlocked = questionActivities.filter(activity => !activity.onCooldown);
+      questionOption.disabled = !unlocked.length;
       availability.textContent = questionActivities.length
-        ? `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed.`
+        ? `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed. ${unlocked.length} available now. Passed tasks unlock again after one week.${!unlocked.length ? ` Next unlock: ${new Date(Math.min(...questionActivities.map(activity => activity.availableAt)) * 1000).toLocaleString()}.` : ""}`
         : "Q&A: Questions coming soon.";
     } catch {
       if (epoch !== availabilityEpoch) return;
@@ -334,8 +345,13 @@ export function bindVoicePractice(game) {
     if (data.status !== "completed" || !voiceResultPassed(data) || !SERVICE_SET.has(data.serviceId)) return;
     if (isQuestionAnswer(data)) {
       const activity = questionActivities.find(activity => activity.activityId === data.activityId);
-      if (activity) activity.completed = true;
-      availability.textContent = `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed.`;
+      if (activity) {
+        activity.completed = true;
+        activity.onCooldown = true;
+        activity.availableAt = Math.floor(Date.now() / 1000) + 7 * 86400;
+      }
+      questionOption.disabled = !questionActivities.some(activity => !activity.onCooldown);
+      availability.textContent = `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed. Passed questions are locked for one week.`;
       return;
     }
     game.readServices?.add(data.serviceId);
@@ -348,6 +364,7 @@ export function bindVoicePractice(game) {
   };
   const speech = bindMobileVoicePractice({
     autoConnect: false,
+    toggleSpeech: true,
     documentRef: {
       getElementById: id => document.getElementById(id === "mobile-refresh" ? "voice-check" : id.replace(/^mobile-/, "pc-")),
       createElement: tag => document.createElement(tag),
@@ -361,6 +378,13 @@ export function bindVoicePractice(game) {
       recordCompletion(state);
       if (data.status === "completed" || data.result?.score !== undefined) game.refreshVoiceWallet?.();
       updateButtons();
+    },
+    onSessionUnavailable: async () => {
+      if (!state) return;
+      state = { ...state, status: "expired" };
+      saveDesktopState(sessionStorage, state);
+      render();
+      await recoverExpiredTask();
     },
   });
   const open = serviceId => {
@@ -380,7 +404,7 @@ export function bindVoicePractice(game) {
     if (selectedType === "question_answer" && !state) {
       document.getElementById("voice-desktop-title").textContent = `${AWS_SERVICES[serviceId].label} Q&A`;
       document.getElementById("voice-desktop-intro").textContent =
-        "Start another approved question. Completed questions can be practised again without another MP reward.";
+        "Choose an available question for this service. Passed questions unlock after one week; MP is awarded only on the first pass.";
     }
     if (state) render();
     else {
@@ -396,13 +420,21 @@ export function bindVoicePractice(game) {
     if (!dialog.open) dialog.showModal();
     game.readingService = true;
     (start.hidden ? check : start).focus();
-    loadQuestionAvailability();
-    if (!state && current.key && selectedType === "read_aloud") startSession();
+    const availabilityReady = loadQuestionAvailability();
+    if (state?.status === "expired" && current.key) recoverExpiredTask(availabilityReady);
+    else if (!state && current.key && selectedType === "read_aloud") startSession();
     else if (state && current.key) checkStatus();
   };
+  const recoverExpiredTask = async (availabilityReady) => {
+    const expired = state, epoch = generation, current = readOwner();
+    showSessionError("This task session expired. Reopening the same service task...");
+    if (isQuestionAnswer(expired)) await (availabilityReady ?? loadQuestionAvailability());
+    if (state !== expired || epoch !== generation || current.fingerprint !== readOwner().fingerprint) return;
+    await startSession();
+  };
   const startSession = async () => {
-    if (starting || speech.isBusy() || ["evaluating", "completed"].includes(state?.status)) return;
-    if (selectedType === "question_answer" && !questionActivities.length) return;
+    if (starting || speech.isBusy() || !canStartTask()) return;
+    if (selectedType === "question_answer" && !questionActivities.some(activity => !activity.onCooldown)) return;
     let current;
     try { current = currentKey(); }
     catch (error) { showError(error.message); return; }
@@ -425,14 +457,11 @@ export function bindVoicePractice(game) {
             })() } : {}) },
       });
       if (epoch !== generation || current.fingerprint !== readOwner().fingerprint) return;
-      if (!created || typeof created.id !== "string" || !SERVICE_SET.has(created.serviceId))
+      if (!created || typeof created.id !== "string" || created.serviceId !== selectedService)
         throw new Error("The voice service returned an invalid activity.");
       state = { ...created, owner: current.fingerprint };
-      const serviceChanged = selectedService !== created.serviceId;
-      selectedService = created.serviceId;
       saveDesktopState(sessionStorage, state);
       render();
-      if (serviceChanged) loadQuestionAvailability();
     } catch (error) {
       if (epoch !== generation) return;
       showError(error.message.startsWith("The API key changed") ? error.message :
@@ -445,6 +474,7 @@ export function bindVoicePractice(game) {
     try { current = currentKey(); }
     catch (error) { showError(error.message); return; }
     if (!state) return;
+    const epoch = generation, sessionId = state.id;
     check.disabled = true;
     try {
       const response = await authenticatedRequest("");
@@ -468,19 +498,26 @@ export function bindVoicePractice(game) {
       saveDesktopState(sessionStorage, state);
       render();
     } catch (error) {
-      if (error.status === 410 && state) {
+      if (epoch !== generation || sessionId !== state?.id || current.fingerprint !== readOwner().fingerprint) return;
+      if ((error.status === 410 ||
+          (error.status === 404 && /session not found/i.test(error.apiMessage || ""))) && state) {
         state = { ...state, status: "expired" };
         saveDesktopState(sessionStorage, state);
         render();
-      } else showSessionError(unavailableMessage(error) ||
-        "Could not refresh the voice result. The session is still saved; retry manually.");
+        await recoverExpiredTask();
+      } else {
+        showSessionError(unavailableMessage(error) ||
+          "Connection interrupted. Your task is saved. Choose Retry connection.");
+        check.hidden = false;
+        check.textContent = "Retry connection";
+      }
     }
   };
   explain.onclick = () => open(selectedService);
   taskType.addEventListener("change", () => {
     if (starting || speech.isBusy() || state?.status === "evaluating" ||
         !["read_aloud", "question_answer"].includes(taskType.value) ||
-        (taskType.value === "question_answer" && !questionActivities.length)) {
+        (taskType.value === "question_answer" && !questionActivities.some(activity => !activity.onCooldown))) {
       taskType.value = selectedType;
       return;
     }
@@ -583,9 +620,11 @@ export function bindMobileVoicePractice({
   fetcher = (...args) => globalThis.fetch(...args),
   SpeechRecognitionClass,
   autoConnect = true,
+  toggleSpeech = false,
   requestSession,
   requestAnswer,
   onSession = () => {},
+  onSessionUnavailable,
 } = {}) {
   SpeechRecognitionClass ??= windowRef?.SpeechRecognition || windowRef?.webkitSpeechRecognition;
   const get = id => documentRef.getElementById(id);
@@ -626,6 +665,7 @@ export function bindMobileVoicePractice({
   let speechParts = [];
   let restartTimer = null;
   let finishTimer = null;
+  let startupTimer = null;
   let emptyRestarts = 0;
   let submitting = false;
   let finalSpeechReady = false;
@@ -633,6 +673,7 @@ export function bindMobileVoicePractice({
   let refreshTimer = null;
   let refreshCount = 0;
   let refreshing = false;
+  let connectionFailed = false;
   let pageClosed = false;
   const schedule = windowRef.setTimeout?.bind(windowRef) ?? setTimeout;
   const unschedule = windowRef.clearTimeout?.bind(windowRef) ?? clearTimeout;
@@ -647,7 +688,9 @@ export function bindMobileVoicePractice({
       return;
     }
     if (refreshCount >= 150) {
-      showStatus("Processing is taking longer than expected. Tap Refresh to check again.");
+      connectionFailed = true;
+      updateControls();
+      showStatus("Grading is taking longer than expected. Your answer is saved. Choose Check saved result.");
       return;
     }
     refreshTimer = schedule(() => {
@@ -698,19 +741,23 @@ export function bindMobileVoicePractice({
     const ready = canAnswer() && !isBusy();
     languageSelect.disabled = isBusy() || !languageOptions.length;
     startSpeech.disabled = !SpeechRecognitionClass || (!holding && !ready);
-    startSpeech.textContent = holding ? "Listening... release when finished" : finishing ? "Finishing speech..." : "Hold to speak";
+    startSpeech.textContent = holding ? toggleSpeech ? "Stop speaking" : "Listening... release when finished"
+      : finishing ? "Finishing speech..." : toggleSpeech ? "Start speaking" : "Hold to speak";
     startSpeech.setAttribute?.("aria-pressed", String(holding));
     sendAnswer.disabled = !ready || !finalSpeechReady;
     sendAnswer.textContent = submitting ? "Submitting..." : isQuestionAnswer(session) ? "Submit answer" : "Submit spoken reading";
     if (holding || finishing) submitStatus.textContent = holding
-      ? "Release the microphone button before submitting."
+      ? toggleSpeech ? "Click Stop speaking before submitting." : "Release the microphone button before submitting."
       : "Waiting for the browser to finish your speech...";
     refreshButton.disabled = isBusy() || refreshing;
+    refreshButton.hidden = !connectionFailed;
+    refreshButton.textContent = pendingTurn || session?.status === "evaluating"
+      ? "Check saved result" : "Retry connection";
   };
   const renderSession = data => {
     session = { ...data, question: data.question ?? session?.question };
     practiceContent.hidden = false;
-    refreshButton.textContent = isQuestionAnswer(session) ? "Refresh question or result" : "Refresh passage or result";
+    connectionFailed = false;
     const heading = get("mobile-question-heading");
     if (heading) heading.textContent = isQuestionAnswer(session) ? "Question" : "Text to read aloud";
     if (autoConnect) {
@@ -826,7 +873,15 @@ export function bindMobileVoicePractice({
     } catch (error) {
       if (pageClosed || epoch !== sessionEpoch) return;
       stopAutoRefresh();
-      if (error.status === 410 || error.status === 401) {
+      if (error.status === 410 ||
+          (error.status === 404 && /session not found/i.test(error.apiMessage || ""))) {
+        if (onSessionUnavailable) {
+          await onSessionUnavailable();
+          return;
+        }
+      }
+      if (error.status === 410 || error.status === 401 ||
+          (error.status === 404 && /session not found/i.test(error.apiMessage || ""))) {
         for (const storage of [mobileStorage, windowRef.sessionStorage]) {
           try { storage?.removeItem(mobileStorageKey(id)); } catch { /* Optional recovery. */ }
         }
@@ -835,7 +890,8 @@ export function bindMobileVoicePractice({
         refreshButton.hidden = true;
       }
       else {
-        showStatus("Could not refresh the question or result. Check your connection and retry manually.");
+        connectionFailed = true;
+        showStatus("Connection interrupted. Your task is saved. Choose Retry connection.");
         refreshButton.disabled = false;
       }
     } finally { if (epoch === sessionEpoch) { refreshing = false; updateControls(); } }
@@ -853,10 +909,12 @@ export function bindMobileVoicePractice({
     restartTimer = null;
     if (finishTimer !== null) unschedule(finishTimer);
     finishTimer = null;
+    if (startupTimer !== null) unschedule(startupTimer);
+    startupTimer = null;
     if (!recognition) return;
     const active = recognition;
     recognition = null;
-    active.onresult = active.onerror = active.onend = null;
+    active.onaudiostart = active.onresult = active.onerror = active.onend = null;
     try { (active.abort ?? active.stop).call(active); } catch { /* Already stopped by the browser. */ }
     updateControls();
   };
@@ -867,7 +925,7 @@ export function bindMobileVoicePractice({
     setTranscript(speechParts.join(" ").trim());
     showStatus(finalSpeechReady
       ? isQuestionAnswer(session) ? "Answer captured. Tap Submit answer." : "Reading captured. Tap Submit spoken reading."
-      : "No clear speech captured. Hold the microphone button and try again.");
+      : "No clear speech captured. Use the microphone button to try again.");
     updateControls();
   };
   const startRecognition = () => {
@@ -879,8 +937,15 @@ export function bindMobileVoicePractice({
       active.lang = languageOptions.find(option => option.id === language)?.speechLocale || language;
       active.continuous = true;
       active.interimResults = false;
+      const audioStarted = () => {
+        if (recognition !== active) return;
+        if (startupTimer !== null) unschedule(startupTimer);
+        startupTimer = null;
+      };
+      active.onaudiostart = audioStarted;
       active.onresult = event => {
         if (recognition !== active) return;
+        audioStarted();
         const start = Number.isInteger(event.resultIndex) ? event.resultIndex : 0;
         recognized.length = event.results.length;
         for (let i = start; i < event.results.length; i++) {
@@ -896,11 +961,14 @@ export function bindMobileVoicePractice({
         setTranscript("");
         const denied = event.error === "not-allowed" || event.error === "service-not-allowed";
         showStatus(denied
-          ? "Microphone or speech recognition was denied. Allow microphone access in browser settings and try again, or ask your teacher for help."
-          : "Speech recognition failed. Try speaking again or ask your teacher for help.");
+          ? "Microphone or speech recognition was denied. Allow microphone access in browser settings, or use the phone microphone (QR) on desktop."
+          : event.error === "audio-capture"
+            ? "No working microphone was found. Connect a microphone and try again, or use the phone microphone (QR) on desktop."
+            : "Speech recognition failed. Try again, or use the phone microphone (QR) on desktop.");
       };
       active.onend = () => {
         if (recognition !== active) return;
+        audioStarted();
         const words = speechText(recognized);
         if (words) speechParts.push(words);
         recognition = null;
@@ -909,7 +977,7 @@ export function bindMobileVoicePractice({
           if (emptyRestarts >= 3) {
             holding = false;
             finishSpeech();
-            showStatus("The browser stopped listening. Hold to speak again, or submit the speech already captured.");
+            showStatus("The browser stopped listening. Use the microphone button to try again, or submit the speech already captured.");
           } else {
             restartTimer = schedule(() => {
               restartTimer = null;
@@ -920,6 +988,12 @@ export function bindMobileVoicePractice({
         updateControls();
       };
       updateControls();
+      startupTimer = schedule(() => {
+        if (recognition !== active) return;
+        stopRecognition();
+        setTranscript("");
+        showStatus("Microphone did not start. Check that a microphone is connected and allowed, or use the phone microphone (QR) on desktop.");
+      }, 10000);
       active.start();
     } catch {
       stopRecognition();
@@ -937,7 +1011,9 @@ export function bindMobileVoicePractice({
     holding = true;
     setTranscript("");
     result.textContent = "";
-    showStatus(isQuestionAnswer(session)
+    showStatus(toggleSpeech
+      ? "Listening. Click Stop speaking when finished, then submit."
+      : isQuestionAnswer(session)
       ? "Listening while you hold. Answer the question, then release the button."
       : "Listening while you hold. Read the passage, then release the button.");
     startRecognition();
@@ -945,6 +1021,8 @@ export function bindMobileVoicePractice({
   const releaseSpeech = () => {
     if (!holding) return;
     holding = false;
+    if (startupTimer !== null) unschedule(startupTimer);
+    startupTimer = null;
     if (restartTimer !== null) unschedule(restartTimer);
     restartTimer = null;
     if (!recognition) { finishSpeech(); return; }
@@ -957,7 +1035,7 @@ export function bindMobileVoicePractice({
       finishTimer = null;
       if (recognition !== active) return;
       active.onend?.();
-      active.onresult = active.onerror = active.onend = null;
+      active.onaudiostart = active.onresult = active.onerror = active.onend = null;
       try { (active.abort ?? active.stop).call(active); } catch { /* Browser already stopped. */ }
     }, 5000);
     try { active.stop(); }
@@ -966,7 +1044,8 @@ export function bindMobileVoicePractice({
   const submitTranscript = async () => {
     if (submitting) return;
     if (isBusy()) {
-      showStatus("Release the microphone button and wait for speech capture to finish before submitting.");
+      showStatus(toggleSpeech ? "Click Stop speaking and wait for speech capture to finish before submitting."
+        : "Release the microphone button and wait for speech capture to finish before submitting.");
       return;
     }
     if (!canAnswer()) {
@@ -976,11 +1055,11 @@ export function bindMobileVoicePractice({
       return;
     }
     if (!finalSpeechReady) {
-      showStatus("No completed speech is ready to send. Hold to speak, then release before submitting.");
+      showStatus("No completed speech is ready to send. Capture and finish your speech before submitting.");
       return;
     }
     if (transcript.textContent.length > 6000) {
-      showStatus("The transcript exceeds the 6,000-character limit and was not sent. Hold to speak again for a shorter response.");
+      showStatus("The transcript exceeds the 6,000-character limit and was not sent. Use the microphone button to capture a shorter response.");
       return;
     }
     const spoken = { transcript: transcript.textContent, language };
@@ -1019,10 +1098,12 @@ export function bindMobileVoicePractice({
         : error.status === 401 || error.status === 410
           ? "This phone session has expired or lost authorization. Start a new QR session on desktop."
           : error.status === 400
-            ? "The server rejected the spoken transcript (HTTP 400). Hold to speak again, then release and submit."
+            ? "The server rejected the spoken transcript (HTTP 400). Capture your speech again, then finish and submit."
             : error.status
-              ? `Submission failed (HTTP ${error.status}). Tap Refresh passage or result to check, then retry Submit.`
-              : "Submission timed out or could not connect. Tap Refresh passage or result to check, then retry Submit.";
+              ? `Submission failed (HTTP ${error.status}). Choose Retry connection to check whether your answer was saved before submitting again.`
+              : "Submission timed out or could not connect. Choose Retry connection to check whether your answer was saved before submitting again.";
+      connectionFailed = !error.status || error.status >= 500;
+      updateControls();
       showStatus(message);
       submitStatus.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
       return;
@@ -1054,27 +1135,32 @@ export function bindMobileVoicePractice({
     }
   });
   startSpeech.addEventListener("pointerdown", event => {
+    if (toggleSpeech) return;
     if (event.button !== undefined && event.button !== 0) return;
     event.preventDefault();
     try { startSpeech.setPointerCapture?.(event.pointerId); } catch { /* Capture may be unavailable to assistive input. */ }
     speak();
   });
-  startSpeech.addEventListener("pointerup", releaseSpeech);
-  startSpeech.addEventListener("pointercancel", releaseSpeech);
-  startSpeech.addEventListener("lostpointercapture", releaseSpeech);
+  const releaseHold = () => { if (!toggleSpeech) releaseSpeech(); };
+  startSpeech.addEventListener("pointerup", releaseHold);
+  startSpeech.addEventListener("pointercancel", releaseHold);
+  startSpeech.addEventListener("lostpointercapture", releaseHold);
+  if (toggleSpeech) startSpeech.onclick = () => holding ? releaseSpeech() : speak();
   startSpeech.addEventListener("keydown", event => {
+    if (toggleSpeech) return;
     if (![" ", "Enter"].includes(event.key)) return;
     event.preventDefault();
     if (!event.repeat) speak();
   });
   startSpeech.addEventListener("keyup", event => {
+    if (toggleSpeech) return;
     if (![" ", "Enter"].includes(event.key)) return;
     event.preventDefault();
     releaseSpeech();
   });
   startSpeech.addEventListener("contextmenu", event => event.preventDefault());
-  windowRef.addEventListener("pointerup", releaseSpeech);
-  windowRef.addEventListener("pointercancel", releaseSpeech);
+  windowRef.addEventListener("pointerup", releaseHold);
+  windowRef.addEventListener("pointercancel", releaseHold);
   windowRef.addEventListener("blur", releaseSpeech);
   sendAnswer.onclick = submitTranscript;
   refreshButton.onclick = () => mobileToken || requestSession ? refresh() : claim();

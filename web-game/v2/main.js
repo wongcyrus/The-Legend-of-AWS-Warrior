@@ -16,7 +16,7 @@ import { baseUrl } from "../src/constant.js";
 import { Assets } from "./assets.js?v=20261027-maps-1";
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js";
 import { GameSave, initialGameSave } from "./game-save.js?v=20261029-save-1";
-import { World } from "./world.js?v=20261028-facing-signs-1";
+import { World } from "./world.js?v=20261029-facing-2";
 import { MAPS, isSafePosition, nearbyGate } from "./maps.js?v=20261027-maps-1";
 import { sharedResources, disposeMap } from "./map-lifecycle.js?v=20261027-maps-1";
 import { createRenderer, WebGLUnavailableError } from "./renderer.js";
@@ -33,7 +33,7 @@ import { SHIELDS, ShieldGuard } from "./shields.js?v=20261027-equipment-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261028-voice-1";
-import { bindServiceReader } from "./aws-service-reader.js?v=20261029-qa-1";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261029-facing-2";
 import { SPELLS, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261028-voice-mp-1";
 import { MagicEffects } from "./magic-effects.js?v=20261028-magic-2";
 
@@ -1472,7 +1472,22 @@ class Game {
   useGate() {
     if (!this.player) { this.travelStatus("The world is still loading. Try travelling again in a moment."); return false; }
     const gate = nearbyGate(this.map, this.player._position);
-    if (!gate) { this.travelStatus("Move closer to the glowing ring, then press T to travel."); return false; }
+    if (!gate) { this.travelStatus("Walk into a glowing ring at the end of a road to travel."); return false; }
+    return this.switchMap(gate.to);
+  }
+
+  updateGateTravel() {
+    const gate = nearbyGate(this.map, this.player._position);
+    if (!gate || Math.hypot(this.player._position.x - gate.x, this.player._position.z - gate.z) >= 4) {
+      this.enteredGate = null;
+      return false;
+    }
+    if (this.enteredGate === gate || !this.ready || this.traveling || this.progressChanging ||
+        this.readingService || this.talking || this.api.grading) return false;
+    const controller = this.player.GetComponent("BasicCharacterController");
+    if (!this.player.GetComponent("HealthComponent").IsAlive() || this.dodge.active ||
+        controller._stateMachine._currentState?.Name === "attack") return false;
+    this.enteredGate = gate;
     return this.switchMap(gate.to);
   }
 
@@ -1608,7 +1623,7 @@ class Game {
     this.traveling = false;
     this.sound.play("portal");
     this.saveCheckpoint();
-    this.travelStatus(`Entered ${map.name}. Your AWS task is unchanged. T uses the glowing return gate.`);
+    this.travelStatus(`Entered ${map.name}. Your AWS task is unchanged. Walk into the glowing return gate to travel back.`);
     this.renderer.domElement.focus();
     return true;
   }
@@ -1917,6 +1932,7 @@ class Game {
     });
     this.updateCamera(dt);
     const position = this.player._position;
+    if (this.updateGateTravel()) return;
     this.sun.position.set(position.x - 55, 95, position.z + 40);
     this.sun.target.position.copy(position);
     document.getElementById("region").textContent = this.map.id === "village" ? regionAt(position.x, position.z) : this.map.name;

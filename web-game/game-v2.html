@@ -74,7 +74,7 @@
       <button id="magic-cast" type="button" disabled>Cast X</button>
     </div>
   </div>
-  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>X</kbd> Magic</span><span><kbd>R</kbd> Block</span><span><kbd>E</kbd> Get task</span><span><kbd>Q</kbd> Dodge</span><span><kbd>F</kbd> Open chest</span><span><kbd>T</kbd> Travel gate</span><span><kbd>Scroll</kbd> Zoom &middot; <kbd>Shift + scroll</kbd> Weapon</span></footer>
+  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>X</kbd> Magic</span><span><kbd>R</kbd> Block</span><span><kbd>E</kbd> Get task</span><span><kbd>Q</kbd> Dodge</span><span><kbd>F</kbd> Open chest</span><span>Walk into gates to travel</span><span><kbd>Scroll</kbd> Zoom &middot; <kbd>Shift + scroll</kbd> Weapon</span></footer>
   <div class="v2-ui credits">Town: <a href="https://kenney.nl/assets/fantasy-town-kit" target="_blank" rel="noopener noreferrer">Kenney / CC0</a> &middot; Nature &amp; creatures: Quaternius &middot; <a href="./v2/assets/aws/NOTICE.txt" title="Independent educational game; not endorsed by AWS">AWS icons / notice</a> &middot; <a href="./v2/assets/sources.json">Sources</a></div>
   <section id="loading" class="loading" aria-label="Loading the enhanced world">
     <div class="brand-logos loading-logos">
@@ -137,8 +137,8 @@
       <label class="voice-language" for="pc-voice-language">Speaking language
         <select id="pc-voice-language" disabled></select>
       </label>
-      <p>Hold to speak, release when finished, then submit. Changing language or transferring to your phone discards unsent speech.</p>
-      <button id="pc-speak" type="button" aria-pressed="false" disabled>Hold to speak</button>
+      <p>Click Start speaking, then Stop speaking when finished, then submit. Changing language or transferring to your phone discards unsent speech.</p>
+      <button id="pc-speak" type="button" aria-pressed="false" disabled>Start speaking</button>
       <h3>Read-only speech transcript</h3>
       <p id="pc-voice-transcript" class="voice-transcript" aria-live="polite"></p>
       <button id="pc-send-answer" type="button" disabled>Submit spoken reading</button>
@@ -149,7 +149,7 @@
     <div class="voice-actions">
       <button id="voice-start" type="button">Start voice practice</button>
       <button id="voice-transfer" type="button" disabled>Use phone microphone (QR)</button>
-      <button id="voice-check" type="button" disabled>Refresh passage or result</button>
+      <button id="voice-check" type="button" hidden disabled>Retry connection</button>
       <button id="voice-desktop-close" type="button">Back to service</button>
     </div>
   </dialog>
@@ -159,7 +159,7 @@
     <div id="manual-content" class="combat-manual-content" tabindex="0" role="region" aria-label="Combat instructions and power tables">
       <p>The game pauses while this manual is open. Complete AWS tasks in your account, then defeat a monster to grade your work. Magic kills use the same grading rules as melee kills.</p>
       <h3>Controls</h3>
-      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: cast your selected spell. Choose I, II or III for its power. R: hold to block. Q: dodge. Scroll: zoom. Shift + scroll: cycle weapons. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. T near a gate: travel. F near a chest: open it.</p>
+      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: cast your selected spell. Choose I, II or III for its power. R: hold to block. Q: dodge. Scroll: zoom. Shift + scroll: cycle weapons. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. Walk into a glowing gate at a road end to travel automatically. F near a chest: open it.</p>
       <h3>All weapons</h3>
       <p id="manual-strength"></p>
       <p>Unarmed uses your full Power because no weapon is equipped; weapon multipliers apply only to equipped items.</p>
@@ -178,6 +178,6 @@
     </div>
     <div class="dialog-actions"><button id="manual-close" type="button">Back to game</button></div>
   </dialog>
-  <script src="./v2/main.js?v=20261029-qa-1" type="module"></script>
+  <script src="./v2/main.js?v=20261029-facing-2" type="module"></script>
 </body>
 </html>

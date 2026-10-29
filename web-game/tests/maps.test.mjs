@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { MAPS, isMapWalkable, isSafePosition, nearbyGate, mapScenery } from '../v2/maps.js';
 import { sharedResources, disposeMap } from '../v2/map-lifecycle.js';
 import { findMonsterSpawn } from '../v2/spawning.js';
-import { seededRandom, isWalkable } from '../v2/layout.js';
+import { seededRandom, isWalkable, isPath, createScenery } from '../v2/layout.js';
 
 test('all village gates and destinations are valid and preserve the original village layout', () => {
   assert.equal(MAPS.village.enemies.length, 12);
@@ -46,6 +46,37 @@ test('expedition spawn camps, guides, monsters and gates are walkable and reacha
     assert.ok(isSafePosition(map, ...map.spawn));
     for (const point of map.enemies) assert.equal(isSafePosition(map, ...point), false);
   }
+});
+
+test('village gates stand outside the village at clear outer road ends', () => {
+  const trees = createScenery().trees;
+  for (const gate of MAPS.village.gates) {
+    assert.equal(isSafePosition(MAPS.village, gate.x, gate.z), false);
+    assert.ok(Math.hypot(gate.x, gate.z) >= 145);
+    assert.ok(isPath(gate.x, gate.z));
+    assert.ok(isWalkable(gate.x, gate.z, 3, trees));
+  }
+});
+
+test('entering a gate automatically travels once, rearming only after leaving the ring', () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', { MAPS, nearbyGate });
+  const gate = MAPS.village.gates[0], destinations = [];
+  const game = { map: MAPS.village, ready: true, api: {}, dodge: {},
+    player: { _position: { x: gate.x, z: gate.z }, GetComponent: () => ({
+      IsAlive: () => true, _stateMachine: { _currentState: { Name: 'walk' } },
+    }) }, switchMap: id => { destinations.push(id); return true; } };
+  game.readingService = true;
+  assert.equal(Game.prototype.updateGateTravel.call(game), false);
+  game.readingService = false;
+  assert.equal(Game.prototype.updateGateTravel.call(game), true);
+  assert.equal(Game.prototype.updateGateTravel.call(game), false);
+  game.player._position.z += 10;
+  assert.equal(Game.prototype.updateGateTravel.call(game), false);
+  game.player._position.z -= 10;
+  assert.equal(Game.prototype.updateGateTravel.call(game), true);
+  assert.deepEqual(destinations, ['mountains', 'mountains']);
+  for (const map of Object.values(MAPS)) assert.equal(nearbyGate(map, { x: map.spawn[0], z: map.spawn[1] }), null);
 });
 
 test('expedition bounds and walls block walking and malformed coordinates', () => {
@@ -159,7 +190,7 @@ test('T is a separate gate action and E remains the guide interaction', () => {
   const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(html, /travel-button|click Travel/);
-  assert.match(html, /<kbd>T<\/kbd> Travel gate/);
+  assert.match(html, /Walk into gates to travel/);
   assert.doesNotMatch(main, /travel-button/);
   assert.match(main, /event.code === "KeyT"[\s\S]*?this._params.game.useGate\(\)/);
   assert.match(main, /event.code === "KeyE"[\s\S]*?this._params.game.talkToGuide\(\)/);

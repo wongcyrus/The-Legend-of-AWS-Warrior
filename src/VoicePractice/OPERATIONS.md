@@ -30,7 +30,7 @@ POST `/voice/sessions` with
 `mode:"graded_question_answer"`, `questionId`, `questionTitle`, translated
 `questionTexts` and the usual session/device/attempt fields. The server chooses
 an unfinished approved question in that service/language independently of reading
-rounds. When all are passed, it allows practice again without additional rewards.
+rounds. Passed questions are unavailable for one week, then can be retried without additional rewards.
 PC task selection uses authenticated `/voice/completions` availability; the server
 rechecks availability on creation. Selecting Q&A discards unsent reading speech.
 After completion, close and reopen the service's voice dialog to start another
@@ -50,7 +50,19 @@ Rubrics and reference answers are never returned in session/marks/availability
 responses. A session snapshots the full approved question and language metadata;
 later edits/retirement do not change an already-started attempt.
 
-`grade_answer` makes one bounded model call for the **current answer only**.
+`grade_answer` grades the **current answer only**, using one bounded model call
+and at most one additional call if the assessment fails schema or evidence validation.
+Both results must pass the same strict validation: reference-answer text cannot
+substitute for transcript evidence. If the retry is invalid, no grade or MP is awarded.
+
+After passing, each reading activity and Q&A question has a seven-day cooldown
+per student, enforced by the backend across devices, languages and question versions.
+Failed answers do not start a cooldown. Other tasks at the same service remain
+available; selection never moves the student to another service. Availability
+summaries expose `onCooldown` and `availableAt` (Unix seconds).
+Existing records use `completedAt` until a later pass records `lastPassedAt`.
+Passing again after the week renews the cooldown but does not award MP again:
+the existing first-pass-only reward rule remains unchanged.
 The model returns each approved concept as met, missing or contradicted, with
 verbatim transcript evidence for met/contradicted concepts and short feedback.
 Both layers validate the concept partition; evidence must occur in the submitted

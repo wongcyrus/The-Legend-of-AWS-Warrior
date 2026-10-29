@@ -2,6 +2,9 @@ import { activities as authoredActivities, rewardFor } from "./activities.mjs";
 
 export const walletKey = owner => ({ PK: `PLAYER#${owner}`, SK: "WALLET" });
 export const activityKey = (owner, id) => ({ PK: `PLAYER#${owner}`, SK: `ACTIVITY#${id}` });
+export const VOICE_TASK_COOLDOWN_SECONDS = 7 * 24 * 60 * 60;
+export const taskAvailableAt = row => row?.completed
+  ? (row.lastPassedAt ?? row.completedAt ?? 0) + VOICE_TASK_COOLDOWN_SECONDS : 0;
 export const gradeKey = (owner, session, hash) => ({ PK: `PLAYER#${owner}`, SK: `GRADE#${session}#${hash}` });
 export const castKey = (owner, id) => ({ PK: `PLAYER#${owner}`, SK: `CAST#${id}` });
 export const walletView = row => ({
@@ -33,15 +36,19 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
         round: activity.round, completed: saved?.completed === true,
         bestScore: saved?.bestScore ?? null, latestScore: saved?.latestScore ?? null,
         feedback: saved?.feedback ?? null, mpAwarded: saved?.mpAwarded ?? 0,
-        completedAt: saved?.completedAt ?? null };
+        completedAt: saved?.completedAt ?? null,
+        availableAt: taskAvailableAt(saved), onCooldown: taskAvailableAt(saved) > now() };
     });
   };
   const choose = async (owner, requested) => {
-    const unfinished = (await summaries(owner)).filter(a => a.type === "read_aloud" && !a.completed);
-    if (!unfinished.length) fail(409, "All authored reading activities are complete. No further MP rewards are available.");
-    const round = Math.min(...unfinished.map(a => a.round));
-    const eligible = unfinished.filter(a => a.round === round);
-    const selected = eligible.find(a => a.serviceId === requested) ?? eligible[0];
+    const serviceTasks = (await summaries(owner)).filter(a => a.type === "read_aloud" && a.serviceId === requested);
+    const unfinished = serviceTasks.filter(a => !a.onCooldown);
+    if (!unfinished.length) fail(409, `All reading tasks for this service are on a one-week cooldown. Available again ${new Date(Math.min(...serviceTasks.map(a => a.availableAt)) * 1000).toISOString()}. Return to the game to discover another service.`);
+    unfinished.sort((a, b) => Number(a.completed) - Number(b.completed));
+    const pending = unfinished.filter(a => a.completed === unfinished[0].completed);
+    const round = Math.min(...pending.map(a => a.round));
+    const eligible = pending.filter(a => a.round === round);
+    const selected = eligible[0];
     return activities.find(a => a.activityId === selected.activityId);
   };
   const cast = async (owner, body) => {
@@ -96,6 +103,7 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
         completed: Boolean(before?.completed || grade.passed),
         bestScore: Math.max(before?.bestScore ?? 0, grade.score), latestScore: grade.score,
         feedback: grade.feedback, mpAwarded: (before?.mpAwarded ?? 0) + credited,
+        ...(grade.passed ? { lastPassedAt: now() } : {}),
         ...(firstPass ? { completedAt: now(), rewardClaimed: true, rewardScore: grade.score } : {}) };
       const writes = [
         { item: { ...s, result, status: grade.passed ? "completed" : s.attempts >= 6 ? "failed" : "ready",
