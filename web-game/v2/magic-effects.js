@@ -1,5 +1,5 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js";
-import { SPELLS } from "./magic.js?v=20261029-lightning-80-1";
+import { SPELLS } from "./magic.js?v=20261030-lightning-120-1";
 import { SkeletonUtils } from "https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/utils/SkeletonUtils.js";
 
 export class MagicEffects {
@@ -41,7 +41,7 @@ export class MagicEffects {
       item.rotation.x = -Math.PI / 2;
       return item;
     };
-    let duration = to?.duration || (kind === "lightning" ? 1.1 : 0.8), mixer, model, attack, blade;
+    let duration = to?.duration || (kind === "lightning" ? 1.2 : 0.8), mixer, model, attack, blade;
     const skins = [];
     if (kind === "release-boundary") {
       ring(radius);
@@ -52,13 +52,13 @@ export class MagicEffects {
       slash.rotation.z = Math.PI / 2 - to.heading;
     } else if (kind === "lightning") {
       const points = [];
-      for (let i = 0; i <= 14; i++) {
-        const t = i / 14;
-        points.push(new THREE.Vector3((to.x - from.x) * t + (i && i < 14 ? Math.sin(i * 19) * 0.9 : 0),
+      for (let i = 0; i <= 20; i++) {
+        const t = i / 20;
+        points.push(new THREE.Vector3((to.x - from.x) * t + (i && i < 20 ? Math.sin(i * 19) * 1.15 : 0),
           (from.y || 3) * (1 - t) + 3 * t, (to.z - from.z) * t));
       }
-      mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), reduced ? 16 : 44, 0.34, 6, false));
-      const core = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), reduced ? 16 : 44, 0.12, 6, false));
+      mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), reduced ? 20 : 56, 0.45, 6, false));
+      const core = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), reduced ? 20 : 56, 0.16, 6, false));
       core.material = new THREE.MeshBasicMaterial({ color: 0xfff3d1, transparent: true,
         opacity: 0.95, depthWrite: false, fog: false, toneMapped: false });
     } else if (kind === "domain" || kind === "ward") {

@@ -1,7 +1,7 @@
 // Keep persisted spell IDs so existing equipment saves remain valid.
 export const SPELLS = {
   lightning: { label: "瞬式・事件雷切", englishLabel: "Event-Driven λ", service: "AWS Lambda", color: 0xff9900, cost: 12,
-    damage: 320, range: 80, cooldown: 12,
+    damage: 320, range: 120, cooldown: 12,
     bestFor: "A distant target and nearby followers", tradeoff: "Aim forward; up to three hits, each bounce halves damage." },
   fireball: { label: "影分身・彈性軍勢", englishLabel: "Auto Scaling Army", service: "EC2 Auto Scaling", color: 0xed7100, cost: 15,
     damage: 180, range: 28, cooldown: 20,
@@ -264,7 +264,7 @@ export class MagicCombat {
         this.effect("lightning", from, target, level);
         this.damage(target, Math.round(damage * 0.5 ** i), batch);
         from = target;
-        target = this.enemies(from, 28).find(enemy => !hit.has(enemy.id));
+        target = this.enemies(from, 40).find(enemy => !hit.has(enemy.id));
       }
       const domain = this.fields.find(field => field.id === "frost" && !field.done);
       if (domain) {
@@ -277,8 +277,8 @@ export class MagicCombat {
         }
       }
       const endPoint = { x: origin.x + forward.x * range, z: origin.z + forward.z * range };
-      if (!hit.size) this.effect("lightning", origin, endPoint, level);
-      else if (hit.size === 1 && Math.hypot(from.x - origin.x, from.z - origin.z) < range * 0.85)
+      this.effect("lightning", origin, endPoint, level);
+      if (hit.size && Math.hypot(from.x - endPoint.x, from.z - endPoint.z) > 8)
         this.effect("lightning", from, endPoint, level);
     } else if (id === "shockwave") {
       if (this.anchor) this.anchor.done = true;
