@@ -60,8 +60,13 @@ class BasicCharacterController extends player_entity.BasicCharacterController {
   }
 
   _FindIntersections(position) {
-    return clearShot(this._parent._position, position, (x, z) => this._params.world.canWalk(x, z)) ?
+    const blocked = clearShot(this._parent._position, position, (x, z) => this._params.world.canWalk(x, z)) ?
       findMovementBlockers(this._params.game.grid, this._parent, position) : [true];
+    if (blocked.length) {
+      this._velocity?.set(0, 0, 0);
+      if (this._target) this._parent.SetQuaternion?.(this._target.quaternion);
+    }
+    return blocked;
   }
 }
 
@@ -273,6 +278,7 @@ class NPCController extends npc_entity.NPCController {
       if (this._FindPlayer().length()) {
         const player = this.FindEntity("player");
         this._target.lookAt(player._position.x, this._target.position.y, player._position.z);
+        this._parent.SetQuaternion(this._target.quaternion);
       }
       return;
     }
@@ -310,8 +316,13 @@ class NPCController extends npc_entity.NPCController {
   }
 
   _FindIntersections(position) {
-    return clearShot(this._parent._position, position, (x, z) => this._params.world.canWalk(x, z)) ?
+    const blocked = clearShot(this._parent._position, position, (x, z) => this._params.world.canWalk(x, z)) ?
       findMovementBlockers(this._params.game.grid, this._parent, position) : [true];
+    if (blocked.length) {
+      this._velocity?.set(0, 0, 0);
+      if (this._target) this._parent.SetQuaternion?.(this._target.quaternion);
+    }
+    return blocked;
   }
 
   _FindPlayer() {
@@ -405,10 +416,10 @@ class EnemyAttackController extends entity.Component {
     const distance = this._parent._position.distanceTo(player._position);
     const safe = isSafePosition(this.game.map, player._position.x, player._position.z);
     if (safe) { this.reset(); return; }
+    const clear = () => clearShot(this._parent._position, player._position,
+      (x, z) => this.game.world.canWalk(x, z));
     if (this.remaining === null) {
-      if (distance > profile.range || this.cooldown > 0) return;
-      if (profile.ranged && !clearShot(this._parent._position, player._position,
-        (x, z) => this.game.world.canWalk(x, z))) return;
+      if (distance > profile.range || this.cooldown > 0 || !clear()) return;
       this.remaining = profile.windup;
       const cue = { Yeti: "yeti", Cactus: "cactus", Bat: "bat" }[controller.kind];
       if (cue) this.game.sound.play(cue, distance);
@@ -428,13 +439,14 @@ class EnemyAttackController extends entity.Component {
       }
     } else {
       this.remaining -= dt;
+      this.ring.position.set(this._parent._position.x, 0.12, this._parent._position.z);
       this.ring.material.color.setHex(this.remaining < 0.3 ? 0xff4c4c : 0xffb95e);
       if (this.remaining <= 0) {
         if (profile.ranged) {
           if (this.game.spikes.fire(this._parent._position, this.aim, health._params.strength, this._parent)) {
             this.game.sound.play("spike", distance);
           }
-        } else if (distance <= profile.reach) player.Broadcast({
+        } else if (distance <= profile.reach && clear()) player.Broadcast({
           topic: "health.damage", value: health._params.strength, attacker: this._parent,
         });
         if (controller.kind === "Yeti") this.game.sound.play("slam", distance);
@@ -802,7 +814,10 @@ class Game {
   async castMagic() {
     if (!this.canCastMagic()) return false;
     const ids = [...(this.selectedSpells ?? [this.spell])];
-    if (!ids.length) return false;
+    if (!ids.length) {
+      this.magicStatus("Select at least one cloud art before casting.");
+      return false;
+    }
     const ultimate = Object.keys(SPELLS).every(id => ids.includes(id));
     const spell = ids[0], level = this.magicLevel, map = this.map;
     const combined = ids.length > 1;
@@ -885,7 +900,7 @@ class Game {
       },
       effect: (...args) => this.magicEffects.spawn(...args),
       recover: (anchor, healthValue) => {
-        if (findMovementBlockers(this.grid, this.player, anchor, anchor).length) return false;
+        if (findMovementBlockers(this.grid, this.player, anchor, { x: Infinity, z: Infinity }).length) return false;
         const controller = this.player.GetComponent("BasicCharacterController");
         controller._target.position.set(anchor.x, 0, anchor.z);
         controller._velocity.set(0, 0, 0);

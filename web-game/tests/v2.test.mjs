@@ -351,6 +351,22 @@ test('V2 player and NPC movement use overlap escape while retaining terrain coll
     controller._params.world.canWalk = (x, z) => z < 2 || z > 3;
     assert.equal(controller._FindIntersections({ x: 0, z: 4 }).length, 1,
       'a clear destination beyond a wall must not allow tunnelling');
+    let velocityReset = false, syncedRotation = null;
+    controller._velocity = { set(x, y, z) { velocityReset = x === 0 && y === 0 && z === 0; } };
+    controller._target = { position: { y: 0 }, quaternion: { id: `${name}-quat` }, lookAt() {} };
+    actor.SetQuaternion = q => { syncedRotation = q; };
+    assert.equal(controller._FindIntersections({ x: 0, z: 4 }).length, 1);
+    assert.equal(velocityReset, true);
+    assert.equal(syncedRotation, controller._target.quaternion);
+    if (name === 'NPCController') {
+      syncedRotation = null;
+      controller.profile = { ranged: true };
+      controller._input = { _keys: { forward: true } };
+      controller._FindPlayer = () => ({ length: () => 1 });
+      controller.FindEntity = () => ({ _position: { x: 5, z: 8 } });
+      controller._OnAIWalk(0.016);
+      assert.equal(syncedRotation, controller._target.quaternion);
+    }
   }
 });
 

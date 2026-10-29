@@ -860,3 +860,52 @@ test('super monster nameplates show name and health, reuse textures and hide for
   attack.updateSuperLabel(controller, health);
   assert.equal(attack.superLabel.visible, false);
 });
+
+test('setupMagic recovery rejects occupied anchors and castMagic reports empty spell selection', async () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const { findMovementBlockers } = await import('../v2/combat.js');
+  const healthText = {};
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+    MagicEffects: class {},
+    MagicCombat: class { constructor(options) { Object.assign(this, options); } },
+    findMovementBlockers,
+    THREE: { Vector3: class { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } } },
+    document: { getElementById: () => healthText },
+    matchMedia: () => ({ matches: false }),
+    navigator: { userAgent: '', platform: '', maxTouchPoints: 0 },
+  });
+  const blocker = { _position: { x: 10, z: 10 }, GetComponent: () => ({ IsAlive: () => true }) };
+  const controller = {
+    _target: { position: { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; },
+      clone: () => ({ add: () => ({}) }) } },
+    _velocity: { set() {} },
+  };
+  const health = { _health: 10, _maxHealth: 100, _UpdateUI() {} };
+  const notices = [];
+  const game = {
+    scene: {},
+    grid: { FindNear: () => [{ entity: blocker }] },
+    player: {
+      _position: { x: 0, z: 0 },
+      SetPosition() {},
+      GetComponent: name => name === 'BasicCharacterController' ? controller : health,
+    },
+    dodge: { remaining: 0.2 },
+    guard: { release() {} },
+    feedback: { show() {} },
+    sound: { play() {} },
+    canCastMagic: () => true,
+    selectedSpells: [],
+    magicStatus: msg => notices.push(msg),
+  };
+  Game.prototype.setupMagic.call(game);
+  assert.equal(game.magic.recover({ x: 10, z: 12 }, 35), false, 'occupied recovery anchor must fail closed');
+  assert.equal(health._health, 10);
+  blocker._position = { x: 25, z: 25 };
+  assert.equal(game.magic.recover({ x: 10, z: 12 }, 35), true);
+  assert.equal(health._health, 35);
+  assert.equal(controller._target.position.x, 10);
+  assert.equal(controller._target.position.z, 12);
+  assert.equal(await Game.prototype.castMagic.call(game), false);
+  assert.match(notices.at(-1), /Select at least one cloud art/);
+});

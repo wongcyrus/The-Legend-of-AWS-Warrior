@@ -1,3 +1,12 @@
+function materialTextures(material) {
+  const textures = [];
+  for (const value of Object.values(material)) if (value?.isTexture) textures.push(value);
+  for (const uniform of Object.values(material.uniforms || {})) {
+    if (uniform?.value?.isTexture) textures.push(uniform.value);
+  }
+  return textures;
+}
+
 export function sharedResources(models) {
   const resources = { geometries: new Set(), materials: new Set(), textures: new Set() };
   for (const model of Object.values(models)) {
@@ -6,7 +15,7 @@ export function sharedResources(models) {
       for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
         if (!material) continue;
         resources.materials.add(material);
-        for (const value of Object.values(material)) if (value?.isTexture) resources.textures.add(value);
+        for (const texture of materialTextures(material)) resources.textures.add(texture);
       }
     });
   }
@@ -20,8 +29,8 @@ export function disposeMap(root, shared) {
     for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
       if (!material || shared.materials.has(material)) continue;
       materials.add(material);
-      for (const value of Object.values(material)) {
-        if (value?.isTexture && !shared.textures.has(value)) textures.add(value);
+      for (const texture of materialTextures(material)) {
+        if (!shared.textures.has(texture)) textures.add(texture);
       }
     }
   });

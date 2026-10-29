@@ -49,6 +49,63 @@ test('cacti cannot aim through terrain, including narrow walls', () => {
   assert.equal(clearShot({ x: 0, z: 0 }, { x: 20, z: 0 }, () => true), true);
 });
 
+test('melee enemy attacks require line of sight to wind up and land, and track enemy position', () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  let clear = false;
+  const hits = [];
+  const Attack = runInNewContext(main.match(/class EnemyAttackController[\s\S]*?(?=\nclass HealthComponent)/)[0] +
+    '\nEnemyAttackController;', {
+    entity: { Component: class {} },
+    isSafePosition: () => false,
+    clearShot: () => clear,
+  });
+  const player = {
+    _position: { x: 4, z: 0 },
+    GetComponent: () => ({ IsAlive: () => true }),
+    Broadcast: message => hits.push(message),
+  };
+  const attack = new Attack({
+    map: 'dungeon', traveling: false, player,
+    world: { canWalk: () => true },
+    sound: { play() {} },
+  });
+  const parentPos = { x: 0, z: 0, distanceTo: other => Math.hypot(parentPos.x - other.x, parentPos.z - other.z) };
+  attack._parent = { _position: parentPos };
+  attack.ring = {
+    visible: false,
+    position: { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; } },
+    scale: { setScalar() {} },
+    material: { color: { setHex() {} } },
+  };
+  attack.aimLine = { visible: false };
+  const components = {
+    HealthComponent: { _params: { strength: 18 }, IsAlive: () => true },
+    NPCController: {
+      kind: 'Ghost', profile: { range: 5.5, reach: 6, windup: 0.5, cooldown: 1.5, ranged: false },
+      _stateMachine: { _currentState: { Name: 'idle' }, SetState() {} },
+      _velocity: { set() {} },
+    },
+  };
+  attack.GetComponent = name => components[name];
+  attack.Update(0.1);
+  assert.equal(attack.remaining, null, 'melee windup must not start through a wall');
+  clear = true;
+  attack.Update(0.1);
+  assert.equal(attack.remaining, 0.5);
+  assert.equal(attack.ring.visible, true);
+  parentPos.x = 1.5;
+  clear = false;
+  attack.Update(0.5);
+  assert.equal(attack.ring.position.x, 1.5, 'warning ring follows pushed enemy position');
+  assert.equal(hits.length, 0, 'melee hit must not land through a wall');
+  attack.cooldown = 0;
+  clear = true;
+  attack.Update(0.1);
+  attack.Update(0.5);
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].value, 18);
+});
+
 function shots() {
   const removed = [], spawned = [], hits = [];
   const spikes = new SpikeShots({ spawn: shot => spawned.push(shot), remove: shot => removed.push(shot) });

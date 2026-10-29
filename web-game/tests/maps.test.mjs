@@ -150,9 +150,17 @@ test('unloading a map disposes owned GPU resources once and never disposes share
   const disposed = [];
   const resource = name => ({ dispose: () => disposed.push(name) });
   const sharedGeometry = resource('shared-geometry'), sharedTexture = { ...resource('shared-texture'), isTexture: true };
-  const sharedMaterial = { ...resource('shared-material'), map: sharedTexture };
+  const sharedUniformTexture = { ...resource('shared-uniform-texture'), isTexture: true };
+  const sharedMaterial = {
+    ...resource('shared-material'), map: sharedTexture,
+    uniforms: { diffuseTexture: { value: sharedUniformTexture } },
+  };
   const geometry = resource('terrain'), texture = { ...resource('sign-texture'), isTexture: true };
-  const material = { ...resource('sign'), map: texture, normalMap: texture, shared: sharedTexture };
+  const uniformTexture = { ...resource('particle-uniform-texture'), isTexture: true };
+  const material = {
+    ...resource('sign'), map: texture, normalMap: texture, shared: sharedTexture,
+    uniforms: { diffuseTexture: { value: uniformTexture }, sharedUniform: { value: sharedUniformTexture } },
+  };
   const shared = sharedResources({ rock: { traverse: callback => callback({ geometry: sharedGeometry, material: sharedMaterial }) } });
   let detached = false;
   const root = {
@@ -163,7 +171,7 @@ test('unloading a map disposes owned GPU resources once and never disposes share
     remove(child) { this.children.splice(this.children.indexOf(child), 1); },
   };
   disposeMap(root, shared);
-  assert.deepEqual(disposed.sort(), ['sign', 'sign-texture', 'terrain']);
+  assert.deepEqual(disposed.sort(), ['particle-uniform-texture', 'sign', 'sign-texture', 'terrain']);
   assert.equal(root.children.length, 0);
   assert.equal(detached, true);
 });
