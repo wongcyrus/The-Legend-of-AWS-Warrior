@@ -378,7 +378,7 @@ levels. Ordinary damage scales with current Power; MP costs are fixed.
 
 | Cloud art | AWS theme / colour | MP | Shared cooldown | Effect |
 |---|---|---:|---:|---|
-| 瞬式・事件雷切 / **Event-Driven λ** | Lambda / orange | 12 | 12s | Forward lightning reaches 40 units and chains to three enemies at 100%, 50%, then 25% damage. |
+| 瞬式・事件雷切 / **Event-Driven λ** | Lambda / orange | 12 | 12s | Forward lightning reaches 80 units and chains to three enemies at 100%, 50%, then 25% damage. |
 | 影分身・彈性軍勢 / **Auto Scaling Army** | EC2 Auto Scaling / dark orange | 15 | 20s | Five animated copies of the player advance and strike three times each; walls stop their movement. |
 | 領域展開・無量儲存 / **Domain: Infinite Storage** | S3 / green | 20 | 45s | A stationary 16-unit domain deals six damage pulses and a final burst over six seconds, slowing enemies with reduced boss control. |
 | 結界術・私有雲界 / **Private Cloud Barrier** | VPC / purple | 15 | 25s | An eight-second, 12-unit ward halves incoming damage while inside and damages/pushes each intruder once. |

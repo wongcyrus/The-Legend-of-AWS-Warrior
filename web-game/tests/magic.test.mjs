@@ -505,10 +505,10 @@ test('cloud arts have distinct persistent, delayed, chained and defensive behavi
     assert.equal(h.cast(id === 'shockwave' ? 'lightning' : 'shockwave'), false);
     assert.deepEqual(h.paid, [SPELLS[id].cost]);
   }
-  const distant = harness([{ id: 'far', x: 0, z: 39 }]);
+  const distant = harness([{ id: 'far', x: 0, z: 78 }]);
   distant.cast('lightning');
   assert.deepEqual(distant.hits, [{ id: 'far', value: 320 }]);
-  const chain = harness([{ id: 'a', x: 0, z: 8 }, { id: 'b', x: 1, z: 9 }, { id: 'c', x: 2, z: 10 }]);
+  const chain = harness([{ id: 'a', x: 0, z: 8 }, { id: 'b', x: 1, z: 28 }, { id: 'c', x: 2, z: 48 }]);
   chain.cast('lightning', 3);
   assert.deepEqual(chain.hits.map(hit => hit.value), [320, 160, 80]);
   const blast = harness([{ id: 'a', x: 0, z: 8 }, { id: 'b', x: 3, z: 8 }]);

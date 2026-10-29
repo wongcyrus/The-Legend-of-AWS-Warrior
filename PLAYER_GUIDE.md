@@ -67,7 +67,7 @@ Earn **MP** (up to 100 MP) by passing graded **Voice Practice** activities on AW
 
 | Key | Cloud Art | AWS Theme | Cost / Cooldown | Effect |
 |---:|---|---|---|---|
-| **`3`** | **瞬式・事件雷切** (`Event-Driven λ`) | AWS Lambda | `12 MP` / `12s` | Chains lightning up to 40 units across 3 targets (`100%`, `50%`, `25%` damage). |
+| **`3`** | **瞬式・事件雷切** (`Event-Driven λ`) | AWS Lambda | `12 MP` / `12s` | Chains lightning up to 80 units across 3 targets (`100%`, `50%`, `25%` damage). |
 | **`4`** | **影分身・彈性軍勢** (`Auto Scaling Army`) | EC2 Auto Scaling | `15 MP` / `20s` | Summons 5 animated shadow clones that advance and strike 3 times each. |
 | **`5`** | **領域展開・無量儲存** (`Domain: Infinite Storage`) | Amazon S3 | `20 MP` / `45s` | Creates a 16-unit domain for 6s dealing 6 damage pulses + final burst and slowing enemies. |
 | **`6`** | **結界術・私有雲界** (`Private Cloud Barrier`) | Amazon VPC | `15 MP` / `25s` | Forms a 12-unit ward for 8s that halves incoming damage and knocks back intruders. |
