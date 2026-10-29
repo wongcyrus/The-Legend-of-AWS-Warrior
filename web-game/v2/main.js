@@ -939,9 +939,10 @@ class Game {
         title.classList.toggle("combo-banner", combined);
         title.replaceChildren(english, chinese);
         title.style.setProperty("--art-color", `#${SPELLS[spell].color.toString(16).padStart(6, "0")}`);
+        const bannerDuration = ultimate ? 6000 : Math.max(3800, 2600 + ids.length * 1400, (englishName.length + chineseName.length) * 65);
         title.getAnimations().forEach(animation => animation.cancel());
-        title.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.75 }, { opacity: 0 }],
-          { duration: 2200, easing: "ease-out" });
+        title.animate([{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }],
+          { duration: bannerDuration, easing: "ease-out" });
       }
       return true;
     };
