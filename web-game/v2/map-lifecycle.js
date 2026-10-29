@@ -40,3 +40,28 @@ export function disposeMap(root, shared) {
   root.parent?.remove(root);
   while (root.children.length) root.remove(root.children[root.children.length - 1]);
 }
+
+export function disposeLevelUpEffect(effect, manager) {
+  const component = effect?.GetComponent?.("LevelUpComponent");
+  if (!component) return false;
+  const particles = component._particles;
+  particles?._points?.parent?.remove(particles._points);
+  particles?._geometry?.dispose?.();
+  for (const texture of materialTextures(particles?._material || {})) texture.dispose?.();
+  particles?._material?.dispose?.();
+  effect.SetActive?.(false);
+  if (manager?._entitiesMap && effect.Name) delete manager._entitiesMap[effect.Name];
+  return true;
+}
+
+export function cleanupExpiredEffects(manager, force = false) {
+  if (!manager?._entitiesMap) return 0;
+  let cleaned = 0;
+  for (const effect of Object.values(manager._entitiesMap)) {
+    if (!effect.GetComponent?.("LevelUpComponent")) continue;
+    if (force || effect._active === false) {
+      if (disposeLevelUpEffect(effect, manager)) cleaned++;
+    }
+  }
+  return cleaned;
+}

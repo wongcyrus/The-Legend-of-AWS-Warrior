@@ -3,7 +3,8 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { MAPS, isMapWalkable, isSafePosition, nearbyGate, mapScenery, isMagicWaveClear } from '../v2/maps.js';
-import { sharedResources, disposeMap } from '../v2/map-lifecycle.js';
+import { sharedResources, disposeMap, cleanupExpiredEffects } from '../v2/map-lifecycle.js';
+import { drawMinimap } from '../v2/minimap.js';
 import { findMonsterSpawn } from '../v2/spawning.js';
 import { seededRandom, isWalkable, isPath, createScenery } from '../v2/layout.js';
 
@@ -274,4 +275,61 @@ test('travel failures explain the reason in the existing status area', () => {
   assert.match(html, /id="status" role="status"/);
   Game.prototype.travelStatus.call({ status(value) { message = value; } }, 'Gate is loading.');
   assert.equal(message, 'Gate is loading.');
+});
+
+test('expired level-up particle systems immediately dispose GPU resources and entity map entries', () => {
+  const disposed = [];
+  let detached = false;
+  const makeEffect = (name, active) => ({
+    Name: name,
+    _active: active,
+    SetActive(value) { this._active = value; },
+    GetComponent(kind) {
+      if (kind !== 'LevelUpComponent') return null;
+      return {
+        _particles: {
+          _points: { parent: { remove() { detached = true; } } },
+          _geometry: { dispose: () => disposed.push(`${name}-geometry`) },
+          _material: {
+            dispose: () => disposed.push(`${name}-material`),
+            uniforms: { diffuseTexture: { value: { isTexture: true, dispose: () => disposed.push(`${name}-texture`) } } },
+          },
+        },
+      };
+    },
+  });
+  const manager = {
+    _entitiesMap: {
+      expired: makeEffect('expired', false),
+      active: makeEffect('active', true),
+      player: { Name: 'player', _active: true, GetComponent: () => null },
+    },
+  };
+  assert.equal(cleanupExpiredEffects(manager), 1);
+  assert.equal(detached, true);
+  assert.deepEqual(disposed.sort(), ['expired-geometry', 'expired-material', 'expired-texture']);
+  assert.equal('expired' in manager._entitiesMap, false);
+  assert.equal('active' in manager._entitiesMap, true);
+  assert.equal(cleanupExpiredEffects(manager, true), 1);
+  assert.equal('active' in manager._entitiesMap, false);
+  assert.equal('player' in manager._entitiesMap, true);
+});
+
+test('minimap module renders village and expedition layouts, gates, visible guides and player position', () => {
+  for (const map of Object.values(MAPS)) {
+    const rects = [], arcs = [];
+    const ctx = {
+      fillStyle: '', strokeStyle: '', lineWidth: 0,
+      fillRect: (...args) => rects.push(args),
+      beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {}, ellipse() {},
+      arc: (...args) => arcs.push(args),
+    };
+    const markers = [
+      { visible: true, userData: { guide: { _position: { x: 10, z: -10 } } } },
+      { visible: false, userData: { guide: { _position: { x: 20, z: -20 } } } },
+    ];
+    drawMinimap(ctx, map, markers, { x: 0, z: 20 });
+    assert.ok(rects.length >= 2, map.id);
+    assert.equal(arcs.length, map.gates.length + 2, map.id);
+  }
 });

@@ -18,7 +18,8 @@ import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js?v=20261029-ajax-co
 import { GameSave, initialGameSave } from "./game-save.js?v=20261029-save-1";
 import { World } from "./world.js?v=20261029-ajax-collision-1";
 import { MAPS, isSafePosition, nearbyGate, isMagicWaveClear } from "./maps.js?v=20261029-monster-density-1";
-import { sharedResources, disposeMap } from "./map-lifecycle.js?v=20261027-maps-1";
+import { sharedResources, disposeMap, cleanupExpiredEffects } from "./map-lifecycle.js?v=20261029-v2-review-1";
+import { drawMinimap } from "./minimap.js?v=20261029-v2-review-1";
 import { createRenderer, WebGLUnavailableError } from "./renderer.js";
 import { findMeleeTargets, findMovementBlockers } from "./combat.js?v=20261027-equipment-1";
 import { GuidePatrol } from "./guides.js";
@@ -1692,11 +1693,7 @@ class Game {
       register(actor, active, position);
       if (active) this.respawnEnemy(actor, { x: position[0], z: position[1] });
     });
-    for (const effect of Object.values(this.manager._entitiesMap)) {
-      if (!effect.GetComponent("LevelUpComponent")) continue;
-      effect.SetActive(false);
-      delete this.manager._entitiesMap[effect.Name];
-    }
+    cleanupExpiredEffects(this.manager, true);
     const effects = this.manager.Get("level-up-spawner").GetComponent("LevelUpComponentSpawner");
     effects._params.scene = root;
     effects._params.world = world;
@@ -1906,7 +1903,8 @@ class Game {
   }
 
   updateCamera(dt) {
-    const target = this.player._position.clone().add(new THREE.Vector3(0, 5, 0));
+    const target = (this._cameraTarget ??= new THREE.Vector3()).copy(this.player._position);
+    target.y += 5;
     const fullRelease = this.magicEffects?.active.some(effect => effect.kind === "avatar");
     const halfFov = this.camera.fov * Math.PI / 360;
     const fitFov = Math.min(halfFov, Math.atan(Math.tan(halfFov) * this.camera.aspect));
@@ -1920,14 +1918,16 @@ class Game {
     }
     this.scene.fog.near = fullRelease ? Math.max(this.map.fogNear, viewDistance - FULL_RELEASE_RANGE) : this.map.fogNear;
     this.scene.fog.far = fullRelease ? Math.max(this.map.fogFar, viewDistance + FULL_RELEASE_RANGE * 2) : this.map.fogFar;
-    const desired = new THREE.Vector3(0, cameraDistance * 0.65, -cameraDistance)
+    const desired = (this._cameraDesired ??= new THREE.Vector3())
+      .set(0, cameraDistance * 0.65, -cameraDistance)
       .applyQuaternion(this.player._rotation).add(this.player._position);
     this.camera.position.lerp(desired, 1 - Math.pow(0.002, dt));
-    const direction = this.camera.position.clone().sub(target);
+    const direction = (this._cameraDir ??= new THREE.Vector3()).copy(this.camera.position).sub(target);
     let distance = direction.length();
-    const ray = new THREE.Ray(target, direction.normalize());
+    const ray = (this._cameraRay ??= new THREE.Ray()).set(target, direction.normalize());
+    const hit = (this._cameraHit ??= new THREE.Vector3());
     for (const box of this.cameraBoxes) {
-      const intersection = ray.intersectBox(box, new THREE.Vector3());
+      const intersection = ray.intersectBox(box, hit);
       if (intersection && intersection.distanceTo(target) < distance) {
         distance = Math.max(0.5, intersection.distanceTo(target) - 0.8);
         this.camera.position.copy(target).addScaledVector(direction, distance);
@@ -1937,40 +1937,7 @@ class Game {
   }
 
   drawMap() {
-    const ctx = document.getElementById("map").getContext("2d");
-    ctx.fillStyle = this.map.id === "village" ? "#294940" : "#" + this.map.ground.toString(16).padStart(6, "0");
-    ctx.fillRect(0, 0, 200, 200);
-    const scale = 91 / this.map.limit;
-    const point = (x, z) => [100 + x * scale, 100 + z * scale];
-    if (this.map.id === "village") {
-      ctx.strokeStyle = "#a19064";
-      ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(100, 10); ctx.lineTo(100, 190);
-      ctx.moveTo(60, 100); ctx.lineTo(140, 100); ctx.stroke();
-      ctx.fillStyle = "#4c8994";
-      ctx.beginPath(); ctx.ellipse(...point(LAKE.x, LAKE.z), LAKE.rx * scale, LAKE.rz * scale, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#c9ac79";
-      BUILDINGS.forEach(b => ctx.fillRect(...point(b.x - 8, b.z - 8), 17 * scale, 17 * scale));
-      ctx.fillStyle = "#83d6cf";
-      ctx.fillRect(...point(83, -96), 13, 13);
-    } else {
-      ctx.fillStyle = this.map.id === "dungeon" ? "#9aa6bd" : "#786a59";
-      this.map.obstacles.forEach(b => ctx.fillRect(...point(b.x - b.width / 2, b.z - b.depth / 2),
-        b.width * scale, b.depth * scale));
-    }
-    for (const gate of this.map.gates) {
-      ctx.strokeStyle = "#" + gate.color.toString(16).padStart(6, "0");
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(...point(gate.x, gate.z), 4, 0, Math.PI * 2); ctx.stroke();
-    }
-    ctx.fillStyle = "#ffda88";
-    this.markers.forEach(marker => {
-      if (!marker.visible) return;
-      const guide = marker.userData.guide._position;
-      ctx.beginPath(); ctx.arc(...point(guide.x, guide.z), 2.5, 0, Math.PI * 2); ctx.fill();
-    });
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath(); ctx.arc(...point(this.player._position.x, this.player._position.z), 3.5, 0, Math.PI * 2); ctx.fill();
+    drawMinimap(document.getElementById("map").getContext("2d"), this.map, this.markers, this.player._position);
   }
 
   frame() {
@@ -2004,6 +1971,7 @@ class Game {
     this.restoreCheckpoint();
     const beforeX = this.player._position.x, beforeZ = this.player._position.z;
     this.manager.Update(dt);
+    cleanupExpiredEffects(this.manager);
     if (this.traveling || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) {
       this.magic.clearProjectiles();
       this.magicEffects.clear();
@@ -2066,7 +2034,7 @@ class Game {
         : "";
     document.getElementById("explore-hint").hidden = !document.getElementById("explore-hint").textContent;
     this.feedback.update(dt, point => {
-      const projected = point.clone().project(this.camera);
+      const projected = (this._projected ??= new THREE.Vector3()).copy(point).project(this.camera);
       return { x: (projected.x + 1) * innerWidth / 2, y: (1 - projected.y) * innerHeight / 2, z: projected.z };
     });
     this.drawMap();
