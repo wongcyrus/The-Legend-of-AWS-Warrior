@@ -30,13 +30,13 @@ export const COMBO_ARTS = [
   { id: "blade-barrage", requires: ["lightning", "fireball"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
   { id: "singularity", requires: ["lightning", "frost"], label: "赫式・毫秒爆裂", englishLabel: "Dynamo Singularity", service: "Amazon DynamoDB", color: 0xb537f2 },
   { id: "almighty-push", requires: ["fireball", "storm"], label: "神羅・負載天徵", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
-  { id: "omniscience", requires: ["frost", "storm"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0xff2a6d },
+  { id: "omniscience", requires: ["frost", "storm"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0x050208 },
   { id: "edge-flash", requires: ["lightning", "shockwave"], label: "炎呼吸・邊緣瞬閃", englishLabel: "CloudFront Edge Flash", service: "Amazon CloudFront", color: 0xff5500 },
-  { id: "titan-meteor", requires: ["frost", "shockwave"], label: "創成・基岩星隕", englishLabel: "Bedrock Titan Meteor", service: "Amazon Bedrock", color: 0xff6b2b },
+  { id: "titan-meteor", requires: ["frost", "shockwave"], label: "天礙震星・基岩星隕", englishLabel: "Bedrock Titan Meteor", service: "Amazon Bedrock", color: 0xd95b26 },
   { id: "almighty-push", requires: ["lightning", "storm"], label: "神羅・負載天徵", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
   { id: "blade-barrage", requires: ["fireball", "frost"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
   { id: "edge-flash", requires: ["fireball", "shockwave"], label: "炎呼吸・邊緣瞬閃", englishLabel: "CloudFront Edge Flash", service: "Amazon CloudFront", color: 0xff5500 },
-  { id: "omniscience", requires: ["storm", "shockwave"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0xff2a6d },
+  { id: "omniscience", requires: ["storm", "shockwave"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0x050208 },
 ];
 
 export function comboArtFor(ids) {
@@ -267,9 +267,9 @@ export class MagicCombat {
       this.combos.push(state);
       this.effect("singularity", state, { range: 26, duration: 2.5, color: combo.color }, 1);
     } else if (combo.id === "almighty-push") {
-      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 2.0, power, batch };
+      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 2.4, power, batch };
       this.combos.push(state);
-      this.effect("almighty-push", state, { range: 32, duration: 2.0, color: combo.color }, 1);
+      this.effect("almighty-push", state, { range: 32, duration: 2.4, color: combo.color }, 1);
     } else if (combo.id === "omniscience") {
       const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 7.0, power, batch };
       this.combos.push(state);
@@ -281,9 +281,9 @@ export class MagicCombat {
       this.effect("edge-flash", state, { dx: forward.x, dz: forward.z, range: 65, duration: 3.0, color: combo.color }, 1);
     } else if (combo.id === "titan-meteor") {
       const impact = { x: origin.x + forward.x * 22, z: origin.z + forward.z * 22 };
-      const state = { id: combo.id, x: impact.x, z: impact.z, age: 0, step: 0, duration: 2.6, power, batch };
+      const state = { id: combo.id, x: impact.x, z: impact.z, age: 0, step: 0, duration: 2.8, power, batch };
       this.combos.push(state);
-      this.effect("titan-meteor", state, { range: 26, duration: 2.6, color: combo.color }, 1);
+      this.effect("titan-meteor", state, { range: 26, duration: 2.8, color: combo.color }, 1);
     }
   }
   cast(id, level, origin, direction, pay, batch = {}) {

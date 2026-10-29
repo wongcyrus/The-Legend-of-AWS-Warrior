@@ -394,10 +394,10 @@ Combined casts add the selected MP costs and use the longest selected cooldown.
 Combining 2, 3, or 4 Cloud Arts in a single cast awakens one of **six Anime × AWS Awakening Combo Arts** alongside the selected base spells:
 - **千刃・容器萬解 / `Fargate Blade Barrage` (`[3] + [4]` or `[4] + [5]`)**: Opens 5 golden container portals behind the player and fires 18 glowing blades up to 75 units ahead across 3 volleys (`2.2x` Power per volley).
 - **赫式・毫秒爆裂 / `Dynamo Singularity` (`[3] + [5]`)**: Spirals Blue (`蒼`) and Red (`赫`) orbs into a Hollow Purple (`茈`) singularity 20 units ahead, pulling enemies within 26 units inward twice before a `5.5x` Power supernova burst, plus **Cold-Start Surge** lightning across the 16-unit Storage domain.
-- **神羅・負載天徵 / `ALB Almighty Push` (`[4] + [6]` or `[3] + [6]`)**: Expands two 360° gravity domes and 16 radial spikes across 32 units (`3.0x` Power + knockback per wave) while granting **VPC Peered Fleet** shadow clones (`5.8`-unit strike radius and knockback).
-- **天照・全知之眼 / `CloudWatch Omniscience` (`[5] + [6]` or `[6] + [7]`)**: Summons a 28-unit crimson Sharingan mandala, sweeping X-Ray laser, and 12 black-crimson Amaterasu flame pillars that pulse 6 times over 7s (`1.8x` Power + `1.5s` slow).
+- **神羅・負載天徵 / `ALB Almighty Push` (`[4] + [6]` or `[3] + [6]`)**: The player flies up into the sky (`y = 18`) while a 360° gravity sphere and 16 radial spikes expand outward from his body across 32 units (`3.0x` Power + knockback per wave) alongside **VPC Peered Fleet** shadow clones (`5.8`-unit strike radius and knockback).
+- **天照・全知之眼 / `CloudWatch Omniscience` (`[5] + [6]` or `[6] + [7]`)**: Darkens the domain into an obsidian void and erupts 24 pitch-black Amaterasu flame pillars (`0x050208`) with a floating Mangekyō eye and sweeping X-Ray laser that pulse 6 times over 7s (`1.8x` Power + `1.5s` slow).
 - **炎呼吸・邊緣瞬閃 / `CloudFront Edge Flash` (`[3] + [7]` or `[4] + [7]`)**: Unleashes twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a 65-unit corridor for 3 rapid slashes (`3.2x` Power each).
-- **創成・基岩星隕 / `Bedrock Titan Meteor` (`[5] + [7]`)**: Summons a rotating octahedral asteroid from the sky (`y = 52`) into a targeting sigil 22 units ahead after `1.2s`, dealing `9.0x` Power AoE damage across a 26-unit radius.
+- **天礙震星・基岩星隕 / `Bedrock Titan Meteor` (`[5] + [7]`)**: Tears open a sky portal and drops twin colossal craggy rock boulders straight down from the sky 22 units ahead after `1.2s`, dealing `9.0x` Power AoE damage across a 26-unit radius.
 
 The server reserves the whole selection in one transaction: insufficient MP means
 none of the attacks fire, and retries cannot debit twice. A miss still consumes MP.

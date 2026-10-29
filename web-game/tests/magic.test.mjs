@@ -669,7 +669,9 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   }
   class Object3D {
     constructor(geometry, material) {
-      Object.assign(this, { geometry, material, rotation: {}, position: { set() {} }, scale: { setScalar() {} } });
+      Object.assign(this, { geometry, material, rotation: {},
+        position: { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; } },
+        scale: { setScalar() {} } });
       this.children = [];
     }
     add(item) { this.children.push(item); }
@@ -686,11 +688,13 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const source = readFileSync(new URL('../v2/magic-effects.js', import.meta.url), 'utf8')
     .replace(/^import .*$/gm, '').replace('export class', 'class');
   const MagicEffects = runInNewContext(source + '\nMagicEffects;', { THREE, SPELLS });
+  const playerTarget = { position: { x: 4, y: 0, z: 6 } };
   const effects = new MagicEffects(scene);
   const from = { x: 0, z: 0 }, to = { x: 0, z: 5, range: 10 };
   for (const id of ['lightning', 'domain', 'ward', 'clone', 'anchor', 'recall', 'seal', 'cast',
     'blade-barrage', 'singularity', 'almighty-push', 'omniscience', 'edge-flash', 'titan-meteor'])
     effects.spawn(id, from, { ...to, duration: 2 });
+  effects.character = () => ({ _target: playerTarget });
   const objects = [], resources = new Set();
   for (const effect of effects.active) {
     objects.push(effect.object);
@@ -699,7 +703,21 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
       if (item.material) resources.add(item.material);
     });
   }
-  effects.update(3);
+  effects.update(0.8);
+  assert.ok(playerTarget.position.y > 15, 'almighty-push lifts the main character high into the sky');
+  const pushEffect = effects.active.find(e => e.kind === 'almighty-push');
+  const pushDome = pushEffect.object.children.find(c => c.userData?.pushDome === 1);
+  assert.ok(pushDome.position.y > 18, 'almighty-push sphere originates from the flying character in the sky');
+  const meteorEffect = effects.active.find(e => e.kind === 'titan-meteor');
+  const rock = meteorEffect.object.children.find(c => c.userData?.meteor === 1);
+  assert.equal(rock.position.x, 0, 'titan-meteor rock drops straight down from the sky');
+  assert.ok(rock.position.y > 10 && rock.position.y < 36, 'titan-meteor rock descends from sky height');
+  const amaterasuEffect = effects.active.find(e => e.kind === 'omniscience');
+  const blackFlames = amaterasuEffect.object.children.filter(c => c.userData?.blackFlame !== undefined);
+  assert.ok(blackFlames.length >= 20 && blackFlames.every(f => f.material.color === 0x050208 || f.material.color === 0x12061a),
+    'omniscience Amaterasu flames are pitch-black fire');
+  effects.update(2.2);
+  assert.equal(playerTarget.position.y, 0, 'main character returns to ground when almighty-push ends');
   assert.equal(effects.active.length, 0);
   for (const object of objects) assert.equal(object.parent, null);
   for (const resource of resources) assert.equal(resource.disposed, 1);

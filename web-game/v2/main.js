@@ -37,12 +37,13 @@ import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipmen
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
 import { bindServiceReader } from "./aws-service-reader.js?v=20261029-mandarin-door-1";
-import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-1";
-import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-1";
+import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-2";
+import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-2";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
   Update(dt) {
     const game = this._params.game;
+    if (this._target?.position) this._target.position.y = 0;
     this._animations.attack?.action.setEffectiveTimeScale(
       WEAPONS[game.weapon].speed * (game.worldEvents?.attackSpeedMultiplier || 1));
     if (this.frostSlow > 0) this.frostSlow = Math.max(0, this.frostSlow - dt);
@@ -942,7 +943,7 @@ class Game {
         chinese.textContent = chineseName;
         title.classList.toggle("combo-banner", combined);
         title.replaceChildren(english, chinese);
-        const bannerColor = combo ? combo.color : SPELLS[spell].color;
+        const bannerColor = combo ? (combo.id === "omniscience" ? 0xb8001f : combo.color) : SPELLS[spell].color;
         title.style.setProperty("--art-color", `#${bannerColor.toString(16).padStart(6, "0")}`);
         const bannerDuration = ultimate ? 6000 : Math.max(3800, 2600 + ids.length * 1400, (englishName.length + chineseName.length) * 65);
         title.getAnimations().forEach(animation => animation.cancel());
@@ -2063,11 +2064,14 @@ class Game {
 
   updateCamera(dt) {
     const target = (this._cameraTarget ??= new THREE.Vector3()).copy(this.player._position);
-    target.y += 5;
+    const charY = this.player.GetComponent("BasicCharacterController")?._target?.position?.y || 0;
+    const skyMeteor = this.magicEffects?.active.some(effect => effect.kind === "titan-meteor" && effect.age < 1.6);
+    target.y += 5 + charY * 0.75 + (skyMeteor ? 9 : 0);
     const fullRelease = this.magicEffects?.active.some(effect => effect.kind === "avatar");
     const halfFov = this.camera.fov * Math.PI / 360;
     const fitFov = Math.min(halfFov, Math.atan(Math.tan(halfFov) * this.camera.aspect));
-    const framing = fullRelease ? FULL_RELEASE_RANGE / Math.sin(fitFov) / Math.hypot(1, 0.65) : 0;
+    const framing = fullRelease ? FULL_RELEASE_RANGE / Math.sin(fitFov) / Math.hypot(1, 0.65) :
+      (charY > 0 || skyMeteor ? 42 : 0);
     const cameraDistance = Math.max(this.cameraDistance, framing);
     const viewDistance = cameraDistance * Math.hypot(1, 0.65);
     const far = Math.max(850, viewDistance + FULL_RELEASE_RANGE * 2);
@@ -2078,7 +2082,7 @@ class Game {
     this.scene.fog.near = fullRelease ? Math.max(this.map.fogNear, viewDistance - FULL_RELEASE_RANGE) : this.map.fogNear;
     this.scene.fog.far = fullRelease ? Math.max(this.map.fogFar, viewDistance + FULL_RELEASE_RANGE * 2) : this.map.fogFar;
     const desired = (this._cameraDesired ??= new THREE.Vector3())
-      .set(0, cameraDistance * 0.65, -cameraDistance)
+      .set(0, cameraDistance * 0.65 + charY * 0.4, -cameraDistance)
       .applyQuaternion(this.player._rotation).add(this.player._position);
     this.camera.position.lerp(desired, 1 - Math.pow(0.002, dt));
     const direction = (this._cameraDir ??= new THREE.Vector3()).copy(this.camera.position).sub(target);
