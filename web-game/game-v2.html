@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#182e30">
   <title>AWS Warrior - V2</title>
   <link rel="icon" type="image/x-icon" href="./favicon.ico?v=hkiit-1">
-  <link rel="stylesheet" href="./v2/style.css?v=20261029-loading-brand-1">
+  <link rel="stylesheet" href="./v2/style.css?v=20261029-four-avatars-1">
   <script type="importmap">
     {
       "imports": {
@@ -28,10 +28,17 @@
     <nav aria-label="Game navigation">
       <a href="./game.html">Play Classic</a>
       <a href="./voice-marks.html" target="_blank" rel="noopener noreferrer" aria-label="Voice marks (opens in a new tab)" title="Opens in a new tab; your game stays open">Voice marks</a>
-      <button id="manual-button" type="button" aria-haspopup="dialog">Combat manual</button>
+      <button id="manual-button" type="button" aria-haspopup="dialog" aria-label="Combat manual / 戰鬥手冊" title="Combat manual / 戰鬥手冊">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M12 5C9 3 5 3 2 4v15c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Z"/>
+          <path d="M12 5v15M5 8h4M5 12h4M15 8h4M15 12h4"/>
+        </svg>
+      </button>
       <button id="key-button" type="button">Set Key</button>
       <button id="sound-button" type="button" aria-pressed="false">Mute sound</button>
       <label class="sound-volume">Volume <input id="sound-volume" type="range" min="0" max="100" step="5" aria-label="Sound effects volume"></label>
+      <label>聲線 / Voice <select id="attack-voice" title="Available Cantonese system voices; male voices depend on your device"></select></label>
+      <button id="attack-voice-preview" type="button" title="試聽所選廣東話聲線 / Preview selected Cantonese voice">試聽 / Preview</button>
       <label>Quality <select id="quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
     </nav>
   </div>
@@ -65,14 +72,13 @@
     <p id="dodge-state" hidden></p>
     <p id="explore-hint" hidden></p>
     <button id="home-button" type="button">Return to village</button>
-    <div class="equipment-heading"><span>Magic</span><span id="magic-badges">0 MP</span></div>
-    <div id="magic-bar" class="magic-bar" role="group" aria-label="Choose a spell"></div>
-    <div class="magic-levels" role="group" aria-label="Magic power and MP cost">
-      <button type="button" data-magic-level="1" aria-pressed="true" title="Level 1: costs 1 MP">I</button>
-      <button type="button" data-magic-level="2" aria-pressed="false" title="Level 2: costs 2 MP">II</button>
-      <button type="button" data-magic-level="3" aria-pressed="false" title="Level 3: costs 3 MP">III</button>
+    <div class="equipment-heading"><span>雲術絕招 · Cloud arts</span><span id="magic-badges">0 MP</span></div>
+    <div id="magic-bar" class="magic-bar" role="group" aria-label="Select one or more cloud arts"></div>
+    <p id="magic-selection" role="status"></p>
+    <div class="magic-levels" role="group" aria-label="Cast selected cloud art">
       <button id="magic-cast" type="button" disabled>Cast X</button>
     </div>
+    <div id="cloud-art-title" role="status" aria-live="polite"></div>
   </div>
   <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span><kbd>Space</kbd> Attack</span><span><kbd>X</kbd> Magic</span><span><kbd>R</kbd> Block</span><span><kbd>E</kbd> Get task</span><span><kbd>Q</kbd> Dodge</span><span><kbd>F</kbd> Open chest</span><span>Walk into gates to travel</span><span><kbd>Scroll</kbd> Zoom &middot; <kbd>Shift + scroll</kbd> Weapon</span></footer>
   <div class="v2-ui credits">Town: <a href="https://kenney.nl/assets/fantasy-town-kit" target="_blank" rel="noopener noreferrer">Kenney / CC0</a> &middot; Nature &amp; creatures: Quaternius &middot; <a href="./v2/assets/aws/NOTICE.txt" title="Independent educational game; not endorsed by AWS">AWS icons / notice</a> &middot; <a href="./v2/assets/sources.json">Sources</a></div>
@@ -124,7 +130,7 @@
     <p id="voice-desktop-intro">Pass at 60/100 to earn MP once per activity. Grades assess recognised content, not pronunciation or comprehension. Use your computer's microphone, or transfer the activity to your phone.</p>
     <label class="voice-language" for="voice-task-type">Task
       <select id="voice-task-type">
-        <option value="read_aloud">Read aloud (5-15 MP)</option>
+        <option id="voice-reading-option" value="read_aloud" disabled>Read aloud (5-15 MP)</option>
         <option id="voice-question-option" value="question_answer" disabled>Answer a question (10-30 MP)</option>
       </select>
     </label>
@@ -159,17 +165,18 @@
     <div id="manual-content" class="combat-manual-content" tabindex="0" role="region" aria-label="Combat instructions and power tables">
       <p>The game pauses while this manual is open. Complete AWS tasks in your account, then defeat a monster to grade your work. Magic kills use the same grading rules as melee kills.</p>
       <h3>Controls</h3>
-      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: cast your selected spell. Choose I, II or III for its power. R: hold to block. Q: dodge. Scroll: zoom. Shift + scroll: cycle weapons. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. Walk into a glowing gate at a road end to travel automatically. F near a chest: open it.</p>
+      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: unleash your selected cloud art. Each art has a fixed MP cost; there are no power levels. R: hold to block. Q: dodge. Scroll: zoom. Shift + scroll: cycle weapons. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. Walk into a glowing gate at a road end to travel automatically. F near a chest: open it.</p>
       <h3>All weapons</h3>
       <p id="manual-strength"></p>
       <p>Unarmed uses your full Power because no weapon is equipped; weapon multipliers apply only to equipped items.</p>
       <div class="manual-table"><table><caption>Melee damage per landed hit</caption><thead><tr><th scope="col">Weapon</th><th scope="col">Damage</th><th scope="col">Power multiplier</th><th scope="col">Speed</th><th scope="col">Reach</th><th scope="col">Style</th></tr></thead><tbody id="manual-weapons"></tbody></table></div>
       <h3>All magic</h3>
       <p id="manual-mode"></p>
+      <p>Select several arts to cast them together with X: MP costs are added and the longest shared cooldown applies. The entire selection is reserved in one server transaction. Insufficient MP casts nothing. Selecting all five automatically changes the cast button to Global Deployment (全域部署): 87 MP with a 60-second shared cooldown. Its announcement reads both the Chinese and English names. Four Cloud Avatars, each six times your size, appear ahead, behind, left and right, facing outward. Their three slashes release waves across a 128-unit radius around the casting position, marked by an outer boundary ring. Each wave expands to that boundary over 1.2 seconds and defeats enemies, including bosses, when it reaches them; buildings and solid walls block hits. Wave visuals and damage use the same expanding radius. The camera pulls back to frame the attack and smoothly returns to your chosen zoom afterwards; nearby walls can limit the view. The avatars remain for six seconds and do not add collision or invulnerability. Deselect any art to return to a normal combination without these execution waves. Travel, death and account changes remove the avatars and cancel pending waves. On reload, your saved primary art is selected.</p>
       <p id="manual-cast-status" role="status"></p>
-      <p>Every slash-separated value is I / II / III. Damage scales with your current Power. Level-I damage multipliers are Lightning 6.4x, Fireball 5.2x, Frost wave 3.2x, Thunderstorm 4.4x and Shockwave 3.6x, compared with at most 3x for melee weapons. Levels II / III multiply spell damage by 2 / 3; damage is rounded to a whole number. Listed damage is per enemy hit, except Lightning's chain bounces deal 50%, then 25% of its first hit. Higher powers add 0 / 4 / 8 range.</p>
-      <p>All spells cost 1 / 2 / 3 MP. Cooldown is shared across spells, so switching cannot bypass it. All spells are blocked by line-of-sight obstacles; face your target for Lightning, Fireball and Frost wave. A missed cast still spends MP.</p>
-      <div class="manual-table"><table><caption>Spell power, situations and tradeoffs</caption><thead><tr><th scope="col">Spell</th><th scope="col">Damage I / II / III</th><th scope="col">Range I / II / III</th><th scope="col">Normal cooldown</th><th scope="col">Effect I / II / III</th><th scope="col">Best situation and tradeoff</th></tr></thead><tbody id="manual-spells"></tbody></table></div>
+      <p>Damage scales with Power. Storage's listed damage is the total of six pulses plus its final burst. Army summons five shadows of your character, advancing forward and attacking three times each; listed damage is each shadow's total across three hits. Walls stop shadows and each strike checks nearby enemies. Event lightning chains to three targets at 100%, 50%, then 25% damage. The ward deals damage once per intruder and halves incoming damage while you remain inside. Recovery has no attack damage; its anchor must finish a one-second windup and have a clear landing spot.</p>
+      <p>Cooldown is shared across arts, so switching cannot bypass it. Obstacles block attacks. Fields stay where cast; moving away does not move them. Travel, account changes and death remove fields, clones and recovery anchors. These are fictional AWS-inspired combat metaphors, not actual AWS service capabilities.</p>
+      <div class="manual-table"><table><caption>Cloud arts, situations and tradeoffs</caption><thead><tr><th scope="col">Art</th><th scope="col">Damage</th><th scope="col">Range</th><th scope="col">MP / shared cooldown</th><th scope="col">Effect</th><th scope="col">Best situation</th></tr></thead><tbody id="manual-spells"></tbody></table></div>
       <p>MP comes only from passed voice activities: 60-74 earns 5 MP, 75-89 earns 10 MP, and 90-100 earns 15 MP, credited up to the 100 MP capacity. Each activity rewards once. Reading, repeated passes, kills, waiting and missions never replenish MP. Dialogs, loading, travel and death block casting.</p>
       <h3>Shields</h3>
       <p id="manual-shields"></p>
@@ -178,6 +185,6 @@
     </div>
     <div class="dialog-actions"><button id="manual-close" type="button">Back to game</button></div>
   </dialog>
-  <script src="./v2/main.js?v=20261029-facing-2" type="module"></script>
+  <script src="./v2/main.js?v=20261029-ajax-collision-1" type="module"></script>
 </body>
 </html>

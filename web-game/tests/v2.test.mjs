@@ -4,6 +4,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from '../v2/api.js';
+import { clearShot } from '../v2/monsters.js';
 import { createRenderer, WebGLUnavailableError } from '../v2/renderer.js';
 import { findMeleeTargets, findMovementBlockers, MELEE_RANGE } from '../v2/combat.js';
 import { GuidePatrol, GUIDE_ROAM_RADIUS, GUIDE_WALK_SPEED } from '../v2/guides.js';
@@ -334,7 +335,7 @@ test('V2 player and NPC movement use overlap escape while retaining terrain coll
     const source = main.match(new RegExp(`class ${name} extends[\\s\\S]*?(?=\\nclass ${next})`))[0];
     const Controller = runInNewContext(source + `\n${name};`, {
       [namespace]: { [name]: class { _FindIntersections() { assert.fail('Inherited collision locks overlaps'); } } },
-      findMovementBlockers,
+      findMovementBlockers, clearShot,
     });
     const controller = new Controller();
     const actor = { _position: { x: 0, z: 0 } };
@@ -347,6 +348,9 @@ test('V2 player and NPC movement use overlap escape while retaining terrain coll
     assert.equal(controller._FindIntersections({ x: 0, z: -0.1 }).length, 1);
     controller._params.world.canWalk = () => false;
     assert.equal(controller._FindIntersections({ x: 0, z: 0.1 }).length, 1);
+    controller._params.world.canWalk = (x, z) => z < 2 || z > 3;
+    assert.equal(controller._FindIntersections({ x: 0, z: 4 }).length, 1,
+      'a clear destination beyond a wall must not allow tunnelling');
   }
 });
 
@@ -525,6 +529,7 @@ test('API requests preserve the shared key, controller path and encoded filter',
   assert.equal(request.url.searchParams.get('filter'), task.filter);
   assert.equal(request.options.headers['x-api-key'], 'example-key');
   assert.ok(request.options.signal instanceof AbortSignal);
+  assert.equal(request.options.cache, 'no-store');
   assert.deepEqual(client.quest, task);
 });
 

@@ -130,6 +130,14 @@ test('every map builds only small individual AWS signs and safely disposes share
     assert.equal(world.animated.length, 0);
     assert.equal(meshes.length, landmarks.length * 2);
     assert.ok(landmarks.every(object => object.position.y === 4.6 && object.geometry.args[0] === 6));
+    for (const sign of landmarks) {
+      const post = meshes.find(object => object !== sign &&
+        object.position.x === sign.position.x && object.position.z === sign.position.z);
+      assert.ok(post, `${map.id}: sign has a centered support post`);
+      const postTop = post.position.y + post.geometry.args[1] / 2;
+      const panelBottom = sign.position.y - sign.geometry.args[1] / 2;
+      assert.ok(postTop < panelBottom, `${map.id}: support stays below the rotating icon panel`);
+    }
     assert.equal(world.servicePlaques.filter(plaque => plaque.userData.awsService).length, landmarks.length);
     assert.equal(world.servicePlaques.filter(plaque => plaque.userData.awsGallery).length, 0);
     const resources = new Set(meshes.flatMap(mesh => [mesh.geometry, mesh.material, mesh.material.map]).filter(Boolean));

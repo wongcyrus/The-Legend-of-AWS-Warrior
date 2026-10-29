@@ -41,15 +41,15 @@ test('combat manual lists live weapon stats, all spell powers and shields, and p
   const spells = values('manual-spells');
   assert.equal(spells.length, 5);
   Object.values(SPELLS).forEach((spell, index) => {
-    assert.equal(spells[index][0], spell.label);
-    assert.equal(spells[index][1], [1, 2, 3].map(level => spell.damage * level).join(' / '));
-    assert.equal(spells[index][2], [0, 1, 2].map(level => spell.range + level * 4).join(' / '));
-    assert.equal(spells[index][3], `${spell.cooldown}s`);
+    assert.equal(spells[index][0], `${spell.label} (${spell.service})`);
+    assert.equal(spells[index][1], spell.damage);
+    assert.equal(spells[index][2], spell.range);
+    assert.equal(spells[index][3], `${spell.cost} MP / ${spell.cooldown}s`);
     assert.ok(spells[index][4].length > 20);
-    assert.equal(spells[index][5], `${spell.bestFor}. ${spell.tradeoff}`);
+    assert.equal(spells[index][5], spell.bestFor);
   });
   Object.values(SHIELDS).forEach(label => assert.ok(elements['manual-shields'].textContent.includes(label)));
-  assert.match(elements['manual-mode'].textContent, /1 \/ 2 \/ 3 MP.*reserved on the server/);
+  assert.match(elements['manual-mode'].textContent, /fixed MP cost, reserved on the server/);
   assert.doesNotMatch(elements['manual-mode'].textContent, /free|unlimited/i);
   assert.ok(released && !keys.forward && !keys.space && elements['combat-manual'].open);
   assert.equal(elements['manual-content'].scrollTop, 0);
@@ -57,8 +57,8 @@ test('combat manual lists live weapon stats, all spell powers and shields, and p
   Game.prototype.showCombatManual.call(game);
   assert.equal(values('manual-weapons').length, 15);
   assert.equal(values('manual-weapons')[0][1], 96);
-  assert.equal(values('manual-spells')[0][1], '512 / 1024 / 1536');
-  assert.match(elements['manual-mode'].textContent, /1 \/ 2 \/ 3 MP/);
+  assert.equal(values('manual-spells')[0][1], 512);
+  assert.match(elements['manual-mode'].textContent, /fixed MP cost/);
   assert.match(main, /if \(this.readingService \|\| document.getElementById\("combat-manual"\).open\)/);
   assert.match(html, /id="manual-button"[^>]+aria-haspopup="dialog"/);
   assert.match(html, /id="combat-manual"[^>]+aria-labelledby="manual-title"/);
@@ -132,7 +132,7 @@ test('equipment panel omits repeated controls and only shows active guard and do
   assert.doesNotMatch(html, /id="(?:weapon-summary|magic-summary|magic-tactics|magic-help|magic-feedback)"/);
   assert.match(html, /<kbd>R<\/kbd> Block/);
   assert.match(html, /<kbd>Q<\/kbd> Dodge/);
-  assert.match(html, /<kbd>T<\/kbd> Travel gate/);
+  assert.match(html, /Walk into gates to travel/);
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(main, /block-button|blockButton/);
   const source = main.match(/    document.getElementById\("shield-state"\).textContent[\s\S]*?(?=\n    const chest =)/)[0];

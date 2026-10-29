@@ -4,11 +4,10 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { MagicWallet, MagicCombat, SPELLS, spellDamage } from '../v2/magic.js';
-import { WEAPONS } from '../v2/adventure.js';
 import { MONSTERS, SUPER_MONSTERS, superMonsterProfile, monsterFor } from '../v2/monsters.js';
 import { MAPS } from '../v2/maps.js';
 
-const walletData = (balance = 10, revision = 1) => ({ balance, max: 100, earned: 20, spent: 20 - balance, revision });
+const walletData = (balance = 20, revision = 1) => ({ balance, max: 100, earned: 100, spent: 100 - balance, revision });
 const success = data => ({ ok: true, json: async () => data });
 const deferred = () => {
   let resolve, reject;
@@ -22,11 +21,11 @@ function walletHarness(fetcher, uuid = randomUUID) {
     get effects() { return effects; },
     cast(spell = 'lightning', level = 1) {
       return wallet.cast({ spell, level, valid: () => ready,
-        execute: pay => { if (!pay(level)) return false; effects++; return true; } });
+        execute: pay => { if (!pay(SPELLS[spell].cost)) return false; effects++; return true; } });
     } };
 }
 const authorization = (request, wallet = walletData(9, 2)) => ({
-  ...JSON.parse(request.body), cost: JSON.parse(request.body).level, wallet,
+  ...JSON.parse(request.body), cost: SPELLS[JSON.parse(request.body).spell].cost, wallet,
 });
 
 test('MP loads only from the server with the masked key header, never reading accrual or saved balances', async () => {
@@ -39,7 +38,7 @@ test('MP loads only from the server with the masked key header, never reading ac
   assert.equal(await h.cast(), false);
   assert.equal(requests.length, 0);
   assert.equal(await h.wallet.refresh(), true);
-  assert.equal(h.wallet.wallet.balance, 10);
+  assert.equal(h.wallet.wallet.balance, 20);
   assert.equal(requests[0].url.pathname, '/api/voice/wallet');
   assert.equal(requests[0].url.search, '');
   assert.equal(requests[0].request.headers['x-api-key'], 'student-one');
@@ -49,6 +48,138 @@ test('MP loads only from the server with the masked key header, never reading ac
   assert.doesNotMatch(main + source, /MagicBadges|MAGIC_SPENT_KEY|magicTesting|magicTest|unlimited|Free test cast/);
   assert.doesNotMatch(source, /localStorage|readServices|storage\.setItem/);
   assert.match(main, /refreshVoiceWallet\(\)/);
+});
+
+test('combined authorization retries the same selection and charges one payment before simultaneous effects', async () => {
+  const posts = [];
+  let effects = 0;
+  const h = walletHarness(async (url, request) => {
+    if (request.method === 'GET') return success(walletData(100));
+    posts.push(JSON.parse(request.body));
+    if (posts.length === 1) throw new TypeError('lost response');
+    return success({ ...posts.at(-1), cost: 87, wallet: walletData(13, 2) });
+  });
+  await h.wallet.refresh();
+  const run = spells => h.wallet.cast({ spells, valid: () => true,
+    execute: pay => { assert.equal(pay(87), true); assert.equal(pay(87), false); effects++; return true; } });
+  assert.equal(await run(Object.keys(SPELLS)), false);
+  assert.equal(await run(['frost']), false);
+  assert.equal(posts.length, 1);
+  assert.equal(await run(Object.keys(SPELLS).reverse()), true);
+  assert.deepEqual(posts[0], posts[1]);
+  assert.equal(effects, 1);
+  assert.equal(h.wallet.wallet.balance, 13);
+});
+
+test('combined combat reserves total cost once and retains all five effects with maximum cooldown', () => {
+  const h = harness();
+  const ids = Object.keys(SPELLS);
+  let payments = 0;
+  const pay = cost => { payments++; assert.equal(cost, 87); return true; };
+  assert.equal(h.magic.castCombination(ids, 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => false), false);
+  assert.equal(h.hits.length, 0);
+  assert.equal(h.magic.castCombination(ids, 1, { x: 0, z: 0 }, { x: 0, z: 1 }, pay), true);
+  assert.equal(payments, 1);
+  assert.equal(h.magic.clones.length, 5);
+  assert.equal(h.magic.fields.length, 2);
+  assert.ok(h.magic.anchor);
+  assert.equal(h.magic.cooldown, 60);
+  assert.equal(h.magic.castCombination(ids, 1, { x: 0, z: 0 }, { x: 0, z: 1 }, pay), false);
+  assert.equal(payments, 1);
+});
+
+test('deployment waves execute only when reaching targets within 128 units, respecting walls', () => {
+  const targets = [{ id: 'ordinary', x: 0, z: 80 }, { id: 'boss', x: 128, z: 0, boss: true },
+    { id: 'outside', x: 0, z: 128.01 }, { id: 'wall', x: -80, z: 0 }];
+  const h = harness(targets), defeated = [];
+  h.magic.clear = (from, target) => target.id !== 'wall';
+  h.magic.waveClear = h.magic.clear;
+  h.magic.defeat = target => defeated.push(target.id);
+  h.magic.castCombination(Object.keys(SPELLS), 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true);
+  h.magic.update(0.69);
+  assert.deepEqual(defeated, []);
+  h.magic.update(0.01);
+  assert.deepEqual(defeated, []);
+  h.magic.update(0.6);
+  assert.deepEqual(defeated, [], 'targets outside the expanding ring are not hit early');
+  h.magic.update(0.16);
+  assert.deepEqual(defeated, ['ordinary']);
+  h.magic.update(0.46);
+  assert.deepEqual(defeated, ['ordinary', 'boss']);
+  h.magic.update(3.6);
+  assert.equal(defeated.length, 6);
+  assert.ok(defeated.every(id => ['ordinary', 'boss'].includes(id)));
+  assert.equal(h.effects.filter(([kind]) => kind === 'release-wave').length, 12);
+  assert.equal(h.magic.release, null);
+  h.magic.cooldown = 0;
+  h.magic.castCombination(Object.keys(SPELLS), 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true);
+  h.magic.clearProjectiles();
+  h.magic.update(6);
+  assert.equal(defeated.length, 6);
+  h.magic.cooldown = 0;
+  h.magic.castCombination(['lightning', 'frost'], 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true);
+  assert.equal(h.magic.release, null);
+});
+
+test('all immediate and delayed hits from a cast share one grading batch, but new casts get a fresh batch', () => {
+  const h = harness();
+  const batches = [];
+  h.magic.damage = (target, value, batch) => batches.push(batch);
+  h.magic.defeat = (target, batch) => batches.push(batch);
+  h.magic.castCombination(Object.keys(SPELLS), 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true);
+  for (let i = 0; i < 8; i++) h.magic.update(1);
+  assert.ok(batches.length > 10);
+  assert.ok(batches.every(batch => batch === batches[0]));
+  const previous = batches[0];
+  h.magic.cooldown = 0;
+  h.cast('lightning');
+  assert.notEqual(batches.at(-1), previous);
+});
+
+test('a later kill from the same cast cannot repeat a completed or failed AJAX check', async () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+    localStorage: { getItem: () => 'same-account' }, MARKS_RESET_KEY: 'reset',
+    document: { getElementById: () => ({}) }, URL,
+  });
+  let calls = 0;
+  const game = { api: { quest: { filter: 'task' }, gradeQuest: async () => {
+    calls++;
+    if (calls === 2) throw new Error('network failure');
+    return { isSuccess: false };
+  } }, progress: { version: 1 }, status() {}, showQuest() {}, sound: { play() {} } };
+  const first = {};
+  await Game.prototype.grade.call(game, first);
+  await Game.prototype.grade.call(game, first);
+  assert.equal(calls, 1);
+  const second = {};
+  await Game.prototype.grade.call(game, second);
+  await Game.prototype.grade.call(game, second);
+  assert.equal(calls, 2);
+  await Game.prototype.grade.call(game, {});
+  await Game.prototype.grade.call(game);
+  assert.equal(calls, 4, 'new spells and ordinary melee kills can retry');
+});
+
+test('late grader failures cannot overwrite a changed account or reset progress display', async () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  for (const change of ['account', 'reset', 'version', 'loading']) {
+    const values = { api_key: 'first', reset: 'old' }, pending = deferred(), messages = [];
+    const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+      localStorage: { getItem: name => values[name] }, MARKS_RESET_KEY: 'reset',
+    });
+    const game = { api: { quest: { filter: 'task' }, gradeQuest: () => pending.promise },
+      progress: { version: 1 }, status: text => messages.push(text) };
+    const request = Game.prototype.grade.call(game, {});
+    if (change === 'account') values.api_key = 'second';
+    if (change === 'reset') values.reset = 'new';
+    if (change === 'version') game.progress.version++;
+    if (change === 'loading') game.progressChanging = true;
+    pending.reject(new Error('old request failed'));
+    await request;
+    assert.equal(messages.length, 1, change);
+    assert.doesNotMatch(messages[0], /old request failed/);
+  }
 });
 
 test('wallet failures fail closed without inventing MP', async () => {
@@ -74,7 +205,7 @@ test('wallet failures fail closed without inventing MP', async () => {
 test('cast checks validity and affordability before reserving; double clicks cannot double pay or apply', async () => {
   const response = deferred(), requests = [];
   const h = walletHarness(async (url, request) => {
-    if (request.method === 'GET') return success(walletData(2));
+    if (request.method === 'GET') return success(walletData(12));
     requests.push(request);
     return response.promise;
   });
@@ -82,7 +213,7 @@ test('cast checks validity and affordability before reserving; double clicks can
   h.ready(false);
   assert.equal(await h.cast(), false);
   h.ready(true);
-  assert.equal(await h.cast('lightning', 3), false);
+  assert.equal(await h.cast('frost', 3), false);
   for (const level of [0, 4, 1.5, '1']) assert.equal(await h.cast('lightning', level), false);
   assert.equal(await h.cast('constructor'), false);
   assert.equal(requests.length, 0);
@@ -176,7 +307,7 @@ test('key changes clear wallet, pending IDs and effects cache and ignore stale s
     assert.equal(await cast, false);
     assert.equal(h.effects, 0);
     assert.equal(h.wallet.error, '');
-    assert.equal(h.wallet.wallet.balance, 10);
+    assert.equal(h.wallet.wallet.balance, 20);
   }
   const pending = deferred();
   const h = walletHarness(() => pending.promise);
@@ -244,7 +375,7 @@ test('cast authorization must match the request and a synchronous one-use paymen
   }
   const h = harness();
   assert.equal(h.cast('fireball', 1, () => Promise.resolve(true)), false);
-  assert.equal(h.magic.projectiles.length, 0);
+  assert.equal(h.magic.clones.length, 0);
   assert.equal(h.magic.cooldown, 0);
 });
 
@@ -266,8 +397,11 @@ test('MP UI exposes authoritative balance and disables unaffordable, checking an
   assert.equal(nodes['mp-value'].textContent, '2 / 100');
   assert.equal(nodes['mp-bar'].style.width, '2%');
   assert.equal(attributes['aria-valuenow'], '2');
+  assert.equal(nodes['magic-cast'].disabled, true);
+  voiceWallet.wallet = walletData(20);
+  update();
   assert.equal(nodes['magic-cast'].disabled, false);
-  assert.equal(levels[2].disabled, true);
+  assert.match(nodes['magic-cast'].textContent, /12 MP/);
   voiceWallet.checking = 1;
   update();
   assert.equal(nodes['magic-cast'].disabled, true);
@@ -314,67 +448,44 @@ function harness(targets = [{ id: 'a', x: 0, z: 8 }], power = () => 50) {
     } };
 }
 
-test('all spells scale with current Power and exceed the strongest melee hit at every level', () => {
-  let power = 50;
-  for (const id of Object.keys(SPELLS)) {
-    const h = harness(undefined, () => power);
-    for (power of [25, 50, 80, 125]) for (const level of [1, 2, 3]) {
-      h.magic.update(10);
+test('five fixed-cost cloud arts replace legacy labels, preserving saved IDs and Power scaling', () => {
+  assert.equal(Object.keys(SPELLS).length, 5);
+  for (const [id, spell] of Object.entries(SPELLS)) {
+    assert.match(spell.label, /・/);
+    for (const level of [1, 2, 3]) {
+      const h = harness();
       assert.equal(h.cast(id, level), true);
-      if (id === 'fireball') {
-        power += 10;
-        h.magic.update(2);
-        power -= 10;
-      }
-      const expected = Math.round(SPELLS[id].damage * power / 50 * level);
-      assert.equal(h.hits.at(-1).value, expected, `${id}, Power ${power}, level ${level}`);
-      assert.equal(spellDamage(id, level, power), expected);
-      assert.ok(expected > Math.max(...Object.values(WEAPONS).map(weapon => Math.round(power * weapon.damage))));
+      assert.deepEqual(h.paid, [spell.cost]);
+      assert.equal(h.magic.cooldown, spell.cooldown);
+      assert.equal(h.cast(id), false);
+      h.magic.update(spell.cooldown);
+      assert.equal(h.cast(id), true);
+      assert.equal(spellDamage(id, level, 100), spell.damage * 2);
     }
   }
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /data-magic-level|Choose I, II or III/);
 });
 
-for (const id of Object.keys(SPELLS)) {
-  for (const level of [1, 2, 3]) test(`${id} power ${level}: cost, damage and cooldown`, () => {
-    const h = harness();
-    assert.equal(h.cast(id, level), true);
-    assert.deepEqual(h.paid, [level]);
-    if (id === 'fireball') {
-      assert.equal(h.hits.length, 0);
-      for (let i = 0; i < 30; i++) h.magic.update(1 / 30);
-      assert.equal(h.magic.projectiles.length, 0);
-    }
-    assert.deepEqual(h.hits, [{ id: 'a', value: SPELLS[id].damage * level }]);
-    assert.equal(h.cast(id, level), false);
-    assert.deepEqual(h.paid, [level]);
-    h.magic.update(10);
-    assert.equal(h.magic.cooldown, 0);
-    assert.equal(h.cast(id, level), true);
-    if (id === 'frost') assert.equal(h.slows[0].duration, 3 + level);
-    if (id === 'shockwave') assert.equal(h.pushes[0].distance, 3 + level * 2);
-    assert.ok(h.effects.length);
-  });
-}
-
-test('invalid input, blocked casts, directional misses, walls and chain limits', () => {
+test('invalid input, denied payments, directional misses, walls and three-target chain limits', () => {
   for (const id of ['__proto__', 'constructor', 'unknown']) assert.equal(harness().cast(id), false);
   for (const level of [0, 4, NaN, 1.5]) assert.equal(harness().cast('lightning', level), false);
   const h = harness();
   assert.equal(h.cast('fireball', 1, () => false), false);
   assert.equal(h.magic.cooldown, 0);
-  assert.equal(h.magic.projectiles.length, 0);
+  assert.equal(h.magic.clones.length, 0);
   const targets = [{ id: 'a', x: 0, z: 8 }, { id: 'b', x: 2, z: 10 },
     { id: 'c', x: -3, z: 12 }, { id: 'behind', x: 0, z: -9 }];
   for (const level of [1, 2, 3]) {
     const chain = harness(targets);
     chain.cast('lightning', level);
-    assert.equal(chain.hits.length, level);
-    assert.equal(new Set(chain.hits.map(hit => hit.id)).size, level);
+    assert.equal(chain.hits.length, 3);
+    assert.equal(new Set(chain.hits.map(hit => hit.id)).size, 3);
   }
   const miss = harness([{ id: 'behind', x: 0, z: -8 }]);
-  assert.equal(miss.cast('frost'), true);
+  assert.equal(miss.cast('lightning'), true);
   assert.equal(miss.hits.length, 0);
-  assert.deepEqual(miss.paid, [1]);
+  assert.deepEqual(miss.paid, [12]);
   for (const id of Object.keys(SPELLS)) {
     const wall = harness();
     wall.block();
@@ -384,62 +495,135 @@ test('invalid input, blocked casts, directional misses, walls and chain limits',
   }
 });
 
-test('equal MP costs have distinct situational strengths and a shared cooldown', () => {
+test('cloud arts have distinct persistent, delayed, chained and defensive behavior', () => {
   const targets = [{ id: 'front', x: 0, z: 8 }, { id: 'side', x: 8, z: 0 },
     { id: 'back', x: 0, z: -8 }];
   for (const id of Object.keys(SPELLS)) {
     const h = harness(targets);
     h.cast(id, 3);
-    assert.deepEqual(h.paid, [3]);
+    assert.deepEqual(h.paid, [SPELLS[id].cost]);
     assert.equal(h.cast(id === 'shockwave' ? 'lightning' : 'shockwave'), false);
-    assert.deepEqual(h.paid, [3]);
+    assert.deepEqual(h.paid, [SPELLS[id].cost]);
   }
   const distant = harness([{ id: 'far', x: 0, z: 39 }]);
   distant.cast('lightning');
   assert.deepEqual(distant.hits, [{ id: 'far', value: 320 }]);
   const chain = harness([{ id: 'a', x: 0, z: 8 }, { id: 'b', x: 1, z: 9 }, { id: 'c', x: 2, z: 10 }]);
   chain.cast('lightning', 3);
-  assert.deepEqual(chain.hits.map(hit => hit.value), [960, 480, 240]);
+  assert.deepEqual(chain.hits.map(hit => hit.value), [320, 160, 80]);
   const blast = harness([{ id: 'a', x: 0, z: 8 }, { id: 'b', x: 3, z: 8 }]);
   blast.cast('fireball');
   blast.magic.update(1);
-  assert.deepEqual(blast.hits.map(hit => hit.value), [260, 260]);
+  assert.ok(blast.hits.length >= 3);
+  assert.ok(blast.hits.every(hit => hit.value === 60));
   const frost = harness([...targets, { id: 'approaching', x: 0, z: 17 }]);
   frost.cast('frost');
-  assert.deepEqual(frost.hits.map(hit => hit.id), ['front', 'approaching']);
-  assert.deepEqual(frost.slows.map(slow => slow.duration), [4, 4]);
+  assert.equal(frost.hits.length, 0);
+  for (let i = 0; i < 6; i++) frost.magic.update(1);
+  assert.equal(frost.hits.filter(hit => hit.id === 'front').reduce((sum, hit) => sum + hit.value, 0), 600);
+  assert.equal(frost.hits.some(hit => hit.id === 'approaching'), false);
+  assert.equal(frost.slows.length, 18);
+  assert.equal(frost.magic.fields.length, 0);
   const storm = harness([...targets, { id: 'spread', x: 14, z: 0 }]);
   storm.cast('storm');
-  assert.equal(storm.hits.length, 4);
-  assert.equal(storm.magic.cooldown, 9);
+  storm.magic.update(0.1);
+  assert.equal(storm.hits.length, 3);
+  storm.magic.update(0.1);
+  assert.equal(storm.hits.length, 3, 'ward cannot hit an intruder twice');
+  assert.equal(storm.magic.incomingDamage(21, { x: 0, z: 0 }, 100, 100), 11);
+  assert.equal(storm.magic.incomingDamage(21, { x: 20, z: 0 }, 100, 100), 21);
+  assert.equal(storm.pushes.length, 3);
   const escape = harness([...targets, { id: 'far', x: 14, z: 0 }]);
   escape.cast('shockwave');
-  assert.equal(escape.hits.length, 3);
-  assert.equal(escape.pushes.length, 3);
-  assert.equal(escape.magic.cooldown, 2);
-  assert.ok(SPELLS.lightning.damage > SPELLS.fireball.damage);
-  assert.ok(SPELLS.fireball.damage > SPELLS.storm.damage);
-  assert.ok(SPELLS.storm.range > SPELLS.shockwave.range);
-  assert.ok(SPELLS.frost.range > SPELLS.storm.range);
+  assert.equal(escape.hits.length, 0);
+  assert.ok(escape.magic.anchor);
+  assert.equal(escape.magic.cooldown, 60);
 });
 
-test('fireballs cannot tunnel past enemies and clear safely on travel or death', () => {
-  const h = harness();
+test('clones recheck living targets, reach and obstacles; fields and anchors clear safely on travel or death', () => {
+  const targets = [{ id: 'a', x: 0, z: 8 }];
+  const h = harness(targets);
   h.cast('fireball', 3);
-  const shot = h.magic.projectiles[0];
-  h.magic.update(1);
-  assert.equal(h.hits.length, 1);
-  assert.equal(shot.done, true);
-  h.magic.update(10);
+  targets[0].z = 100;
+  h.magic.update(3.2);
+  assert.equal(h.hits.length, 0);
+  assert.equal(h.magic.clones.length, 0);
+  h.magic.update(60);
+  targets[0].z = 8;
   h.cast('fireball');
-  const next = h.magic.projectiles[0];
+  h.magic.cooldown = 0;
+  h.cast('frost');
+  h.magic.cooldown = 0;
+  h.cast('shockwave');
   h.magic.clearProjectiles();
-  assert.equal(next.done, true);
-  assert.equal(h.magic.projectiles.length, 0);
+  assert.equal(h.magic.clones.length, 0);
+  assert.equal(h.magic.fields.length, 0);
+  assert.equal(h.magic.anchor, null);
+  h.magic.update(5);
+  assert.equal(h.hits.length, 0);
   const cooldown = h.magic.cooldown;
   h.magic.update(NaN);
   h.magic.update(-1);
   assert.equal(h.magic.cooldown, cooldown);
+});
+
+test('army always spawns five forward shadows with three strikes each, including empty casts', () => {
+  const h = harness([]);
+  h.cast('fireball');
+  const shadows = [...h.magic.clones];
+  assert.equal(shadows.length, 5);
+  h.magic.update(3.2);
+  assert.ok(shadows.every(shadow => shadow.strikes === 3 && shadow.done && shadow.z > 20));
+  assert.equal(h.effects.filter(([kind]) => kind === 'seal').length, 15);
+  assert.equal(h.magic.clones.length, 0);
+  const blocked = harness();
+  blocked.block();
+  blocked.cast('fireball');
+  const stopped = [...blocked.magic.clones];
+  blocked.magic.update(3.2);
+  assert.ok(stopped.every(shadow => shadow.z < 5));
+  assert.equal(blocked.hits.length, 0);
+});
+
+test('recovery requires windup, catches one low-HP or lethal hit, expires and fails closed at blocked anchors', () => {
+  const h = harness();
+  const recalls = [];
+  h.magic.recover = (anchor, health) => { recalls.push({ anchor, health }); return true; };
+  h.cast('shockwave');
+  assert.equal(h.magic.incomingDamage(200, { x: 5, z: 5 }, 100, 100), 200);
+  h.magic.update(1);
+  assert.equal(h.magic.incomingDamage(10, { x: 5, z: 5 }, 100, 100), 10);
+  assert.equal(h.magic.incomingDamage(200, { x: 5, z: 5 }, 100, 100), 0);
+  assert.equal(recalls[0].health, 35);
+  assert.equal(recalls[0].anchor.x, 0);
+  assert.equal(h.magic.anchor, null);
+  assert.equal(h.magic.incomingDamage(200, { x: 5, z: 5 }, 35, 100), 200);
+  h.magic.update(60);
+  h.cast('shockwave');
+  h.magic.update(13);
+  assert.equal(h.magic.anchor, null);
+  h.magic.update(60);
+  h.cast('shockwave');
+  h.magic.update(1);
+  h.magic.canWalk = () => false;
+  assert.equal(h.magic.incomingDamage(200, { x: 5, z: 5 }, 100, 100), 200);
+  h.magic.canWalk = () => true;
+  h.magic.recover = () => false;
+  assert.equal(h.magic.incomingDamage(200, { x: 5, z: 5 }, 100, 100), 200);
+});
+
+test('domain applies shorter boss control and ward expires without leaving protection', () => {
+  const h = harness([{ id: 'boss', x: 0, z: 8, boss: true }]);
+  h.cast('frost');
+  h.magic.update(1);
+  assert.equal(h.slows[0].duration, 0.25);
+  h.magic.clearProjectiles();
+  h.magic.cooldown = 0;
+  h.cast('storm');
+  h.magic.update(1);
+  assert.equal(h.pushes[0].distance, 1);
+  h.magic.update(8);
+  assert.equal(h.magic.incomingDamage(20, { x: 0, z: 0 }, 100, 100), 20);
 });
 
 test('each expedition upgrades its last spawn without changing ordinary models or base stats', () => {
@@ -449,7 +633,7 @@ test('each expedition upgrades its last spawn without changing ordinary models o
     assert.equal(profile.label, SUPER_MONSTERS[map.id].label);
     assert.ok(profile.health > MONSTERS[name].health);
     assert.ok(profile.damage > MONSTERS[name].damage);
-    assert.ok(profile.scale > MONSTERS[name].scale);
+    assert.equal(profile.scale, MONSTERS[name].scale * 1.65 * 2);
     assert.ok(profile.windup > MONSTERS[name].windup);
   }
   assert.equal(superMonsterProfile('Yeti', 'village'), null);
@@ -471,27 +655,32 @@ test('magic game actions reject blocked states before spending and use normal da
     assert.equal(Game.prototype.canCastMagic.call(game), false);
     game[key] = false;
   }
-  assert.match(main, /target\.actor\.Broadcast\(\{ topic: "health.damage", value, attacker: this.player \}\)/);
+  assert.match(main, /target\.actor\.Broadcast\(\{ topic: "health.damage", value, attacker: this.player, gradingBatch \}\)/);
   assert.match(main, /event.code === "KeyX"[\s\S]*?!event.repeat[\s\S]*?castMagic/);
   assert.match(main, /controller\.magicSlow = 0/);
 });
 
-test('spell visuals follow projectiles, expire, remain bounded and dispose owned GPU resources', () => {
+test('cloud art visuals reduce detail, expire, remain bounded and dispose shared materials once', () => {
   class Resource {
     constructor(options) { Object.assign(this, options); this.disposed = 0; }
     dispose() { this.disposed++; }
+    clone() { return new Resource({ ...this, disposed: 0 }); }
     setFromPoints() { return this; }
   }
   class Object3D {
     constructor(geometry, material) {
       Object.assign(this, { geometry, material, rotation: {}, position: { set() {} }, scale: { setScalar() {} } });
+      this.children = [];
     }
+    add(item) { this.children.push(item); }
+    traverse(fn) { fn(this); this.children.forEach(item => item.traverse(fn)); }
   }
   const scene = { add(object) { object.parent = this; }, remove(object) { object.parent = null; } };
   const THREE = {
     MeshBasicMaterial: Resource, LineBasicMaterial: Resource, BufferGeometry: Resource,
     SphereGeometry: Resource, RingGeometry: Resource, TubeGeometry: Resource,
-    CatmullRomCurve3: class {}, Mesh: Object3D, Line: Object3D,
+    BoxGeometry: Resource, OctahedronGeometry: Resource,
+    CatmullRomCurve3: class {}, Mesh: Object3D, Line: Object3D, Group: Object3D,
     Vector3: class {}, DoubleSide: 2, AdditiveBlending: 2,
   };
   const source = readFileSync(new URL('../v2/magic-effects.js', import.meta.url), 'utf8')
@@ -499,43 +688,39 @@ test('spell visuals follow projectiles, expire, remain bounded and dispose owned
   const MagicEffects = runInNewContext(source + '\nMagicEffects;', { THREE, SPELLS });
   const effects = new MagicEffects(scene);
   const from = { x: 0, z: 0 }, to = { x: 0, z: 5, range: 10 };
-  for (const id of [...Object.keys(SPELLS), 'explosion', 'cast']) effects.spawn(id, from, to, 3);
-  const objects = effects.active.map(effect => effect.object);
-  effects.update(1);
-  assert.equal(effects.active.length, 1);
-  assert.equal(effects.active[0].kind, 'fireball');
-  from.done = true;
-  effects.update(0.01);
-  assert.equal(effects.active.length, 0);
-  for (const object of objects) {
-    assert.equal(object.parent, null);
-    assert.equal(object.material.disposed, 1);
-    assert.equal(object.geometry.disposed, 1);
+  for (const id of ['lightning', 'domain', 'ward', 'clone', 'anchor', 'recall', 'seal', 'cast'])
+    effects.spawn(id, from, { ...to, duration: 2 });
+  const objects = [], resources = new Set();
+  for (const effect of effects.active) {
+    objects.push(effect.object);
+    effect.object.traverse(item => {
+      if (item.geometry) resources.add(item.geometry);
+      if (item.material) resources.add(item.material);
+    });
   }
-  for (let i = 0; i < 45; i++) effects.spawn('frost', { x: 0, z: 0 }, to, 1);
-  effects.spawn('storm', from, to, 3);
+  effects.update(3);
+  assert.equal(effects.active.length, 0);
+  for (const object of objects) assert.equal(object.parent, null);
+  for (const resource of resources) assert.equal(resource.disposed, 1);
+  for (let i = 0; i < 45; i++) effects.spawn('domain', { x: 0, z: 0 }, to, 1);
   assert.equal(effects.active.length, 40);
   effects.clear();
   assert.equal(effects.active.length, 0);
 
-  const shot = { x: 2, z: 4 };
-  effects.spawn('fireball', shot, null, 2);
-  effects.spawn('explosion', shot, null, 2);
-  const explosion = effects.active[1];
-  shot.done = true;
-  effects.update(0.01);
-  assert.equal(effects.active.length, 1);
-  assert.equal(effects.active[0].kind, 'explosion');
-  assert.equal(explosion.object.geometry.disposed, 0);
-  assert.ok(explosion.object.material.opacity > 0.9);
-  effects.update(1);
-  assert.equal(explosion.object.geometry.disposed, 1);
+  effects.spawn('domain', from, to);
+  const reduced = new MagicEffects(scene, { low: () => true });
+  reduced.spawn('domain', from, to);
+  assert.ok(reduced.active[0].object.children.length < effects.active[0].object.children.length);
+  effects.update(NaN);
+  assert.equal(effects.active[0].age, 0);
+  effects.clear();
+  reduced.clear();
 });
 
 test('game casts are server-reserved even when old testing flags are supplied', async () => {
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
-    document: { querySelector: () => false }, SPELLS,
+    document: { querySelector: () => false, getElementById: () => null }, SPELLS,
     THREE: { Vector3: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } applyQuaternion() { return this; } } },
     location: { search: '?magicTest=1' },
   });
@@ -553,7 +738,7 @@ test('game casts are server-reserved even when old testing flags are supplied', 
       IsAlive: () => true, _stateMachine: { _currentState: { Name: 'idle' } },
     }) },
     voiceWallet: wallet.wallet, canCastMagic: Game.prototype.canCastMagic,
-    guard: { release() {} }, sound: { play() {} }, updateMagicUI() {}, magicStatus() {},
+    guard: { release() {} }, sound: { play() {}, speakAttack() {} }, updateMagicUI() {}, magicStatus() {},
   };
   assert.equal(await Game.prototype.castMagic.call(game), true);
   assert.equal(combat.magic.cooldown, SPELLS.lightning.cooldown);
@@ -570,7 +755,7 @@ test('hidden Control+Alt/Option+M toggles free cooldown-free casts without chang
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   let dialog = false;
   const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
-    document: { querySelector: () => dialog }, SPELLS,
+    document: { querySelector: () => dialog, getElementById: () => null }, SPELLS,
     THREE: { Vector3: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } applyQuaternion() { return this; } } },
   });
   const combat = harness(), notices = [];
@@ -583,7 +768,7 @@ test('hidden Control+Alt/Option+M toggles free cooldown-free casts without chang
     }) },
     voiceWallet: { wallet: walletData(0), cast: async () => { requests++; return false; } },
     canCastMagic: Game.prototype.canCastMagic,
-    guard: { release() {} }, sound: { play() {} }, updateMagicUI() {}, magicStatus: message => notices.push(message),
+    guard: { release() {} }, sound: { play() {}, speakAttack() {} }, updateMagicUI() {}, magicStatus: message => notices.push(message),
   };
   const event = { code: 'KeyM', ctrlKey: true, altKey: true, preventDefault() { prevented++; } };
   for (const overrides of [{ repeat: true }, { isComposing: true }, { metaKey: true }, { shiftKey: true },

@@ -24,7 +24,7 @@ export function superMonsterProfile(name, map) {
   const elite = SUPER_MONSTERS[map];
   if (!elite || !Object.hasOwn(MONSTERS, name)) return null;
   const base = MONSTERS[name];
-  return { ...base, ...elite, scale: base.scale * 1.65,
+  return { ...base, ...elite, scale: base.scale * 3.3,
     windup: base.windup + 0.5, cooldown: base.cooldown + 0.3,
     range: base.ranged ? base.range : base.range + 2,
     reach: base.ranged ? base.reach : base.reach + 2 };
@@ -32,9 +32,12 @@ export function superMonsterProfile(name, map) {
 
 const rosters = {
   village: ["Ghost", "GreenDemon", "Cyclops", "Skull"],
-  mountains: ["Yeti", "Yeti", "Ghost", "Yeti", "Cyclops", "Yeti", "Ghost", "Yeti"],
-  desert: ["Cactus", "Skull", "Cactus", "Cactus", "GreenDemon", "Cactus", "Skull", "Cactus"],
-  dungeon: ["Bat", "Bat", "Ghost", "Bat", "Skull", "Bat", "Ghost", "Bat"],
+  mountains: ["Yeti", "Yeti", "Ghost", "Yeti", "Cyclops", "Yeti", "Ghost",
+    "Yeti", "Yeti", "Ghost", "Yeti", "Cyclops", "Yeti", "Ghost", "Yeti"],
+  desert: ["Cactus", "Skull", "Cactus", "Cactus", "GreenDemon", "Cactus", "Skull",
+    "Cactus", "Skull", "Cactus", "Cactus", "GreenDemon", "Cactus", "Skull", "Cactus"],
+  dungeon: ["Bat", "Bat", "Ghost", "Bat", "Skull", "Bat", "Ghost",
+    "Bat", "Bat", "Ghost", "Bat", "Skull", "Bat", "Ghost", "Bat"],
 };
 
 export function monsterFor(map, index) {

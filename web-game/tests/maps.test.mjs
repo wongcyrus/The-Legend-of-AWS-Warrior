@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { MAPS, isMapWalkable, isSafePosition, nearbyGate, mapScenery } from '../v2/maps.js';
+import { MAPS, isMapWalkable, isSafePosition, nearbyGate, mapScenery, isMagicWaveClear } from '../v2/maps.js';
 import { sharedResources, disposeMap } from '../v2/map-lifecycle.js';
 import { findMonsterSpawn } from '../v2/spawning.js';
 import { seededRandom, isWalkable, isPath, createScenery } from '../v2/layout.js';
 
 test('all village gates and destinations are valid and preserve the original village layout', () => {
-  assert.equal(MAPS.village.enemies.length, 12);
+  assert.equal(MAPS.village.enemies.length, 24);
   assert.equal(MAPS.village.guides.length, 4);
   assert.deepEqual(MAPS.village.spawn, [0, 20]);
   assert.equal(MAPS.village.gates.length, 3);
@@ -20,6 +20,33 @@ test('all village gates and destinations are valid and preserve the original vil
       assert.equal(nearbyGate(map, { x: gate.x, z: gate.z + 9 }), null);
     }
     if (map.id !== 'village') assert.equal(map.gates[0].to, 'village');
+  }
+});
+
+test('execution waves cross lakes and ground clutter but not buildings or solid walls', () => {
+  assert.equal(isMagicWaveClear(MAPS.village, { x: 50, z: 56 }, { x: 110, z: 56 }), true);
+  assert.equal(isWalkable(65, 56), false, 'lake is not walkable');
+  assert.equal(isMagicWaveClear(MAPS.village, { x: 0, z: -15 }, { x: 0, z: 5 }), true);
+  assert.equal(isMagicWaveClear(MAPS.village, { x: -27, z: -45 }, { x: -27, z: 0 }), false);
+  assert.equal(isMagicWaveClear(MAPS.village, { x: 100, z: -110 }, { x: 100, z: -80 }), false);
+  assert.equal(isMagicWaveClear(MAPS.dungeon, { x: 20, z: 30 }, { x: 20, z: 65 }), false);
+  assert.equal(isMagicWaveClear(MAPS.dungeon, { x: 0, z: 30 }, { x: 0, z: 65 }), true);
+  assert.equal(isMagicWaveClear(MAPS.village, { x: NaN, z: 0 }, { x: 0, z: 0 }), false);
+});
+
+test('doubled ordinary populations retain safe spaced village spawns and one expedition boss slot', () => {
+  const trees = createScenery().trees;
+  assert.equal(MAPS.village.enemies.length, 24);
+  for (const [x, z] of MAPS.village.enemies.slice(12)) {
+    assert.ok(isWalkable(x, z, 3, trees));
+    assert.equal(isSafePosition(MAPS.village, x, z), false);
+  }
+  for (const map of Object.values(MAPS)) {
+    if (map.id !== 'village') assert.equal(map.enemies.length - 1, 14);
+    map.enemies.forEach(([x, z], index) => {
+      assert.ok(map.enemies.slice(index + 1).every(([a, b]) => Math.hypot(a - x, b - z) >= 10));
+      assert.ok(map.gates.every(gate => Math.hypot(gate.x - x, gate.z - z) >= 10));
+    });
   }
 });
 

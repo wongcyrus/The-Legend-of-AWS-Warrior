@@ -13,9 +13,11 @@ const results = [];
 const languages = [
   { id: "en-US", label: "English", speechLocale: "en-US" },
   { id: "zh-HK", label: "Cantonese", speechLocale: "zh-HK" },
+  { id: "zh-CN", label: "普通话", speechLocale: "zh-CN" },
   { id: "fr-FR", label: "Français", speechLocale: "fr-FR" },
 ];
 const frenchPassage = "Amazon S3 conserve les objets dans des compartiments.";
+const mandarinPassage = "Amazon S3 将数据作为对象存储在存储桶中。";
 const backend = { calls: [], sessions: new Map(), mobileTokens: new Map(), nextId: 0,
   save: { revision: 0, state: initialGameSave() },
   wallet: { balance: 0, max: 100, earned: 0, spent: 0, revision: 0 } };
@@ -42,27 +44,34 @@ function fakeApi(path, method, body, authorization) {
   }
   if (path.endsWith("/voice/wallet")) return backend.wallet;
   if (path.endsWith("/voice/casts")) {
-    backend.wallet = { ...backend.wallet, balance: backend.wallet.balance - body.level,
-      spent: backend.wallet.spent + body.level, revision: backend.wallet.revision + 1 };
-    return { wallet: backend.wallet, requestId: body.requestId, spell: body.spell, level: body.level, cost: body.level };
+    const cost = (body.spells || [body.spell]).reduce((sum, id) =>
+      sum + { lightning: 12, fireball: 15, frost: 20, storm: 15, shockwave: 25 }[id], 0);
+    if (backend.wallet.balance < cost) return { status: 409, body: { error: "Insufficient MP" } };
+    backend.wallet = { ...backend.wallet, balance: backend.wallet.balance - cost,
+      spent: backend.wallet.spent + cost, revision: backend.wallet.revision + 1 };
+    return { wallet: backend.wallet, requestId: body.requestId,
+      ...(body.spells ? { spells: [...body.spells].sort() } : { spell: body.spell, level: body.level }), cost };
   }
   if (path.endsWith("/voice/completions") && method === "GET") {
     const services = ["s3", "ec2", "iam", "vpc", "lambda", "dynamodb"].map(serviceId => ({
       serviceId, label: serviceId.toUpperCase(),
-      completed: [...backend.sessions.values()].some(session => session.serviceId === serviceId && session.completed),
+      completed: [...backend.sessions.values()].some(session => session.serviceId === serviceId &&
+        session.mode === "graded_read_aloud" && session.completed),
       completedAt: 1793191336,
     }));
     return { services, wallet: backend.wallet,
       activities: [1, 2].flatMap(round => services.map(service => ({ ...service,
+        type: "read_aloud", onCooldown: service.completed,
+        availableAt: service.completed ? Math.floor(Date.now() / 1000) + 604800 : 0,
         completed: round === 1 && service.completed,
         activityId: `${service.serviceId}-reading-v${round}`, round,
-        bestScore: round === 1 && service.completed ? 85 : null,
-        latestScore: round === 1 && service.completed ? 85 : null,
+        bestScore: round === 1 && service.completed ? 90 : null,
+        latestScore: round === 1 && service.completed ? 90 : null,
         feedback: round === 1 && service.completed ? "Good coverage." : "",
         mpAwarded: round === 1 && service.completed ? 10 : 0 }))).concat(backend.qaEnabled ? [1, 2].map(number => ({
           activityId: `qa:s3:q${number}`, serviceId: "s3", label: "Amazon S3", type: "question_answer",
           questionId: `q${number}`, title: `Private screenshots ${number}`, available: true,
-          languages: ["en-US", "zh-HK"], round: 1,
+          languages: ["en-US", "zh-HK", "zh-CN"], round: 1,
           completed: number === 1 && [...backend.sessions.values()].some(session => session.mode === "graded_question_answer" && session.completed),
           bestScore: null, latestScore: null, feedback: null, mpAwarded: 0, completedAt: 1793191336,
         })) : []),
@@ -76,13 +85,14 @@ function fakeApi(path, method, body, authorization) {
       activityId: `${serviceId}-reading-v1`, round: 1,
       question: "Amazon S3 stores data as objects in buckets.",
       readingTexts: { "en-US": "Amazon S3 stores data as objects in buckets.",
-        "zh-HK": "Amazon S3 以物件形式將資料儲存在儲存桶內。", "fr-FR": frenchPassage },
+        "zh-HK": "Amazon S3 以物件形式將資料儲存在儲存桶內。", "zh-CN": mandarinPassage, "fr-FR": frenchPassage },
       languages, defaultLanguage: "en-US",
       language: "en-US", attempts: 0, maxAttempts: 6 };
     if (body.type === "question_answer") Object.assign(session, {
       mode: "graded_question_answer", type: "question_answer", activityId: "qa:s3:q1", questionId: "q1",
-      questionTitle: "Private screenshots", languages: languages.slice(0, 2),
-      questionTexts: { "en-US": "How would you store private screenshots?", "zh-HK": "你會點樣儲存私人截圖？" },
+      questionTitle: "Private screenshots", languages: languages.slice(0, 3),
+      questionTexts: { "en-US": "How would you store private screenshots?", "zh-HK": "你會點樣儲存私人截圖？",
+        "zh-CN": "你会怎样存储私人截图？" },
       question: "How would you store private screenshots?", readingTexts: undefined,
     });
     backend.sessions.set(id, session);
@@ -115,7 +125,7 @@ function fakeApi(path, method, body, authorization) {
       status: session.status, paired: session.paired, completed: session.completed,
       question: session.status === "ready" ? session.question : undefined,
       mode: session.mode, readingTexts: session.readingTexts, questionTexts: session.questionTexts,
-      activityId: session.activityId, questionId: session.questionId, languages: session.languages,
+      activityId: session.activityId, round: session.round, questionId: session.questionId, languages: session.languages,
       defaultLanguage: session.defaultLanguage, result: session.result };
   }
   if (path.endsWith("/voice/mobile/claim") && method === "POST") {
@@ -131,6 +141,7 @@ function fakeApi(path, method, body, authorization) {
     const token = `mobile-${body.id}-${backend.mobileTokens.size}`;
     backend.mobileTokens.set(token, session.id);
     return { mobileToken: token, status: session.status, question: session.question, mode: session.mode,
+      round: session.round, serviceLabel: session.serviceLabel,
       readingTexts: session.readingTexts, questionTexts: session.questionTexts,
       activityId: session.activityId, questionId: session.questionId,
       languages: session.languages, defaultLanguage: session.defaultLanguage,
@@ -142,6 +153,7 @@ function fakeApi(path, method, body, authorization) {
     if (!session) return { status: 401, body: { error: "unauthorized" } };
     return { id: session.id, status: session.status, pairCode: session.pairCode,
       serviceId: session.serviceId, serviceLabel: session.serviceLabel,
+      round: session.round,
       expiresAt: "2026-10-28T16:00:00Z", question: session.question,
       result: session.result, completed: session.completed, language: session.language,
       mode: session.mode, readingTexts: session.readingTexts, questionTexts: session.questionTexts,
@@ -155,7 +167,7 @@ function fakeApi(path, method, body, authorization) {
     session.language = body.language;
     session.completed = true;
     session.status = "completed";
-    session.result = { passed: true, score: 85, mpAwarded: 10, feedback: "Good coverage." };
+    session.result = { passed: true, score: 90, mpAwarded: 15, feedback: "Good coverage." };
     if (session.mode === "graded_question_answer") session.result = {
       passed: true, score: 100, mpAwarded: 30, feedback: "Good understanding.", breakdown: { understanding: 100 },
     };
@@ -423,6 +435,7 @@ try {
   })()`);
   assert.ok(signClick.hits.includes("s3"));
   await waitFor(desktop, "document.querySelector('#service-dialog')?.open");
+  await waitFor(desktop, "document.querySelector('#service-explain').disabled === false");
   assert.equal(await desktop.evaluate(`document.querySelector('#service-title').textContent`), "Amazon S3");
   assert.equal(await desktop.evaluate(`document.querySelector('#service-read')`), null);
   const pause = await desktop.evaluate(`({
@@ -433,17 +446,28 @@ try {
     position:[__game.player._position.x,__game.player._position.z]
   })`);
   assert.equal(pause.signOpen, true);
-  assert.equal(pause.readLabel, "Voice practice");
+  assert.equal(pause.readLabel, "Available: Read aloud");
   assert.equal(pause.readDisabled, false);
   assert.equal(pause.reading, true);
   await desktop.evaluate(`__game.player.GetComponent('BasicCharacterControllerInput')._keys.forward=true`);
   await delay(1200);
   assert.deepEqual(await desktop.evaluate(`[__game.player._position.x,__game.player._position.z]`), pause.position);
   await desktop.evaluate(`__game.player.GetComponent('BasicCharacterControllerInput')._keys.forward=false; document.querySelector('#service-explain').click()`);
+  await waitFor(desktop, `document.querySelector('#voice-start').disabled === false`);
+  assert.equal(backend.sessions.size, 0, "opening the icon and task chooser never creates a reading");
+  await desktop.evaluate(`document.querySelector('#voice-start').click()`);
   await waitFor(desktop, `document.querySelector('#voice-desktop-dialog').open &&
     document.querySelector('#pc-voice-question').textContent.includes('Amazon S3 stores data')`);
   assert.equal(await desktop.evaluate(`!!document.querySelector('#voice-desktop-panel canvas')`), false);
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-speak').disabled`), false);
+  await desktop.evaluate(`document.querySelector('#pc-voice-language').value='zh-CN';
+    document.querySelector('#pc-voice-language').dispatchEvent(new Event('change'));
+    document.querySelector('#pc-speak').click();`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-voice-question').textContent`), mandarinPassage);
+  assert.equal(await desktop.evaluate(`window.__speechInstances.at(-1).lang`), "zh-CN");
+  await desktop.evaluate(`document.querySelector('#pc-speak').click();
+    document.querySelector('#pc-voice-language').value='en-US';
+    document.querySelector('#pc-voice-language').dispatchEvent(new Event('change'));`);
   const micPoint = await desktop.evaluate(`(() => {
     const button = document.querySelector('#pc-speak'); button.scrollIntoView({block:'center'});
     const r = button.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2};
@@ -527,7 +551,13 @@ try {
   await mobile.evaluate(`document.querySelector('#mobile-voice-language').value='fr-FR';
     document.querySelector('#mobile-voice-language').dispatchEvent(new Event('change'))`);
   assert.equal(await mobile.evaluate(`document.querySelector('#mobile-voice-question').textContent`), frenchPassage);
-  assert.equal(await mobile.evaluate(`document.querySelector('#mobile-question-heading').textContent`), "Text to read aloud");
+  assert.equal(await mobile.evaluate(`document.querySelector('#mobile-question-heading').textContent`), "Reading task 1 - Text to read aloud");
+  await mobile.evaluate(`document.querySelector('#mobile-voice-language').value='zh-CN';
+    document.querySelector('#mobile-voice-language').dispatchEvent(new Event('change'));
+    document.querySelector('#mobile-speak').dispatchEvent(new KeyboardEvent('keydown',{key:' '}));`);
+  assert.equal(await mobile.evaluate(`document.querySelector('#mobile-voice-question').textContent`), mandarinPassage);
+  assert.equal(await mobile.evaluate(`window.__speechInstances.at(-1).lang`), "zh-CN");
+  await mobile.evaluate(`document.querySelector('#mobile-speak').dispatchEvent(new KeyboardEvent('keyup',{key:' '}));`);
   await mobile.evaluate(`document.querySelector('#mobile-voice-language').value='zh-HK';
     document.querySelector('#mobile-voice-language').dispatchEvent(new Event('change'))`);
   assert.equal(await mobile.evaluate(`document.querySelector('#mobile-voice-question').textContent`),
@@ -560,7 +590,7 @@ try {
   })()`);
   await mobile.call("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ ...submitPoint, id: 1 }] });
   await mobile.call("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await waitFor(mobile, `document.querySelector('#mobile-voice-status')?.textContent.includes('Voice activity passed')`);
+  await waitFor(mobile, `document.querySelector('#mobile-voice-status')?.textContent.includes('All reading for this service is locked')`);
   const answerRequest = await mobile.evaluate(`__apiCalls.find(call=>call.path.endsWith('/voice/mobile/answer'))`);
   assert.equal(answerRequest.body.source, "browser");
   assert.equal(answerRequest.body.speechCompleted, true);
@@ -568,12 +598,12 @@ try {
   assert.equal(answerRequest.body.language, "en-US");
   assert.equal(answerRequest.auth, "Bearer mobile-voice-1-0");
   assert.equal(answerRequest.apiKey, undefined);
-  await waitFor(mobile, `document.querySelector('#mobile-voice-status')?.textContent.includes('Voice activity passed')`, 15000);
-  assert.match(await mobile.evaluate(`document.querySelector('#mobile-voice-result').textContent`), /Grade: 85\/100.*MP earned: 10/);
+  await waitFor(mobile, `document.querySelector('#mobile-voice-status')?.textContent.includes('All reading for this service is locked')`, 15000);
+  assert.match(await mobile.evaluate(`document.querySelector('#mobile-voice-result').textContent`), /Grade: 90\/100.*MP earned: 15/);
   assert.equal(await mobile.evaluate(`document.querySelector('#mobile-speak').disabled`), true);
   assert.equal(await mobile.evaluate(`document.querySelector('#mobile-chat-section').hidden`), true);
   await mobile.call("Page.reload");
-  await waitFor(mobile, `document.querySelector('#mobile-voice-status')?.textContent.includes('Voice activity passed')`);
+  await waitFor(mobile, `document.querySelector('#mobile-voice-status')?.textContent.includes('All reading for this service is locked')`);
   assert.equal(await mobile.evaluate(`__apiCalls.some(c=>c.path.endsWith('/voice/mobile/claim'))`), false);
   assert.equal(await mobile.evaluate(`document.querySelector('#mobile-voice-transcript').textContent.includes('unrelated')`), false);
   assert.equal(await mobile.evaluate(`document.querySelector('#mobile-speech-consent')`), null);
@@ -581,12 +611,12 @@ try {
   const autoPolls = await desktop.evaluate(`__apiCalls.filter(c=>/\\/voice\\/sessions\\/voice-1$/.test(c.path)).length`);
   assert.equal(autoPolls, 0, "desktop makes no session GET before the manual completion check");
   await desktop.evaluate(`document.querySelector('#voice-check').click()`);
-  await waitFor(desktop, `document.querySelector('#pc-voice-result')?.textContent.includes('85/100')`);
+  await waitFor(desktop, `document.querySelector('#pc-voice-result')?.textContent.includes('90/100')`);
   assert.equal(await desktop.evaluate(`document.querySelector('#voice-start').hidden`), true);
-  assert.equal(await desktop.evaluate(`(document.querySelector('#voice-desktop-dialog').innerText.match(/Grade: 85\\/100/g) || []).length`), 1);
+  assert.equal(await desktop.evaluate(`(document.querySelector('#voice-desktop-dialog').innerText.match(/Grade: 90\\/100/g) || []).length`), 1);
   assert.equal(await desktop.evaluate(`document.querySelector('#voice-desktop-panel').textContent`), "");
-  await waitFor(desktop, `document.querySelector('#mp-value').textContent.includes('10 / 100')`);
-  assert.equal(await desktop.evaluate(`document.querySelector('#mp-bar').style.width`), "10%");
+  await waitFor(desktop, `document.querySelector('#mp-value').textContent.includes('15 / 100')`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#mp-bar').style.width`), "15%");
   assert.equal(await desktop.evaluate(`document.querySelector('#voice-desktop-panel').textContent.includes('遊戲檔案')`), false);
   assert.equal(await desktop.evaluate(`__game.readServices.has('s3')`), true);
   assert.match(await desktop.evaluate(`document.querySelector('#service-read-state').textContent`), /Read/);
@@ -601,8 +631,11 @@ try {
   await desktop.evaluate(`document.querySelector('#voice-desktop-close').click();
     document.querySelector('#service-dialog').close();
     { const mission = document.createElement('button'); mission.dataset.awsService = 'ec2';
-      document.querySelector('#mission-services').appendChild(mission); mission.click(); mission.remove(); }
-    document.querySelector('#service-explain').click();`);
+      document.querySelector('#mission-services').appendChild(mission); mission.click(); mission.remove(); }`);
+  await waitFor(desktop, `document.querySelector('#service-explain').disabled === false`);
+  await desktop.evaluate(`document.querySelector('#service-explain').click()`);
+  await waitFor(desktop, `document.querySelector('#voice-start').disabled === false`);
+  await desktop.evaluate(`document.querySelector('#voice-start').click()`);
   await waitFor(desktop, `document.querySelector('#pc-practice-content').hidden === false`);
   await desktop.evaluate(`document.querySelector('#voice-transfer').click()`);
   await waitFor(desktop, `document.querySelector('#voice-desktop-panel .voice-session-status')?.textContent.includes('Scan the QR code')`);
@@ -642,7 +675,7 @@ try {
   assert.doesNotMatch(mobileMarkup, /api_key|x-api-key/i);
   assert.equal(backend.calls.some(call => /\/voice\/mobile\/(?:upload|transcribe)$/.test(call.path)), false);
 
-  await desktop.evaluate(`document.querySelector('#voice-desktop-dialog').close(); document.querySelector('#service-dialog').close(); __game.spell='shockwave'; __game.magicLevel=1`);
+  await desktop.evaluate(`document.querySelector('#voice-desktop-dialog').close(); document.querySelector('#service-dialog').close(); __game.spell='lightning'; __game.magicLevel=1`);
   await waitFor(desktop, `!document.querySelector('dialog[open]') && !__game.readingService`);
   const castResult = await desktop.evaluate(`__game.castMagic()`);
   assert.equal(castResult, true, JSON.stringify(await desktop.evaluate(`({
@@ -651,17 +684,17 @@ try {
     calls:__apiCalls.filter(call=>call.path.endsWith('/voice/casts')),
     ready:__game.ready,traveling:__game.traveling,reading:__game.readingService,cooldown:__game.magic.cooldown
   })`)));
-  await waitFor(desktop, `document.querySelector('#mp-value').textContent.includes('9 / 100')`, 15000);
-  assert.equal(backend.wallet.spent, 1);
-  assert.equal(await desktop.evaluate(`document.querySelector('#mp-bar').style.width`), "9%");
+  await waitFor(desktop, `document.querySelector('#mp-value').textContent.includes('3 / 100')`, 15000);
+  assert.equal(backend.wallet.spent, 12);
+  assert.equal(await desktop.evaluate(`document.querySelector('#mp-bar').style.width`), "3%");
   assert.equal(await desktop.evaluate(`document.querySelector('a[href="./voice-marks.html"]')?.textContent`), "Voice marks");
   const marks = await makeTarget("/voice-marks.html");
   mobileBrowsers.push(marks);
   await waitFor(marks, `document.querySelector('#voice-marks-results')?.hidden === false`);
   assert.equal(await marks.evaluate(`document.querySelector('#voice-marks-summary').textContent`), "1 of 12 voice activities completed");
   assert.equal(await marks.evaluate(`document.querySelectorAll('#voice-marks-activities tr').length`), 12);
-  assert.match(await marks.evaluate(`document.querySelector('#voice-marks-activities tr').textContent`), /85.*20:42/);
-  assert.match(await marks.evaluate(`document.querySelector('#voice-marks-wallet').textContent`), /9 \/ 100/);
+  assert.match(await marks.evaluate(`document.querySelector('#voice-marks-activities tr').textContent`), /90.*20:42/);
+  assert.match(await marks.evaluate(`document.querySelector('#voice-marks-wallet').textContent`), /3 \/ 100/);
   const marksRequests = backend.calls.filter(call => call.path.endsWith("/voice/completions")).length;
   await marks.evaluate(`{ const search = document.querySelector('input[type="search"]');
     search.value = '  s3  '; search.dispatchEvent(new Event('input')); }`);
@@ -732,7 +765,7 @@ try {
   await waitFor(desktop, "document.body?.dataset.ready === 'true' && !__game.resumeSave && __game.gameSave.status === 'saved'");
   assert.equal(await desktop.evaluate("__game.weapon"), "Spear");
   assert.equal(backend.save.state.equipment.weapon, "Spear");
-  assert.equal(backend.wallet.balance, 9);
+  assert.equal(backend.wallet.balance, 3);
   const castRequests = backend.calls.filter(call => call.path.endsWith('/voice/casts')).length;
   await desktop.call("Input.dispatchKeyEvent", { type: "keyDown", code: "KeyM", key: "m",
     modifiers: 3, windowsVirtualKeyCode: 77 });
@@ -747,7 +780,7 @@ try {
   })()`), true);
   assert.equal(await desktop.evaluate("__game.magic.cooldown"), 0);
   assert.equal(backend.calls.filter(call => call.path.endsWith('/voice/casts')).length, castRequests);
-  assert.equal(backend.wallet.balance, 9);
+  assert.equal(backend.wallet.balance, 3);
   await desktop.call("Page.reload");
   await waitFor(desktop, "document.body?.dataset.ready === 'true' && !__game.resumeSave");
   assert.equal(await desktop.evaluate("__game.infinitiveMagic"), false);
@@ -755,11 +788,15 @@ try {
 
   backend.qaEnabled = true;
   await desktop.evaluate(`{ const mission = document.createElement('button'); mission.dataset.awsService = 's3';
-    document.querySelector('#mission-services').appendChild(mission); mission.click(); mission.remove(); }
-    document.querySelector('#service-explain').click();`);
-  await waitFor(desktop, `document.querySelector('#voice-question-option').disabled === false`);
-  await desktop.evaluate(`{ const type = document.querySelector('#voice-task-type'); type.value='question_answer';
-    type.dispatchEvent(new Event('change')); } document.querySelector('#voice-start').click();`);
+    document.querySelector('#mission-services').appendChild(mission); mission.click(); mission.remove(); }`);
+  await waitFor(desktop, `document.querySelector('#service-explain').textContent === 'Available: Q&A'`);
+  await desktop.evaluate(`document.querySelector('#service-explain').click()`);
+  await waitFor(desktop, `document.querySelector('#voice-question-option')?.disabled === false`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#voice-reading-option')`), null);
+  assert.equal(await desktop.evaluate(`document.querySelector('#voice-task-type').hidden`), true);
+  assert.equal(await desktop.evaluate(`document.querySelector('#voice-task-type').value`), "question_answer");
+  assert.equal(await desktop.evaluate(`document.querySelector('#pc-practice-content').hidden`), true);
+  await desktop.evaluate(`document.querySelector('#voice-start').click()`);
   await waitFor(desktop, `document.querySelector('#pc-question-heading').textContent === 'Question' &&
     document.querySelector('#pc-speak').disabled === false`);
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-voice-question').textContent`), "How would you store private screenshots?");
@@ -796,20 +833,370 @@ try {
     document.querySelector('#voice-marks-type').dispatchEvent(new Event('change'));`);
   assert.equal(await marks.evaluate(`document.querySelectorAll('#voice-marks-activities tr').length`), 2);
   assert.match(await marks.evaluate(`document.querySelector('#voice-marks-activities').textContent`), /Q&A: Private screenshots/);
-  await desktop.evaluate(`document.querySelector('#voice-desktop-close').click(); document.querySelector('#service-explain').click();`);
+  await desktop.evaluate(`document.querySelector('#voice-desktop-close').click()`);
+  await waitFor(desktop, `document.querySelector('#service-explain').disabled === false`);
+  await desktop.evaluate(`document.querySelector('#service-explain').click()`);
   await waitFor(desktop, `document.querySelector('#voice-start').textContent === 'Start Q&A' &&
     document.querySelector('#voice-start').disabled === false`);
   assert.equal(await desktop.evaluate(`document.querySelector('#pc-voice-result').textContent`), "");
+
+  await desktop.evaluate(`document.querySelector('#voice-desktop-close').click();
+    document.querySelector('#service-close')?.click();
+    __game.switchMap('village', true);`);
+  await waitFor(desktop, `__game.map.id === 'village' && !__game.traveling`);
+  for (const destination of ['mountains', 'desert', 'dungeon']) {
+    for (const target of [destination, 'village']) {
+      await desktop.evaluate(`(() => {
+        const gate = __game.map.gates.find(gate => gate.to === '${target}');
+        const controller = __game.player.GetComponent('BasicCharacterController');
+        controller._target.position.set(gate.x, 0, gate.z);
+        controller._velocity.set(0, 0, 0);
+        __game.player.SetPosition(controller._target.position);
+        __game.useGate();
+      })()`);
+      await waitFor(desktop, `__game.map.id === '${target}' && !__game.traveling`);
+      const population = await desktop.evaluate(`({
+        ordinary:__game.enemies.filter(actor=>actor.GetComponent('NPCController')._target.visible &&
+          !actor.GetComponent('NPCController').elite && !actor.GetComponent('NPCController')._params.boss).length,
+        elites:__game.enemies.filter(actor=>actor.GetComponent('NPCController')._target.visible && actor.GetComponent('NPCController').elite).length,
+        bossScale:__game.boss.GetComponent('NPCController').profile.scale
+      })`);
+      assert.equal(population.ordinary, target === 'village' ? 24 : 14);
+      assert.equal(population.elites, target === 'village' ? 0 : 1);
+      assert.equal(population.bossScale, 0.084);
+      const collision = await desktop.evaluate(`(() => {
+        const game=__game, controller=game.player.GetComponent('BasicCharacterController');
+        const saved=game.player._position.clone(), meshes=[];
+        game.worldRoot.traverse(object=>{
+          if (object.isMesh && object.geometry?.type==='ConeGeometry') meshes.push(object);
+        });
+        let blocked=0, matched=0;
+        try {
+          for (const b of game.map.obstacles) {
+            const start=new __THREE.Vector3(b.x-b.width/2-3,0,b.z);
+            game.player.SetPosition(start);
+            controller._target.position.copy(start);
+            if (controller._FindIntersections(new __THREE.Vector3(b.x+b.width/2+3,0,b.z)).length) blocked++;
+            if (['desert','mountains'].includes(game.map.id)) {
+              const solid=meshes.find(mesh=>mesh.position.x===b.x && mesh.position.z===b.z && mesh.position.y===b.height/2);
+              if (!solid) continue;
+              const bounds=new __THREE.Box3().setFromObject(solid);
+              if (Math.abs(bounds.min.x-(b.x-b.width/2))<0.01 &&
+                  Math.abs(bounds.max.x-(b.x+b.width/2))<0.01 &&
+                  Math.abs(bounds.min.z-(b.z-b.depth/2))<0.01 &&
+                  Math.abs(bounds.max.z-(b.z+b.depth/2))<0.01) matched++;
+            }
+          }
+        } finally {
+          game.player.SetPosition(saved);
+          controller._target.position.copy(saved);
+        }
+        return {count:game.map.obstacles.length,blocked,matched};
+      })()`);
+      assert.equal(collision.blocked, collision.count, `${target}: movement must not cross solid obstacles`);
+      if (['desert', 'mountains'].includes(target)) assert.equal(collision.matched, collision.count,
+        `${target}: rendered obstacle footprint must match collision bounds`);
+      assert.equal(await desktop.evaluate(`(() => {
+        const gate = __game.map.gates.find(gate => gate.to === '${target === 'village' ? destination : 'village'}');
+        return __game.player._position.distanceTo(new __THREE.Vector3(gate.x, 0, gate.z)) < 0.1 &&
+          __game.enteredGate === gate && __game.updateGateTravel() === false;
+      })()`), true, `${destination}: arrival at ${target} doorway without bouncing back`);
+    }
+  }
+
+  const arts = await desktop.evaluate(`(async () => {
+    const game = __game, magic = game.magic;
+    game.infinitiveMagic = true;
+    magic.cooldown = 0;
+    magic.clearProjectiles();
+    game.magicEffects.clear();
+    const controller = game.player.GetComponent('BasicCharacterController');
+    controller._target.rotation.set(0, 0, 0);
+    game.player.SetQuaternion(controller._target.quaternion);
+    const origin = game.player._position.clone();
+    const enemy = game.enemies.find(actor => actor._active !== false &&
+      actor.GetComponent('NPCController')._target?.visible && actor.GetComponent('HealthComponent').IsAlive());
+    const enemyHealth = enemy.GetComponent('HealthComponent');
+    enemyHealth._health = enemyHealth._maxHealth = 10000;
+    enemy.GetComponent('NPCController')._target.position.set(origin.x, 0, origin.z + 8);
+    enemy.SetPosition(enemy.GetComponent('NPCController')._target.position);
+    const cast = async spell => { game.spell = spell; return game.castMagic(); };
+    const lightning = await cast('lightning');
+    const lightningHit = enemyHealth._health < 10000;
+    const army = await cast('fireball');
+    const clones = magic.clones.length;
+    const shadows = game.magicEffects.active.filter(effect => effect.kind === 'clone');
+    const characterCopies = shadows.length === 5 && shadows.every(effect => {
+      let skinned = false;
+      effect.model?.traverse(item => { if (item.isSkinnedMesh) skinned = true; });
+      return skinned && effect.model !== controller._target && effect.attack;
+    });
+    const shadowStates = [...magic.clones];
+    for (let i = 0; i < 96; i++) {
+      magic.update(1 / 30);
+      game.magicEffects.update(1 / 30);
+    }
+    const tripleAttacks = shadowStates.every(shadow => shadow.strikes === 3 && shadow.done);
+    const storage = await cast('frost');
+    const domain = game.magicEffects.active.find(effect => effect.kind === 'domain');
+    const normalDetail = domain.object.children.length;
+    const before = enemyHealth._health;
+    magic.update(1.2);
+    const sustainedDamage = enemyHealth._health < before;
+    const ward = await cast('storm');
+    magic.update(0.01);
+    const health = game.player.GetComponent('HealthComponent');
+    health._health = health._maxHealth;
+    game.player.Broadcast({topic:'health.damage',value:20});
+    const wardHP = health._health;
+    const recovery = await cast('shockwave');
+    const anchor = {...magic.anchor};
+    magic.update(1);
+    controller._target.position.x += 2;
+    game.player.SetPosition(controller._target.position);
+    game.player.Broadcast({topic:'health.damage',value:10000});
+    const recovered = health._health === Math.ceil(health._maxHealth * 0.35) &&
+      game.player._position.distanceTo(new __THREE.Vector3(anchor.x, 0, anchor.z)) < 0.1 &&
+      magic.anchor === null;
+    game.quality = 'low';
+    await cast('frost');
+    const lowDetail = game.magicEffects.active.filter(effect => effect.kind === 'domain').at(-1).object.children.length;
+    const title = document.querySelector('#cloud-art-title').textContent;
+    magic.clearProjectiles();
+    game.magicEffects.clear();
+    return {lightning,lightningHit,army,clones,characterCopies,tripleAttacks,storage,sustainedDamage,ward,wardHP,
+      maxHP:health._maxHealth,recovery,recovered,normalDetail,lowDetail,title,
+      levels:document.querySelectorAll('[data-magic-level]').length};
+  })()`);
+  assert.equal(arts.lightning && arts.lightningHit && arts.army && arts.clones > 0 &&
+    arts.storage && arts.sustainedDamage && arts.ward && arts.recovery && arts.recovered, true, JSON.stringify(arts));
+  assert.equal(arts.wardHP, arts.maxHP - 10);
+  assert.equal(arts.clones, 5);
+  assert.equal(arts.characterCopies && arts.tripleAttacks, true);
+  assert.ok(arts.lowDetail < arts.normalDetail);
+  assert.equal(arts.levels, 0);
+  assert.equal(arts.title, "領域展開・無量儲存Domain: Infinite Storage");
+  assert.equal(await desktop.evaluate(`document.querySelector('#manual-button').textContent.trim()`), "");
+  assert.equal(await desktop.evaluate(`document.querySelector('#manual-button svg').getAttribute('aria-hidden')`), "true");
+
+  await desktop.call("Page.bringToFront");
+  await desktop.evaluate(`(() => {
+    const game = __game;
+    const controller = game.player.GetComponent('BasicCharacterController');
+    controller._target.position.set(0, 0, 20);
+    controller._target.rotation.set(0, 0, 0);
+    game.player.SetPosition(controller._target.position);
+    game.player.SetQuaternion(controller._target.quaternion);
+    const enemy = game.enemies.find(actor => actor._active !== false &&
+      actor.GetComponent('NPCController')._target?.visible && actor.GetComponent('HealthComponent').IsAlive());
+    enemy.GetComponent('NPCController')._target.position.set(0, 0, 28);
+    enemy.SetPosition(enemy.GetComponent('NPCController')._target.position);
+    const health = enemy.GetComponent('HealthComponent');
+    health._health = health._maxHealth = 100;
+    globalThis.shadowEnemy = enemy;
+    game.magic.clearProjectiles();
+    game.magicEffects.clear();
+    game.magic.cooldown = 0;
+    game.magicEffects.cpuSkinning = () => true;
+    game.spell = 'fireball';
+  })()`);
+  assert.equal(await desktop.evaluate('__game.castMagic()'), true);
+  const boneStart = await desktop.evaluate(`(() => {
+    globalThis.testShadow = __game.magicEffects.active.find(effect => effect.kind === 'clone');
+    globalThis.shadowVertices = Array.from(testShadow.skins[0].geometry.attributes.position.array);
+    globalThis.originalVertices = Array.from(testShadow.skins[0].source.attributes.position.array);
+    return testShadow.model.getObjectByName('LeftArm').quaternion.toArray();
+  })()`);
+  await waitFor(desktop, `testShadow.age > 0.3`);
+  const boneAfter = await desktop.evaluate(`testShadow.model.getObjectByName('LeftArm').quaternion.toArray()`);
+  assert.notDeepEqual(boneAfter, boneStart, "shadow skeleton must animate during actual game frames");
+  assert.equal(await desktop.evaluate(`testShadow.material.skinning`), false);
+  assert.equal(await desktop.evaluate(`shadowVertices.some((value, i) =>
+    Math.abs(value - testShadow.skins[0].geometry.attributes.position.array[i]) > 0.01)`), true,
+  "CPU compatibility path must deform actual rendered vertices");
+  assert.equal(await desktop.evaluate(`originalVertices.every((value, i) =>
+    value === testShadow.skins[0].source.attributes.position.array[i])`), true,
+  "shadow animation must never mutate the main character's geometry");
+  await waitFor(desktop, `shadowEnemy.GetComponent('HealthComponent')._health === 0`);
+  assert.equal(await desktop.evaluate(`shadowEnemy.GetComponent('NPCController')._stateMachine._currentState.Name`), "death");
+  await desktop.evaluate(`(() => {
+    const clock = __game.clock, magic = __game.magic;
+    const delta = clock.getDelta, update = magic.update;
+    clock.getDelta = function() { clock.getDelta = delta; return 0.5; };
+    magic.update = function(dt) {
+      magic.update = update;
+      globalThis.magicFrameElapsed = dt;
+      return update.call(this, dt);
+    };
+  })()`);
+  await waitFor(desktop, `globalThis.magicFrameElapsed !== undefined`);
+  assert.equal(await desktop.evaluate("magicFrameElapsed"), 0.5, "low-FPS frames must not slow magic timers");
+  const voiceChoice = await desktop.evaluate(`(() => {
+    const sound = __game.sound, original = sound.synthesis, spoken = [];
+    globalThis.attackAnnouncements = spoken;
+    const voices = [{name:'Cantonese male test voice',voiceURI:'test-male',lang:'yue-HK'},
+      {name:'English test voice',voiceURI:'test-en',lang:'en-US'}];
+    sound.synthesis = {getVoices:()=>voices,speak:value=>spoken.push(value),cancel(){}};
+    sound.Utterance = class {constructor(text){this.text=text;}};
+    sound.setMuted(false);
+    sound.setVolume(0.5);
+    original.dispatchEvent(new Event('voiceschanged'));
+    const select = document.querySelector('#attack-voice');
+    select.value = 'test-male';
+    select.dispatchEvent(new Event('change'));
+    const selected = spoken.at(-1);
+    document.querySelector('#attack-voice-preview').click();
+    return {count:select.options.length,name:select.selectedOptions[0].textContent,
+      voice:selected.voice.voiceURI,lang:selected.lang,volume:selected.volume,
+      preview:spoken.at(-1).voice.voiceURI,
+      storage:localStorage.getItem('aws-warrior:v2:sound-voice'),
+      bannerColor:document.querySelector('#cloud-art-title').style.getPropertyValue('--art-color')};
+  })()`);
+  assert.equal(voiceChoice.count, 2);
+  assert.equal(voiceChoice.voice, 'test-male');
+  assert.equal(voiceChoice.lang, 'yue-HK');
+  assert.equal(voiceChoice.preview, 'test-male');
+  assert.equal(voiceChoice.storage, 'test-male');
+  assert.equal(voiceChoice.volume, 0.5);
+  assert.ok(voiceChoice.bannerColor.startsWith('#'));
+  backend.wallet = { balance: 100, max: 100, earned: 100, spent: 0, revision: backend.wallet.revision + 1 };
+  await desktop.evaluate(`(async () => {
+    __game.infinitiveMagic = false;
+    __game.magic.cooldown = 0;
+    __game.magic.clearProjectiles();
+    __game.magicEffects.clear();
+    __game.spell = 'lightning';
+    __game.selectedSpells = null;
+    await __game.refreshVoiceWallet();
+    document.querySelector('[data-spell="frost"]').click();
+  })()`);
+  assert.match(await desktop.evaluate(`document.querySelector('#magic-selection').textContent`), /2 selected.*32 MP.*45s/);
+  assert.equal(await desktop.evaluate("__game.castMagic()"), true);
+  assert.equal(await desktop.evaluate("attackAnnouncements.at(-1).text"), "瞬式，事件雷切。領域展開，無量儲存");
+  assert.equal(backend.wallet.balance, 68);
+  assert.match(await desktop.evaluate(`document.querySelector('#cloud-art-title').textContent`), /Event-Driven λ.*Infinite Storage/);
+  assert.equal(await desktop.evaluate("__game.magic.fields.length"), 1);
+  backend.wallet = { balance: 86, max: 100, earned: 100, spent: 14, revision: backend.wallet.revision + 1 };
+  await desktop.evaluate(`__game.magic.cooldown=0; __game.refreshVoiceWallet()`);
+  await desktop.evaluate(`document.querySelectorAll('[data-spell][aria-pressed="false"]').forEach(button=>button.click())`);
+  assert.equal(await desktop.evaluate(`document.querySelector('#magic-ultimate')`), null);
+  assert.equal(await desktop.evaluate(`document.querySelector('#magic-cast').disabled`), true);
+  assert.match(await desktop.evaluate(`document.querySelector('#magic-cast').textContent`), /全域部署.*87 MP/);
+  await desktop.evaluate(`document.querySelector('[data-spell="shockwave"]').click()`);
+  assert.doesNotMatch(await desktop.evaluate(`document.querySelector('#magic-cast').textContent`), /全域部署/);
+  await desktop.evaluate(`document.querySelector('[data-spell="shockwave"]').click()`);
+  backend.wallet = { balance: 100, max: 100, earned: 100, spent: 0, revision: backend.wallet.revision + 1 };
+  await desktop.evaluate("__game.refreshVoiceWallet()");
+  const avatar = await desktop.evaluate(`(async () => {
+    const selected = JSON.stringify(__game.selectedSpells);
+    const ordinary = __game.enemies.find(actor => actor!==__game.boss && actor._active!==false &&
+      actor.GetComponent('HealthComponent').IsAlive());
+    for (const [actor,z] of [[ordinary,70],[__game.boss,80]]) {
+      const npc=actor.GetComponent('NPCController'), hp=actor.GetComponent('HealthComponent');
+      npc._target.position.set(0,0,z);
+      actor.SetPosition(npc._target.position);
+      hp._health=hp._maxHealth=10000;
+    }
+    if (!await __game.castMagic()) return {cast:false};
+    const avatars = __game.magicEffects.active.filter(effect=>effect.kind==='avatar');
+    const effect = avatars[0];
+    const source = effect.skins[0].source;
+    let disposed=0;
+    source.addEventListener('dispose',()=>disposed++);
+    const scale = effect.model.scale.x / __game.player.GetComponent('BasicCharacterController')._target.scale.x;
+    const centre = __game.player._position;
+    const outward = avatars.every(item => {
+      const dx=item.object.position.x-centre.x, dz=item.object.position.z-centre.z;
+      return Math.abs(Math.hypot(dx,dz)-12)<0.01 &&
+        dx*Math.sin(item.object.rotation.y)+dz*Math.cos(item.object.rotation.y)>11.99;
+    });
+    const state = {cast:true, scale, avatarCount:avatars.length,outward,
+      headings:avatars.map(item=>item.object.rotation.y),
+      allGiant:avatars.every(item=>item.model.scale.x===effect.model.scale.x),
+      clones:__game.magic.clones.length, fields:__game.magic.fields.length,
+      anchor:!!__game.magic.anchor, cooldown:__game.magic.cooldown,
+      selectionUnchanged:selected===JSON.stringify(__game.selectedSpells)};
+    state.beforeWave=[ordinary,__game.boss].map(actor=>actor.GetComponent('HealthComponent')._health);
+    __game.magic.update(0.7);
+    state.atWaveStart=[ordinary,__game.boss].map(actor=>actor.GetComponent('HealthComponent')._health);
+    __game.magic.update(0.3);
+    __game.magicEffects.update(0.3);
+    const movingWave=__game.magicEffects.active.find(item=>item.kind==='release-wave');
+    state.waveRadius=movingWave.source.radius;
+    state.visualRadius=movingWave.object.scale.x;
+    state.boundary=__game.magicEffects.active.find(item=>item.kind==='release-boundary').radius;
+    __game.magic.update(0.31);
+    state.afterWave=[ordinary,__game.boss].map(actor=>actor.GetComponent('HealthComponent')._health);
+    const chosenZoom=__game.cameraDistance;
+    __game.updateCamera(1);
+    state.framedDistance=__game.camera.position.distanceTo(__game.player._position);
+    state.chosenZoom=chosenZoom;
+    __game.magicEffects.update(1);
+    __game.magicEffects.update(1.6);
+    __game.magicEffects.update(1.6);
+    state.strikes=avatars.map(item=>item.strikes);
+    __game.magicEffects.update(2);
+    state.expired=avatars.every(item=>!__game.magicEffects.active.includes(item));
+    state.sourceDisposed=disposed;
+    __game.updateCamera(1);
+    state.restoredDistance=__game.camera.position.distanceTo(__game.player._position);
+    state.zoomUnchanged=chosenZoom===__game.cameraDistance;
+    return state;
+  })()`);
+  assert.equal(avatar.cast && avatar.selectionUnchanged && avatar.anchor && avatar.expired, true, JSON.stringify(avatar));
+  assert.equal(avatar.scale, 6);
+  assert.equal(avatar.avatarCount, 4);
+  assert.equal(avatar.outward && avatar.allGiant, true);
+  for (let i = 1; i < 4; i++) assert.ok(Math.abs(Math.cos(avatar.headings[i]-avatar.headings[i-1])) < 0.001);
+  assert.equal(avatar.clones, 5);
+  assert.equal(avatar.fields, 2);
+  assert.deepEqual(avatar.strikes, [3, 3, 3, 3]);
+  assert.equal(avatar.sourceDisposed, 0);
+  assert.deepEqual(avatar.beforeWave, [10000,10000]);
+  assert.deepEqual(avatar.atWaveStart, [10000,10000]);
+  assert.equal(avatar.visualRadius, avatar.waveRadius);
+  assert.ok(Math.abs(avatar.waveRadius-32)<0.01);
+  assert.equal(avatar.boundary,128);
+  assert.deepEqual(avatar.afterWave, [0,0]);
+  assert.ok(avatar.framedDistance>avatar.restoredDistance+30);
+  assert.equal(avatar.zoomUnchanged,true);
+  assert.equal(backend.wallet.balance, 13);
+  assert.ok(avatar.cooldown > 59);
+  assert.match(await desktop.evaluate(`document.querySelector('#cloud-art-title').textContent`), /全域部署.*Global Deployment/);
+  assert.equal(await desktop.evaluate("attackAnnouncements.at(-1).text"), "全域部署。Global Deployment");
+  const stationary = await desktop.evaluate(`(async () => {
+    const game=__game, controller=game.player.GetComponent('BasicCharacterController');
+    game.infinitiveMagic=true;
+    game.magic.clearProjectiles();
+    game.magicEffects.clear();
+    game.magic.cooldown=0;
+    controller._target.position.set(46,0,56);
+    game.player.SetPosition(controller._target.position);
+    game.respawnEnemy(game.boss,{x:110,z:56});
+    const health=game.boss.GetComponent('HealthComponent');
+    const before=health._health;
+    if (!await game.castMagic()) return {cast:false};
+    game.magic.update(1.31);
+    return {cast:true,before,after:health._health,
+      x:game.boss._position.x,z:game.boss._position.z,
+      death:game.boss.GetComponent('NPCController')._stateMachine._currentState.Name};
+  })()`);
+  assert.equal(stationary.cast && stationary.before > 0, true);
+  assert.equal(stationary.after, 0);
+  assert.equal(stationary.x, 110);
+  assert.equal(stationary.z, 56);
+  assert.equal(stationary.death, 'death');
 
   const evidence = [
     "Local served-page browser integration: PASS",
     `Game booted from http://127.0.0.1:${port}/game-v2.html; mobile page from same served origin.`,
     "Mock API only; no AWS requests, student records, or task grading endpoints called.",
-    "Actual S3 3D sign click opened the service modal; Voice practice is the only practice action and the modal pauses player movement.",
+    "Actual S3 3D sign click checks database availability before showing voice actions; task chooser creates no session until Start.",
+    "After passing S3 reading on phone, reopening S3 shows reading locked and selects available Q&A without a dropdown change.",
     "Desktop QR generated locally; scanning opens the question immediately without a pairing-code check or desktop approval.",
     "Desktop polling: zero session GET requests before manual Check; one after explicit click.",
     "Mobile transcript: no editable text controls; interim speech cannot submit; final speech sends required flags.",
-    "English and Hong Kong Cantonese recognition and request language verified; CJK speech accepted; switching clears unsent speech.",
+    "English, Hong Kong Cantonese and Simplified Mandarin reading/recognition verified; CJK speech accepted; switching clears unsent speech.",
     "PC and phone share a graded activity; failed PC grade gives no MP, passing phone grade credits MP, and reload restores completion without reclaiming.",
     "Browser recognition absent: clear guidance without consuming QR; no recording controls or audio upload calls.",
     "Temporary pairing error: reading controls hidden, QR retained until a successful connection retry.",
@@ -819,6 +1206,8 @@ try {
     "Marks search and status filters run locally without extra API calls.",
     "Q&A is database-gated, supports short PC answers and same-question phone transfer, displays bilingual questions and one result, and filters marks by task type.",
     "Game saves restore safe spawn/equipment on another tab, reject stale writes, explicitly resolve conflicts, and recover offline changes after reload without changing MP.",
+    "All three expedition round trips arrive at the matching doorway without immediately travelling back.",
+    "Five cloud arts render in Three.js: chained hits, delayed clones, persistent storage damage, ward mitigation and lethal-hit recovery; low quality reduces geometry.",
     `Browser runtime exceptions: ${desktop.exceptions.length + mobileBrowsers.reduce((sum, item) => sum + item.exceptions.length, 0)}.`,
   ].join("\n");
   assert.equal(desktop.exceptions.length + mobileBrowsers.reduce((sum, item) => sum + item.exceptions.length, 0), 0);

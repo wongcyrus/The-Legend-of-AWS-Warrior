@@ -8,6 +8,8 @@ const LANGUAGE_KEY = "aws-warrior:voice:language";
 const MAX_ATTEMPTS = 6;
 const SERVICE_SET = new Set(Object.keys(AWS_SERVICES));
 const isQuestionAnswer = session => session?.mode === "graded_question_answer";
+const readingTaskLabel = session => Number.isInteger(session?.round) && session.round > 0
+  ? `Reading task ${session.round}` : "Reading task";
 export const isAnswerTranscript = value => typeof value === "string" && /[\p{L}\p{N}]/u.test(value);
 
 export function voiceLanguageOptions(session) {
@@ -211,10 +213,14 @@ export function bindVoicePractice(game) {
   const pcContent = document.getElementById("pc-practice-content");
   const result = document.getElementById("pc-voice-result");
   const taskType = document.getElementById("voice-task-type");
+  const readingOption = document.getElementById("voice-reading-option");
   const questionOption = document.getElementById("voice-question-option");
   const availability = document.getElementById("voice-question-availability");
   let selectedType = "read_aloud";
   let questionActivities = [];
+  let readingActivities = [];
+  let checkingAvailability = false;
+  let availabilityChecked = false;
   let availabilityEpoch = 0;
   let selectedService = null;
   let state = null;
@@ -234,8 +240,12 @@ export function bindVoicePractice(game) {
     state = null;
     owner = null;
     questionActivities = [];
+    readingActivities = [];
+    checkingAvailability = false;
+    availabilityChecked = false;
     availabilityEpoch++;
     questionOption.disabled = true;
+    readingOption.disabled = true;
     availability.textContent = "";
     try { sessionStorage.removeItem(DESKTOP_KEY); } catch { /* Optional session recovery. */ }
   };
@@ -250,48 +260,96 @@ export function bindVoicePractice(game) {
     return current;
   };
   const canStartTask = () => !state || ["failed", "expired", "cancelled"].includes(state.status);
+  const taskAvailable = type => (type === "question_answer" ? questionActivities : readingActivities)
+    .some(activity => !activity.onCooldown);
   const updateButtons = () => {
     start.hidden = !canStartTask();
-    start.disabled = start.hidden || starting || speech.isBusy() || state?.status === "evaluating";
+    start.disabled = start.hidden || starting || checkingAvailability || speech.isBusy() ||
+      state?.status === "evaluating" || !taskAvailable(selectedType);
     start.textContent = state ? "Retry task" : "Start task";
-    check.disabled = !state || starting || speech.isBusy();
+    check.disabled = !state || starting || checkingAvailability || speech.isBusy();
     if (!state || state.status === "completed" || state.status === "expired") check.hidden = true;
     else if (state.inputDevice === "phone") {
       check.hidden = false;
       check.textContent = "Check phone connection";
     }
-    transfer.disabled = starting || !state || state.status !== "ready" ||
+    transfer.disabled = starting || checkingAvailability || !state || state.status !== "ready" ||
       state.inputDevice === "phone" || speech.isBusy();
     transfer.textContent = "Use phone microphone (QR)";
-    taskType.disabled = starting || speech.isBusy() || state?.status === "evaluating";
+    taskType.disabled = starting || checkingAvailability || speech.isBusy() || state?.status === "evaluating";
+    const availableOptions = [readingOption, questionOption].filter(option => !option.disabled);
+    taskType.replaceChildren(...availableOptions);
+    taskType.hidden = availableOptions.length < 2;
     taskType.value = selectedType;
     if (!state && selectedType === "question_answer") {
       start.textContent = "Start Q&A";
       start.disabled ||= !questionActivities.some(activity => !activity.onCooldown);
     }
   };
-  const loadQuestionAvailability = async () => {
+  const getAvailability = async serviceId => {
+    const current = readOwner();
+    if (!current.key) throw new Error("Set your API key to check available tasks.");
+    const data = await jsonRequest("voice/completions", { apiKey: current.key });
+    if (current.fingerprint !== readOwner().fingerprint) throw new Error("The API key changed.");
+    return (data.activities ?? []).filter(activity => activity.serviceId === serviceId);
+  };
+  const showTaskChoices = () => {
+    document.getElementById("voice-desktop-title").textContent =
+      `${AWS_SERVICES[selectedService]?.label || "AWS"} - Available voice tasks`;
+    document.getElementById("voice-desktop-intro").textContent =
+      "Choose an available task, then start. Passing reading locks all reading for this service for one week. Q&A questions have separate one-week locks.";
+    speech.suspend();
+    panel.replaceChildren();
+    result.textContent = "";
+    updateButtons();
+  };
+  const loadTaskAvailability = async () => {
     const epoch = ++availabilityEpoch, serviceId = selectedService, current = readOwner();
     questionActivities = [];
+    readingActivities = [];
+    checkingAvailability = true;
+    availabilityChecked = false;
     questionOption.disabled = true;
-    availability.textContent = "Checking approved questions...";
+    readingOption.disabled = true;
+    availability.textContent = "Checking available tasks...";
+    updateButtons();
     try {
       if (!current.key) throw new Error("No key");
-      const data = await jsonRequest("voice/completions", { apiKey: current.key });
+      const activities = await getAvailability(serviceId);
       if (epoch !== availabilityEpoch || serviceId !== selectedService || current.fingerprint !== readOwner().fingerprint) return;
-      questionActivities = (data.activities ?? []).filter(activity =>
+      readingActivities = activities.filter(activity => activity.type === "read_aloud");
+      availabilityChecked = true;
+      questionActivities = activities.filter(activity =>
         activity.type === "question_answer" && activity.serviceId === serviceId && activity.available === true &&
         Array.isArray(activity.languages) && activity.languages.length);
       const unlocked = questionActivities.filter(activity => !activity.onCooldown);
+      readingOption.disabled = !taskAvailable("read_aloud");
       questionOption.disabled = !unlocked.length;
-      availability.textContent = questionActivities.length
+      const unlock = Math.max(0, ...readingActivities.map(activity => activity.availableAt || 0));
+      const readingText = readingOption.disabled
+        ? unlock > Date.now() / 1000 ? `Read aloud: Locked until ${new Date(unlock * 1000).toLocaleString()}.`
+          : "Read aloud: Unavailable."
+        : "Read aloud: Available.";
+      readingOption.textContent = readingOption.disabled ? "Read aloud (locked)" : "Read aloud (5-15 MP)";
+      availability.textContent = `${readingText} ` + (questionActivities.length
         ? `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed. ${unlocked.length} available now. Passed tasks unlock again after one week.${!unlocked.length ? ` Next unlock: ${new Date(Math.min(...questionActivities.map(activity => activity.availableAt)) * 1000).toLocaleString()}.` : ""}`
-        : "Q&A: Questions coming soon.";
+        : "Q&A: Questions coming soon.");
+      if (state?.status === "ready" && (state.mode === "graded_read_aloud" && readingOption.disabled ||
+          isQuestionAnswer(state) && questionActivities.some(a => a.activityId === state.activityId && a.onCooldown))) {
+        state = null;
+        try { sessionStorage.removeItem(DESKTOP_KEY); } catch { /* Optional session recovery. */ }
+      }
+      if (!state && !taskAvailable(selectedType))
+        selectedType = taskAvailable("question_answer") ? "question_answer" : "read_aloud";
+      if (!state) showTaskChoices();
     } catch {
       if (epoch !== availabilityEpoch) return;
       questionActivities = [];
-      availability.textContent = "Q&A availability could not be checked. Reopen this service to retry.";
+      readingActivities = [];
+      availability.textContent = "Task availability could not be checked. Reopen this service to retry.";
     }
+    if (epoch !== availabilityEpoch) return;
+    checkingAvailability = false;
     updateButtons();
   };
   const render = () => {
@@ -301,10 +359,10 @@ export function bindVoicePractice(game) {
     if (state) {
       document.getElementById("voice-desktop-title").textContent =
         isQuestionAnswer(state) ? `${state.serviceLabel || "AWS"} Q&A`
-          : `Read ${state.serviceLabel || AWS_SERVICES[state.serviceId]?.label || "an AWS service"} aloud`;
+          : `${state.serviceLabel || AWS_SERVICES[state.serviceId]?.label || "AWS"} - ${readingTaskLabel(state)}`;
       document.getElementById("voice-desktop-intro").textContent = isQuestionAnswer(state)
         ? "Answer in your own words. Scores assess understanding, not pronunciation. First pass earns 10 MP at 60, 20 MP at 75, or 30 MP at 90; wallet cap 100 MP."
-        : "Read the passage aloud. Scores assess recognised content, not pronunciation or comprehension. First pass earns 5 MP at 60, 10 MP at 75, or 15 MP at 90; wallet cap 100 MP.";
+        : `${readingTaskLabel(state)}. Passing locks all reading for this service for one week. Q&A stays separate. Scores assess recognised content, not pronunciation or comprehension. First pass earns 5 MP at 60, 10 MP at 75, or 15 MP at 90; wallet cap 100 MP.`;
       if (state.inputDevice === "phone" || state.status === "pairing") {
         speech.suspend();
         drawPairing(panel, state);
@@ -355,6 +413,13 @@ export function bindVoicePractice(game) {
       return;
     }
     game.readServices?.add(data.serviceId);
+    for (const activity of readingActivities) {
+      activity.onCooldown = true;
+      activity.availableAt = Math.floor(Date.now() / 1000) + 7 * 86400;
+    }
+    readingOption.disabled = true;
+    readingOption.textContent = "Read aloud (locked)";
+    availability.textContent = "Read aloud: Passed and locked for one week. Q&A questions are separate.";
     try { localStorage.setItem("aws-warrior:v2:read-services", JSON.stringify([...game.readServices])); }
     catch { /* Discovery state is cosmetic, never a source of MP. */ }
     for (const plaque of game.world?.servicePlaques || []) {
@@ -392,48 +457,49 @@ export function bindVoicePractice(game) {
     selectedService = serviceId;
     selectedType = "read_aloud";
     questionActivities = [];
+    readingActivities = [];
+    generation++;
+    speech.suspend();
     document.getElementById("voice-desktop-title").textContent =
-      `Read ${AWS_SERVICES[serviceId].label} aloud`;
+      `${AWS_SERVICES[serviceId].label} - Available voice tasks`;
+    document.getElementById("voice-desktop-intro").textContent = "Checking your saved task availability...";
     const current = readOwner();
     owner = current.fingerprint || null;
     state = current.fingerprint ? readDesktopState(sessionStorage, current.fingerprint, serviceId) : null;
     if (isQuestionAnswer(state)) {
       selectedType = "question_answer";
-      if (state.status === "completed") state = null;
     }
+    if (state?.status === "completed") state = null;
     if (selectedType === "question_answer" && !state) {
       document.getElementById("voice-desktop-title").textContent = `${AWS_SERVICES[serviceId].label} Q&A`;
       document.getElementById("voice-desktop-intro").textContent =
         "Choose an available question for this service. Passed questions unlock after one week; MP is awarded only on the first pass.";
     }
-    if (state) render();
-    else {
-      speech.suspend();
-      result.textContent = "";
-      panel.replaceChildren();
-      statusParagraph(panel, current.key
-        ? selectedType === "question_answer" ? "Choose Start Q&A when approved questions are available."
-          : "Opening your next voice activity. Your API key stays on this computer."
-        : "Voice practice needs the API key saved on this computer. Set Key, then reopen this dialog.");
-      updateButtons();
-    }
+    result.textContent = "";
+    panel.replaceChildren();
+    statusParagraph(panel, current.key
+      ? "Checking available tasks. Your API key stays on this computer."
+      : "Voice practice needs the API key saved on this computer. Set Key, then reopen this dialog.");
+    updateButtons();
     if (!dialog.open) dialog.showModal();
     game.readingService = true;
     (start.hidden ? check : start).focus();
-    const availabilityReady = loadQuestionAvailability();
-    if (state?.status === "expired" && current.key) recoverExpiredTask(availabilityReady);
-    else if (!state && current.key && selectedType === "read_aloud") startSession();
-    else if (state && current.key) checkStatus();
+    const epoch = generation;
+    loadTaskAvailability().then(() => {
+      if (!dialog.open || epoch !== generation || current.fingerprint !== readOwner().fingerprint || !availabilityChecked) return;
+      if (state?.status === "expired" && current.key) recoverExpiredTask(Promise.resolve());
+      else if (state && current.key) { render(); checkStatus(); }
+    });
   };
   const recoverExpiredTask = async (availabilityReady) => {
     const expired = state, epoch = generation, current = readOwner();
     showSessionError("This task session expired. Reopening the same service task...");
-    if (isQuestionAnswer(expired)) await (availabilityReady ?? loadQuestionAvailability());
+    await (availabilityReady ?? loadTaskAvailability());
     if (state !== expired || epoch !== generation || current.fingerprint !== readOwner().fingerprint) return;
     await startSession();
   };
   const startSession = async () => {
-    if (starting || speech.isBusy() || !canStartTask()) return;
+    if (starting || checkingAvailability || speech.isBusy() || !canStartTask() || !taskAvailable(selectedType)) return;
     if (selectedType === "question_answer" && !questionActivities.some(activity => !activity.onCooldown)) return;
     let current;
     try { current = currentKey(); }
@@ -464,6 +530,8 @@ export function bindVoicePractice(game) {
       render();
     } catch (error) {
       if (epoch !== generation) return;
+      if (error.status === 409) await loadTaskAvailability();
+      if (epoch !== generation) return;
       showError(error.message.startsWith("The API key changed") ? error.message :
         error.status === 409 ? error.apiMessage || "All available activities are complete. No repeated MP rewards are available."
           : unavailableMessage(error) || "Could not start voice practice. Check the API connection and try again.");
@@ -481,20 +549,8 @@ export function bindVoicePractice(game) {
       if (current.fingerprint !== readOwner().fingerprint) throw new Error("The API key changed.");
       state = { ...state, ...response, id: state.id,
         owner: current.fingerprint, pairingToken: state.pairingToken };
-      if (voiceResultPassed(state) && !isQuestionAnswer(state) && state.serviceId && game.readServices instanceof Set) {
-        const wasRead = game.readServices.has(state.serviceId);
-        game.readServices.add(state.serviceId);
-        try { localStorage.setItem("aws-warrior:v2:read-services", JSON.stringify([...game.readServices])); }
-        catch { /* Keep the earned in-memory badge available for this play session. */ }
-        if (!wasRead) {
-          for (const plaque of game.world?.servicePlaques || []) {
-            if (plaque.userData.awsService === state.serviceId) plaque.userData.setRead(true);
-          }
-          if (isQuestionAnswer(state)) { recordCompletion(state); game.refreshVoiceWallet?.(); }
-          game.refreshVoiceWallet?.();
-        }
-        game.refreshServiceReader?.();
-      }
+      recordCompletion(state);
+      if (state.status === "completed" || state.result?.score !== undefined) game.refreshVoiceWallet?.();
       saveDesktopState(sessionStorage, state);
       render();
     } catch (error) {
@@ -515,9 +571,9 @@ export function bindVoicePractice(game) {
   };
   explain.onclick = () => open(selectedService);
   taskType.addEventListener("change", () => {
-    if (starting || speech.isBusy() || state?.status === "evaluating" ||
+    if (starting || checkingAvailability || speech.isBusy() || state?.status === "evaluating" ||
         !["read_aloud", "question_answer"].includes(taskType.value) ||
-        (taskType.value === "question_answer" && !questionActivities.some(activity => !activity.onCooldown))) {
+        !taskAvailable(taskType.value)) {
       taskType.value = selectedType;
       return;
     }
@@ -541,7 +597,7 @@ export function bindVoicePractice(game) {
     if (phone && state?.inputDevice === "desktop" && state.status === "ready") await transfer.onclick();
   };
   transfer.onclick = async () => {
-    if (speech.isBusy() || !state || state.status !== "ready") return;
+    if (checkingAvailability || speech.isBusy() || !state || state.status !== "ready") return;
     if (starting) return;
     starting = true;
     const epoch = generation;
@@ -577,7 +633,7 @@ export function bindVoicePractice(game) {
     clearOwnedState();
     if (dialog.open) showError("The API key changed. Start a voice activity for this account.");
   });
-  return { open, speech };
+  return { open, speech, getAvailability };
 }
 
 function mobileStatus(status) {
@@ -759,12 +815,14 @@ export function bindMobileVoicePractice({
     practiceContent.hidden = false;
     connectionFailed = false;
     const heading = get("mobile-question-heading");
-    if (heading) heading.textContent = isQuestionAnswer(session) ? "Question" : "Text to read aloud";
+    if (heading) heading.textContent = isQuestionAnswer(session) ? "Question"
+      : `${readingTaskLabel(session)} - Text to read aloud`;
     if (autoConnect) {
-      get("mobile-voice-title").textContent = isQuestionAnswer(session) ? `${data.serviceLabel || "AWS"} Q&A` : "Read a service passage aloud";
+      get("mobile-voice-title").textContent = isQuestionAnswer(session) ? `${data.serviceLabel || "AWS"} Q&A`
+        : `${data.serviceLabel || "AWS"} - ${readingTaskLabel(session)}`;
       get("mobile-voice-intro").textContent = isQuestionAnswer(session)
         ? "Answer in your own words. Grades assess understanding, not pronunciation. First pass: 10 MP at 60, 20 MP at 75, 30 MP at 90; wallet cap 100 MP."
-        : "Grades assess recognised content, not pronunciation or comprehension. First pass: 5 MP at 60, 10 MP at 75, 15 MP at 90; wallet cap 100 MP.";
+        : `${readingTaskLabel(session)}. Passing locks all reading for this service for one week. Q&A stays separate. Grades assess recognised content, not pronunciation or comprehension. First pass: 5 MP at 60, 10 MP at 75, 15 MP at 90; wallet cap 100 MP.`;
     }
     languageOptions = voiceLanguageOptions(session);
     if (!languageOptions.some(option => option.id === language))
@@ -806,7 +864,9 @@ export function bindMobileVoicePractice({
     if (session.mode === "graded_read_aloud" || isQuestionAnswer(session)) {
       if (data.result?.error) result.textContent = "Grading could not finish. No grade or MP was awarded. Please retry.";
       else if (data.result?.feedback && !Number.isInteger(data.result?.score)) result.textContent = data.result.feedback;
-      if (passedCompletion) showStatus(autoConnect ? "Voice activity passed. Your grade and MP reward have been saved." : "");
+      if (passedCompletion) showStatus(isQuestionAnswer(session)
+        ? "Question passed. Your result is saved. This question is locked for one week."
+        : `${readingTaskLabel(session)} passed. Your grade and MP reward are saved. All reading for this service is locked for one week. Q&A stays separate.`);
       else if (data.status === "evaluating") showStatus(`Grading your ${taskName()}. Your result will appear automatically.`);
       else if (data.status === "ready" && readingText()) showStatus(isQuestionAnswer(session) ? "Answer in your own words." : "Ready to read aloud.");
     }

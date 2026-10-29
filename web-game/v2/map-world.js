@@ -1,7 +1,7 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js";
 import { instances, normalized } from "./assets.js?v=20261027-maps-1";
 import { mapScenery } from "./maps.js?v=20261027-maps-1";
-import { servicePlaque } from "./aws-world.js?v=20261028-voice-1";
+import { servicePlaque } from "./aws-world.js?v=20261029-sign-post-1";
 import { CLOUD_REGIONS, AWS_LANDMARKS } from "./aws-theme.js?v=20261028-voice-1";
 
 export function buildGates(world) {
@@ -63,10 +63,15 @@ export function buildExpedition(world) {
   cross.rotation.x = -Math.PI / 2;
   const obstacleMaterial = world.material(map.id === "desert" ? 0xb7894e : 0x657680);
   for (const b of map.obstacles) {
-    const obstacle = world.mesh(new THREE.ConeGeometry(1, b.height, map.id === "desert" ? 4 : 7),
+    const geometry = new THREE.ConeGeometry(1, b.height, map.id === "desert" ? 4 : 7);
+    if (map.id === "desert") geometry.rotateY(Math.PI / 4);
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox;
+    const width = bounds.max.x - bounds.min.x, depth = bounds.max.z - bounds.min.z;
+    geometry.translate(-(bounds.min.x + bounds.max.x) / 2, 0, -(bounds.min.z + bounds.max.z) / 2);
+    const obstacle = world.mesh(geometry,
       obstacleMaterial, b.x, b.height / 2, b.z);
-    obstacle.scale.set(b.width * 0.55, 1, b.depth * 0.55);
-    if (map.id === "desert") obstacle.rotation.y = Math.PI / 4;
+    obstacle.scale.set(b.width / width, 1, b.depth / depth);
     obstacle.castShadow = true;
     if (map.id === "mountains") {
       const snow = world.mesh(new THREE.ConeGeometry(1, b.height * 0.35, 7),

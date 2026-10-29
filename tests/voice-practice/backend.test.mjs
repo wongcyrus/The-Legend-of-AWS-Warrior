@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 import { questionKey, questionActivityId } from "../../src/VoicePractice/questions.mjs";
 import { createQuestionAdmin } from "../../src/VoicePractice/question-bank.mjs";
 import { readFileSync } from "node:fs";
+import { SPELLS } from "../../web-game/v2/magic.js";
 
 const require = createRequire(new URL("../../src/VoicePractice/package.json", import.meta.url));
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
@@ -235,6 +236,33 @@ test("Q&A first-pass credits are atomic across tabs, languages and question vers
   assert.equal((await f.req("/voice/wallet")).data.balance, 30);
 });
 
+test("passing S3 on phone locks every reading round but leaves Q&A and other services available", async () => {
+  const f = fixture({ graded: true, questions: approvedQuestions() });
+  f.deps.evaluate = () => grade(100);
+  const first = await createReading(f), stale = await createReading(f);
+  const staleRow = await f.deps.store.get(sessionKey(stale.id));
+  const nextRound = activities.find(a => a.serviceId === "s3" && a.round === 2);
+  f.rows.set(f.key(staleRow), { ...staleRow, activityId: nextRound.activityId, round: 2 });
+  const transfer = (await f.req(`/voice/sessions/${first.id}/transfer`, {})).data;
+  const phone = (await f.req("/voice/mobile/claim", { id: first.id, pairingToken: transfer.pairingToken })).data;
+  await f.req("/voice/mobile/answer", spoken(), { token: phone.mobileToken });
+  await f.run();
+  assert.equal((await f.req("/voice/mobile/session", undefined, { token: phone.mobileToken })).data.result.mpAwarded, 15);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3" })).statusCode, 409);
+  assert.equal((await f.req(`/voice/sessions/${stale.id}/answer`, spoken("Another reading", "zh-HK"))).statusCode, 409);
+  const summary = (await f.req("/voice/completions")).data.activities;
+  const reading = summary.filter(a => a.serviceId === "s3" && a.type === "read_aloud");
+  assert.equal(reading.length, 2);
+  assert.ok(reading.every(a => a.onCooldown && a.availableAt === reading[0].availableAt));
+  assert.equal(reading.filter(a => a.completed).length, 1);
+  assert.equal((await createAnswer(f)).serviceId, "s3");
+  assert.equal((await createReading(f, "ec2")).serviceId, "ec2");
+  f.advance(7 * 86400 - 1);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3" })).statusCode, 409);
+  f.advance(1);
+  assert.equal((await createReading(f)).activityId, nextRound.activityId);
+});
+
 test("Q&A snapshots survive edits and retirement; marks remain visible without leaking rubrics", async () => {
   const question = approvedQuestions()[0];
   const f = fixture({ graded: true, questions: [question] }), s = await createAnswer(f);
@@ -279,6 +307,34 @@ test("Q&A mobile transfer shares question, keeps rubric private and accepts shor
   assert.equal(result.result.mpAwarded, 30);
   assert.equal(result.questionSnapshot, undefined);
   assert.equal(f.calls.length, 1);
+});
+
+test("Mandarin reading and Q&A use Simplified Chinese and keep rewards and cooldowns shared with other languages", async () => {
+  const f = fixture({ graded: true, questions: approvedQuestions() });
+  const reading = await createReading(f);
+  assert.ok(reading.languages.some(language => language.id === "zh-CN" && language.speechLocale === "zh-CN"));
+  const passage = reading.readingTexts["zh-CN"];
+  assert.match(passage, /存储/);
+  const transfer = (await f.req(`/voice/sessions/${reading.id}/transfer`, {})).data;
+  const phone = (await f.req("/voice/mobile/claim", { id: reading.id, pairingToken: transfer.pairingToken })).data;
+  assert.equal(phone.readingTexts["zh-CN"], passage);
+  await f.req("/voice/mobile/answer", spoken(passage, "zh-CN"), { token: phone.mobileToken });
+  await f.run();
+  assert.equal(f.calls[0].input.language, "zh-CN");
+  assert.match(f.calls[0].input.feedbackLanguage, /Mandarin Chinese using Simplified Chinese/);
+  const grade = (await f.req(`/voice/sessions/${reading.id}`)).data.result;
+  assert.equal(grade.mpAwarded, 10);
+  assert.equal((await f.req("/voice/sessions", { serviceId: "s3" })).statusCode, 409);
+
+  const question = await createAnswer(f, "s3", "zh-CN");
+  assert.equal(question.question, question.questionTexts["zh-CN"]);
+  await f.req(`/voice/sessions/${question.id}/answer`, spoken("把截图作为对象存储在私有存储桶中，只允许获得授权的用户访问。", "zh-CN"));
+  await f.run();
+  assert.equal(f.calls[1].input.question.prompt, question.questionTexts["zh-CN"]);
+  assert.match(f.calls[1].input.feedbackLanguage, /Mandarin Chinese using Simplified Chinese/);
+  assert.equal((await f.req(`/voice/sessions/${question.id}`)).data.result.mpAwarded, 30);
+  assert.notEqual((await createAnswer(f, "s3", "en-US")).activityId, question.activityId);
+  assert.equal((await f.req("/voice/wallet")).data.balance, 40);
 });
 
 test("Q&A grading failures are retryable, saved grades recover without rerunning AI, and wallet cap consumes rewards", async () => {
@@ -407,7 +463,7 @@ test("application checks pairing and approved expiry without TTL deletion", asyn
   assert.equal((await f.req("/voice/mobile/session", undefined, { token: p.token })).statusCode, 410);
 });
 
-test("new practices offer authored bilingual graded reading immediately without touching legacy banks", async () => {
+test("new practices offer authored multilingual graded reading immediately without touching legacy banks", async () => {
   const f = fixture({ graded: true });
   f.deps.agentError = true;
   for (const [serviceId, lesson] of Object.entries(lessons)) {
@@ -424,7 +480,9 @@ test("new practices offer authored bilingual graded reading immediately without 
     assert.equal(claimed.statusCode, 200);
     assert.equal(claimed.data.mode, "graded_read_aloud");
     assert.equal(claimed.data.status, "ready");
-    assert.deepEqual(claimed.data.readingTexts, lesson.readingTexts);
+    assert.deepEqual(claimed.data.readingTexts, activities.find(a => a.serviceId === serviceId && a.round === 1).readingTexts);
+    for (const language of ["en-US", "zh-HK"])
+      assert.equal(claimed.data.readingTexts[language], lesson.readingTexts[language]);
     assert.equal(claimed.data.question, lesson.readingTexts["en-US"]);
     assert.ok(lesson.readingTexts["en-US"].length < 1000);
     assert.match(lesson.readingTexts["zh-HK"], /\p{Script=Han}/u);
@@ -541,7 +599,7 @@ test("explicit phone transfer revokes desktop ownership and capabilities remain 
   assert.equal(mobile.data.status, "completed");
   assert.equal(mobile.data.conversation, undefined);
   assert.equal(mobile.body.includes(spoken().transcript), false);
-  const second = await createReading(f);
+  const second = await createReading(f, "ec2");
   const token = (await f.req(`/voice/sessions/${second.id}/transfer`, {})).data.pairingToken;
   f.advance(301);
   assert.equal((await f.req("/voice/mobile/claim", { id: second.id, pairingToken: token })).statusCode, 410);
@@ -595,6 +653,7 @@ test("reading tasks stay within the requested service and finish safely", async 
     if (i && i % 90 === 0) f.advance(86400);
     f.rows.delete(f.key(walletKey(owner)));
     const expected = ordered[i];
+    if (i && ordered[i - 1].serviceId === expected.serviceId) f.advance(7 * 86400);
     const response = await f.req("/voice/sessions", { serviceId: expected.serviceId });
     assert.equal(response.statusCode, 200, response.body);
     const s = response.data;
@@ -610,7 +669,7 @@ test("reading tasks stay within the requested service and finish safely", async 
     }
   }
   assert.equal(ids.size, activities.length);
-  assert.equal((await f.req("/voice/sessions", { serviceId: "s3" })).statusCode, 409);
+  assert.equal((await f.req("/voice/sessions", { serviceId: ordered.at(-1).serviceId })).statusCode, 409);
   const summary = (await f.req("/voice/completions")).data;
   assert.equal(summary.total, 6);
   assert.equal(summary.completed, 6);
@@ -662,6 +721,7 @@ test("wallet capacity credits only actual MP; historical participation never con
   const s = await createReading(f);
   assert.equal((await completeReading(f, s, 100)).result.mpAwarded, 2);
   assert.deepEqual(await f.deps.store.get(completionKey(owner, "s3")), historical);
+  f.advance(7 * 86400);
   const next = await createReading(f);
   assert.equal((await completeReading(f, next, 100)).result.mpAwarded, 0);
   assert.equal((await f.req("/voice/wallet")).data.earned, 100);
@@ -754,36 +814,63 @@ test("casts validate input, isolate owners and atomically enforce balance, share
   assert.deepEqual((await f.req("/voice/wallet")).data, { balance: 0, max: 100, earned: 0, spent: 0, revision: 0 });
   const cast = { requestId: randomUUID(), spell: "lightning", level: 2 };
   assert.equal((await f.req("/voice/casts", cast)).statusCode, 409);
-  f.rows.set(f.key(walletKey(owner)), { ...walletKey(owner), balance: 10, earned: 10, spent: 0, revision: 1 });
+  f.rows.set(f.key(walletKey(owner)), { ...walletKey(owner), balance: 100, earned: 100, spent: 0, revision: 1 });
   for (const bad of [{ ...cast, requestId: "bad" }, { ...cast, spell: "__proto__" }, { ...cast, level: 0 },
     { ...cast, level: 4 }, { ...cast, level: 1.2 }, { ...cast, level: "1" }])
     assert.equal((await f.req("/voice/casts", bad)).statusCode, 400);
   const results = await Promise.all([1, 2].map(() => f.req("/voice/casts", cast)));
   assert.ok(results.every(r => r.statusCode === 200));
   assert.deepEqual(results[0].data, results[1].data);
-  assert.equal(results[0].data.wallet.balance, 8);
-  assert.equal(results[0].data.wallet.spent, 2);
+  assert.equal(results[0].data.wallet.balance, 88);
+  assert.equal(results[0].data.wallet.spent, 12);
+  assert.equal(results[0].data.cost, 12, "legacy levels cannot reduce the new fixed price");
   assert.equal((await f.req("/voice/casts", { ...cast, level: 1 })).statusCode, 409);
   assert.equal((await f.req("/voice/casts", { ...cast, requestId: randomUUID(), spell: "frost" })).statusCode, 409);
   assert.equal((await f.req("/voice/casts", cast, { owner: "bob" })).statusCode, 409);
   assert.equal((await f.req("/voice/wallet", undefined, { owner: "bob" })).data.balance, 0);
-  f.advance(6);
+  f.advance(12);
   const races = await Promise.all(["frost", "fireball"].map(spell =>
     f.req("/voice/casts", { requestId: randomUUID(), spell, level: 3 })));
   assert.deepEqual(races.map(r => r.statusCode).sort(), [200, 409]);
-  assert.equal((await f.req("/voice/wallet")).data.balance, 5);
+  assert.ok([68, 73].includes((await f.req("/voice/wallet")).data.balance));
   assert.equal((await f.deps.store.get(castKey(owner, cast.requestId))).expiresAt, undefined);
-  for (const [spell, seconds] of Object.entries({ lightning: 6, fireball: 5, frost: 4, storm: 9, shockwave: 2 })) {
-    f.advance(10);
-    f.rows.set(f.key(walletKey(owner)), { ...walletKey(owner), balance: 10, earned: 10, spent: 0, revision: 30 });
+  for (const [spell, art] of Object.entries(SPELLS)) {
+    f.advance(60);
+    f.rows.set(f.key(walletKey(owner)), { ...walletKey(owner), balance: 100, earned: 100, spent: 0, revision: 30 });
     const result = (await f.req("/voice/casts", { requestId: randomUUID(), spell, level: 1 })).data;
-    assert.equal(result.cooldownUntil, (f.deps.now() / 1000) + seconds);
+    assert.equal(result.cooldownUntil, (f.deps.now() / 1000) + art.cooldown);
+    assert.equal(result.cost, art.cost);
+    assert.equal(result.wallet.balance, 100 - art.cost);
   }
+});
+
+test("combined arts charge once, use maximum cooldown and reject partial or conflicting selections", async () => {
+  const f = fixture({ graded: true }), owner = digest("alice@example.com");
+  const key = walletKey(owner);
+  f.rows.set(f.key(key), { ...key, balance: 86, earned: 86, spent: 0, revision: 1 });
+  const body = { requestId: randomUUID(), spells: Object.keys(SPELLS) };
+  assert.equal((await f.req("/voice/casts", body)).statusCode, 409);
+  assert.equal((await f.req("/voice/wallet")).data.balance, 86);
+  for (const spells of [[], ["frost", "frost"], ["constructor"], ["frost", "unknown"], "frost"]) {
+    assert.equal((await f.req("/voice/casts", { ...body, spells })).statusCode, 400);
+  }
+  assert.equal((await f.req("/voice/casts", { ...body, level: 1 })).statusCode, 400);
+  f.rows.set(f.key(key), { ...key, balance: 100, earned: 100, spent: 0, revision: 2 });
+  const results = await Promise.all([f.req("/voice/casts", body),
+    f.req("/voice/casts", { ...body, spells: [...body.spells].reverse() })]);
+  assert.equal(results[0].statusCode, 200);
+  assert.deepEqual(results[0].data, results[1].data);
+  assert.equal(results[0].data.cost, 87);
+  assert.equal(results[0].data.wallet.balance, 13);
+  assert.equal(results[0].data.cooldownUntil, f.deps.now() / 1000 + 60);
+  assert.equal((await f.req("/voice/casts", { ...body, spells: ["lightning"] })).statusCode, 409);
+  assert.equal((await f.req("/voice/casts", { requestId: randomUUID(), spell: "lightning", level: 1 })).statusCode, 409);
+  assert.equal((await f.req("/voice/wallet")).data.spent, 87);
 });
 
 test("cast conflict exhaustion is bounded and safely retries the same UUID", async () => {
   const f = fixture({ graded: true }), owner = digest("alice@example.com");
-  f.rows.set(f.key(walletKey(owner)), { ...walletKey(owner), balance: 3, earned: 3, spent: 0, revision: 1 });
+  f.rows.set(f.key(walletKey(owner)), { ...walletKey(owner), balance: 15, earned: 15, spent: 0, revision: 1 });
   const original = f.deps.store.atomic;
   let calls = 0;
   f.deps.store.atomic = async () => { calls++; throw Object.assign(new Error("collision"), { conflict: true }); };
@@ -807,7 +894,7 @@ test("parallel credit on different activities and racing debit preserve the wall
   const w = (await f.req("/voice/wallet")).data;
   assert.ok(w.balance <= 100 && w.balance >= 0);
   assert.equal(w.earned - w.spent, w.balance);
-  assert.equal(w.spent, 3);
+  assert.equal(w.spent, 25);
   const credits = (await f.req("/voice/completions")).data.activities.reduce((sum, a) => sum + a.mpAwarded, 0);
   assert.equal(w.earned, 95 + credits);
   assert.equal(w.revision, 4);
@@ -851,12 +938,12 @@ test("cast UUID scope permits another funded owner without sharing request or co
   const f = fixture({ graded: true });
   for (const owner of ["alice@example.com", "bob"]) {
     const key = walletKey(digest(owner));
-    f.rows.set(f.key(key), { ...key, balance: 5, earned: 5, spent: 0, revision: 1 });
+    f.rows.set(f.key(key), { ...key, balance: 20, earned: 20, spent: 0, revision: 1 });
   }
   const body = { requestId: randomUUID(), spell: "storm", level: 3, owner: "bob" };
-  assert.equal((await f.req("/voice/casts", body)).data.wallet.balance, 2);
-  assert.equal((await f.req("/voice/casts", body, { owner: "bob" })).data.wallet.balance, 2);
-  assert.equal((await f.req("/voice/wallet")).data.balance, 2);
+  assert.equal((await f.req("/voice/casts", body)).data.wallet.balance, 5);
+  assert.equal((await f.req("/voice/casts", body, { owner: "bob" })).data.wallet.balance, 5);
+  assert.equal((await f.req("/voice/wallet")).data.balance, 5);
 });
 
 test("AWS adapter forwards bounded authored reading input and rejects invalid AgentCore grades", async () => {
@@ -891,12 +978,12 @@ test("AWS adapter canonicalizes persisted reading maps and excludes unrelated gr
   });
 
   const texts = activities[0].readingTexts;
-  for (const readingTexts of [texts, { "zh-HK": texts["zh-HK"], "en-US": texts["en-US"] }]) {
+  for (const readingTexts of [texts, Object.fromEntries(Object.entries(texts).reverse())]) {
     await deps.agent("grade_reading", { readingTexts, activityId: activities[0].activityId,
       serviceId: "s3", transcript: texts["en-US"], owner: "not-forwarded", history: ["not-forwarded"] });
   }
   assert.equal(payloads[0], payloads[1]);
-  assert.deepEqual(Object.keys(JSON.parse(payloads[1]).readingTexts), ["en-US", "zh-HK"]);
+  assert.deepEqual(Object.keys(JSON.parse(payloads[1]).readingTexts), ["en-US", "zh-CN", "zh-HK"]);
   assert.equal(JSON.parse(payloads[1]).owner, undefined);
   assert.equal(JSON.parse(payloads[1]).history, undefined);
   assert.equal(JSON.parse(payloads[1]).language, "en-US");

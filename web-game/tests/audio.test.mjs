@@ -206,3 +206,60 @@ test('axe and unarmed attacks use different cues without repeating every frame',
   component.handler({ action: 'attack', time: 0.5 });
   assert.deepEqual(cues, ['axe', 'punch']);
 });
+test('attack speech selects Cantonese, replaces queued speech and follows mute, volume and pause', () => {
+  const spoken = [];
+  let cancelled = 0, voices = [{ lang: 'en-US' }, { lang: 'zh-CN' }, { lang: 'zh-HK', localService: true }];
+  const synthesis = { getVoices: () => voices, speak: value => spoken.push(value), cancel: () => cancelled++ };
+  const sound = new SoundEffects({ storage: null, createContext: null, synthesis,
+    Utterance: class { constructor(text) { this.text = text; } } });
+  sound.unlockSpeech();
+  sound.unlockSpeech();
+  assert.equal(spoken.length, 1);
+  assert.equal(spoken[0].volume, 0);
+  assert.equal(sound.speakAttack('影分身・彈性軍勢'), true);
+  assert.equal(spoken.at(-1).text, '影分身，彈性軍勢');
+  assert.equal(spoken.at(-1).voice, voices[2]);
+  assert.equal(spoken.at(-1).volume, 0.45);
+  voices = [{ lang: 'yue-HK', localService: true }];
+  sound.speakAttack('領域展開・無量儲存');
+  assert.equal(spoken.at(-1).lang, 'yue-HK');
+  assert.equal(cancelled, 2);
+  sound.setMuted(true);
+  assert.equal(sound.speakAttack('test'), false);
+  assert.equal(cancelled, 3);
+  sound.setMuted(false);
+  sound.setVolume(0);
+  assert.equal(sound.speakAttack('test'), false);
+  sound.setVolume(0.7);
+  sound.setPaused(true);
+  assert.equal(sound.speakAttack('test'), false);
+  sound.setPaused(false);
+  voices = [];
+  sound.speakAttack('跨區復甦');
+  assert.equal(spoken.at(-1).lang, 'zh-HK');
+  assert.equal(spoken.at(-1).voice, null);
+  assert.equal(spoken.at(-1).volume, 0.7);
+  synthesis.speak = () => { throw new Error('unavailable'); };
+  assert.equal(sound.speakAttack('test'), false);
+});
+test('Cantonese voice choice persists, excludes other languages and falls back when unavailable', () => {
+  const data = new Map(), spoken = [];
+  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
+  let voices = [{ name: 'Female Cantonese', voiceURI: 'cantonese-f', lang: 'zh-HK', localService: true },
+    { name: 'Male Cantonese', voiceURI: 'cantonese-m', lang: 'yue-HK' },
+    { name: 'Other voice', voiceURI: 'other', lang: 'en-US' }];
+  const options = { storage, createContext: null,
+    synthesis: { getVoices: () => voices, speak: value => spoken.push(value), cancel() {} },
+    Utterance: class { constructor(text) { this.text = text; } } };
+  const sound = new SoundEffects(options);
+  assert.equal(sound.selectVoice('other'), false);
+  assert.equal(sound.selectVoice('cantonese-m'), true);
+  const restored = new SoundEffects(options);
+  restored.speakAttack('無量儲存');
+  assert.equal(spoken.at(-1).voice, voices[1]);
+  voices = [voices[0]];
+  restored.speakAttack('無量儲存');
+  assert.equal(spoken.at(-1).voice, voices[0]);
+  assert.equal(restored.selectVoice(''), true);
+  assert.equal(new SoundEffects(options).voiceURI, '');
+});

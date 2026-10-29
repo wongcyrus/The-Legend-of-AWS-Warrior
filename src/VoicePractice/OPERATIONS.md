@@ -4,9 +4,9 @@ Node.js 22 Lambda: `index.handler`. Package this directory including production 
 
 ## Authored reading and grading
 
-New sessions default to server-owned `mode:"graded_read_aloud"`. `activities.json` contains 308 immutable versioned activities covering all 302 discoverable services, initially in English and Cantonese. Every service has round one; s3, ec2, iam, vpc, lambda and dynamodb retain their existing second round. The twelve original identifiers and passages are unchanged. No questions are generated for these sessions.
+New sessions default to server-owned `mode:"graded_read_aloud"`. `activities.json` contains 308 immutable versioned activities covering all 302 discoverable services in English, Cantonese and Mandarin (Simplified Chinese). Every service has round one; s3, ec2, iam, vpc, lambda and dynamodb retain their existing second round. The twelve original identifiers and English/Cantonese passages are unchanged. No questions are generated for these sessions.
 
-The server selects unfinished round-one activities before round two. A requested service is preferred only within the eligible round's unfinished services. Thus requesting an already-passed service can return another service. Once all authored activities pass, creation returns 409 with a safe exhaustion message; no unlimited reward generation is available.
+The server selects unfinished activities within the requested service, preferring the earliest available round. It never switches to another service. A reading pass locks every reading round at that service for seven days, across all languages. If reading is locked, creation returns 409; no unlimited reward generation is available.
 
 AgentCore's `grade_reading` operation makes one bounded model call, assessing the current browser transcript against either/both language versions. It grades coverage (integer 0–70) and content fidelity (integer 0–30), summing to integer score 0–100. It tolerates Cantonese, English, code switching, paraphrases and recognition variants. It does not assess pronunciation or comprehension, request explanations or run a conversation. Both the agent and Lambda validate grades and bounded feedback. The server alone determines passing (`score >= 60`) and nominal first-pass rewards: 5 at 60, 10 at 75, 15 at 90.
 
@@ -55,14 +55,18 @@ and at most one additional call if the assessment fails schema or evidence valid
 Both results must pass the same strict validation: reference-answer text cannot
 substitute for transcript evidence. If the retry is invalid, no grade or MP is awarded.
 
-After passing, each reading activity and Q&A question has a seven-day cooldown
+After passing any reading activity, all reading rounds for that service have a seven-day cooldown.
+Each Q&A question has its own seven-day cooldown,
 per student, enforced by the backend across devices, languages and question versions.
-Failed answers do not start a cooldown. Other tasks at the same service remain
-available; selection never moves the student to another service. Availability
+Failed answers do not start a cooldown. Reading and Q&A locks are independent;
+other Q&A questions at the same service remain available. Selection never moves the student to another service. Availability
 summaries expose `onCooldown` and `availableAt` (Unix seconds).
 Existing records use `completedAt` until a later pass records `lastPassedAt`.
-Passing again after the week renews the cooldown but does not award MP again:
-the existing first-pass-only reward rule remains unchanged.
+Passing again after the week renews the cooldown. The existing first-pass-only
+reward rule per activity remains unchanged; a previously unpassed reading round
+can earn its first reward after the service reading lock expires.
+The PC checks database availability on icon click and again when opening voice tasks;
+it disables locked actions and never creates a reading session merely by opening the dialog.
 The model returns each approved concept as met, missing or contradicted, with
 verbatim transcript evidence for met/contradicted concepts and short feedback.
 Both layers validate the concept partition; evidence must occur in the submitted
@@ -88,7 +92,7 @@ or give a cosmetic read-aloud badge.
 
 ### Batch publishing and exporting questions
 
-`questions.json` contains **12 bilingual questions** across six services. Use
+`questions.json` contains **12 questions in English, Cantonese and Mandarin** across six services. Use
 `publish` to import a batch directly as available questions, without a separate
 draft or approval step. Publishing still validates wording bounds, languages,
 rubric weights, stable IDs and revisions. Deployment does not implicitly import
@@ -177,6 +181,18 @@ the local test suite.
 
 ## Editing services, passages and languages
 
+Mandarin is configured as `zh-CN`, displayed as **普通话 · Mandarin (Simplified Chinese)**.
+All 308 authored readings and 12 Q&A prompts have Simplified Chinese translations.
+Browser recognition uses `zh-CN`; grading feedback explicitly requests Mandarin
+in Simplified Chinese, not Cantonese. Device/browser recognition support still varies.
+English and Cantonese content, activity IDs, rewards and cooldowns are unchanged.
+Deploy the backend configuration and passages, then update existing approved
+database questions with the additional `zh-CN` prompts using the revision-checked
+export/publish process and a higher question version. Do not republish the seed
+file over existing rows or reset grades, wallets or completion records.
+Already-open PC/phone sessions keep their saved language snapshot; start a new
+session to see Mandarin after deployment/publication.
+
 The voice catalog is bundled JSON configuration, not database records or application-code lists:
 
 * `languages.json`: `defaultLanguage` and a `languages` array. Each entry defines a unique BCP 47 `id`, display `label`, browser `speechLocale`, and `feedbackLanguage` instructions for the grader. Browser support for a locale depends on the device/provider.
@@ -209,10 +225,185 @@ All desktop routes use the existing API Gateway API-key requirement and canonica
 * POST `/voice/sessions/{id}/transfer`, `{}`: ready desktop sessions only. Keeps the same session/activity, revokes old pairing/mobile hashes, creates a five-minute `pairingToken`, and returns `inputDevice:"phone",status:"pairing"`. Cannot transfer an evaluating/completed session or take phone input back.
 * POST `/voice/sessions/{id}/cancel`, `{}`: cancels and revokes capabilities.
 * GET `/voice/wallet`: `{balance,max:100,earned,spent,revision}`. Initial balance, lifetime credited earnings, spending and revision are zero. No read-badge conversion.
-* POST `/voice/casts`, `{requestId:UUID,spell,level}`: spells are lightning/fireball/frost/storm/shockwave, level is integer 1–3, cost equals level. Returns `{requestId,spell,level,cost,cooldownUntil,wallet}`. Shared server cooldown is respectively 6/5/4/9/2 seconds, across tabs and spell types. Insufficient balance, active cooldown and reuse with different payload return 409 without debit. A successful retry returns its original response, including the original wallet snapshot; GET wallet refreshes current state. Request IDs are scoped per owner and normalized to lowercase. Bounded contention exhaustion returns 503: retry the **same requestId**, especially after a network failure.
+* POST `/voice/casts`, `{requestId:UUID,spell,level}`: persisted IDs lightning/fireball/frost/storm/shockwave select event lightning, elastic clones, storage domain, private-cloud ward and recovery anchor. Fixed costs are respectively 12/15/20/15/25 MP and shared server cooldowns are 12/20/45/25/60 seconds. Legacy integer levels 1–3 remain accepted but do not change costs or strength. Returns `{requestId,spell,level,cost,cooldownUntil,wallet}`.
+* Combined casts use `{requestId:UUID,spells:[...]}` with 1–5 unique IDs and no `spell` or `level`. The server sorts IDs, sums costs and uses the maximum cooldown. All five cost 87 MP with 60 seconds shared cooldown. A single transaction records the entire debit and idempotent response `{requestId,spells,cost,cooldownUntil,wallet}`. Selecting all five also activates Global Deployment (全域部署): three local execution waves expand to a 128-unit radius over 1.2 seconds each, defeating normal enemies and bosses when reached, using normal damage/death events. Buildings and solid walls block waves; ground clutter and water do not. Four directional guardian avatars animate those waves. There is no additional MP charge; combat remains client-side. All kills from one cast share one grading batch, preventing repeated AWS grading requests across successive waves.
+* Insufficient balance, active cooldown and request-ID reuse with a different selection return 409 without debit. Retrying the same selection (even reordered) returns its original response; GET wallet refreshes current state. IDs are owner-scoped and normalized to lowercase. Bounded contention returns 503: retry the **same requestId**, especially after network failure. Existing single-art records remain replayable.
 * GET `/voice/completions`: `{services,completed,total,wallet,activities}`. `services` preserves six service rows and existing completed/total semantics; new graded rows may add `bestScore,latestScore,feedback,mpAwarded`. `activities` contains all configured `{activityId,serviceId,label,round,completed,bestScore,latestScore,feedback,mpAwarded,completedAt}` rows. Ungraded slots have null scores/feedback/time and zero MP; historical ungraded participation stays in service rows only, without manufactured scores or rewards.
 
 New session results are `{score,passed,feedback,breakdown:{coverage,content},mpAwarded,activityId}`. `mpAwarded` is the actual credited amount, not nominal entitlement. Responses include `resultActivity:{activityId,serviceId,round,path:"/voice/completions"}` for result navigation.
+
+## Browser AJAX audit and request lifecycle
+
+This section covers the V2 game, PC/phone voice practice, and voice-marks page.
+It does not imply identical behavior in Classic, the React administration app,
+scheduled bulk grading or direct API clients. Static model/icon/CDN downloads,
+browser-managed speech services and CORS preflight requests are separate from
+the application calls below.
+
+### Request inventory
+
+| Trigger | Application request | Concurrency and repetition |
+|---|---|---|
+| E near a guide, with a saved key and no active quest | GET `game` | `Game.talking` blocks repeated guide requests while pending. Existing instructions reopen locally. Twenty-second client timeout; no automatic request retry. |
+| First eligible monster death from an attack | GET `grader?filter=...` | One grading attempt per cast batch, plus one in-flight grading promise per `GameApi` instance. No active quest means no request. Client timeout is 180 seconds. |
+| Game startup, account/key change, or a displayed voice result | GET `voice/wallet` | Explicit refreshes, not a frame timer. Concurrent refreshes are possible; wallet revision prevents stale responses replacing newer balances. Twenty-second timeout. |
+| One selected art | POST `voice/casts` with `requestId`, `spell`, `level` | One pending reservation per wallet instance. Cost/cooldown are server-owned; no local effects before authorization. |
+| Several selected arts, including Global Deployment | POST `voice/casts` with `requestId`, `spells` | One request for the entire selection, not one per art, clone, wave or enemy. Same atomic wallet/receipt transaction as single casting. |
+| Click a service sign or mission-service badge | GET `voice/completions` | Checks availability for the signed-in owner; the client filters the catalog to that service. Epoch/owner guards ignore stale responses. |
+| Open the task chooser, close/revisit the reader, or complete a task | GET `voice/completions` | Availability may be checked again deliberately. Opening the chooser does not itself create or submit a task. These catalog reads are not billed grading attempts. |
+| Press Start on an available task | POST `voice/sessions` | `starting` prevents repeated starts from that chooser while pending. Current reading/Q&A creation selects authored content; it does not assess speech. |
+| Select phone transfer | POST `voice/sessions/{id}/transfer` | Uses the same starting/busy guard. The saved task is transferred, not duplicated; old pairing credentials are revoked. |
+| Open a valid QR on phone | POST `voice/mobile/claim` | Claims the existing session conditionally. Recovered device capabilities use the existing session. The pairing token is removed from the address bar after successful claim. |
+| Submit final desktop speech | POST `voice/sessions/{id}/answer` | Shared speech UI has a submitting guard and requires final speech. Server transcript-hash deduplication controls attempts and rewards. |
+| Submit final phone speech | POST `voice/mobile/answer` | Same speech guards and backend attempt rules, using the phone capability rather than the account API key. |
+| Active-device grading progress | GET `voice/sessions/{id}` or `voice/mobile/session` | One immediate status check after an evaluating submission, then sequential four-second timers. At most 150 timer checks before manual recovery; not overlapping fixed-interval requests. |
+| Desktop checks a task transferred to phone | GET `voice/sessions/{id}` | Explicit Check action; there is no background desktop polling of phone results. Normal UI disables the check control while requesting. |
+| Load a signed-in checkpoint | GET `game/save` | One operation at a time per `GameSave` instance; generation guards reject old-account responses. Fifteen-second timeout. |
+| Equipment, primary art, map, chest, boss or mission progress changes | POST `game/save` | Debounced by 750 ms and serialized. Unchanged state does not POST. Visibility changes may flush a pending save. No per-frame position saves. |
+| Open voice marks with a key, or submit its refresh form | GET `voice/completions` | Twenty-second timeout; response revision and key checks reject stale displays. Search/type/status filters are entirely local. |
+| Change attack voice, preview or announce an art | No application AJAX | Uses browser speech synthesis; mute, volume, voice availability and browser-provider behavior still apply. |
+
+Game/mission requests explicitly use `cache:"no-store"`. Wallet and marks
+requests also bypass browser caching. Voice/session and checkpoint responses
+carry server `Cache-Control:no-store`. Keys go in headers, never in resource
+URLs. Phone capabilities are not accepted in API query strings. Error text is
+rendered as text rather than HTML.
+
+### Exactly what “one grading call” means
+
+1. A successful local cast creates one in-memory batch object. A combined cast
+   shares it across every selected art, clone, delayed pulse and execution wave.
+2. Damage messages carry the batch into the victim's health component. Only a
+   real death invokes the normal monster-death handler; already-dead targets
+   cannot trigger another death reward.
+3. `Game.grade(batch)` marks the batch consumed before starting asynchronous
+   work. Subsequent deaths in that batch cannot retry it, even after its first
+   check fails or returns “changes needed.”
+4. `GameApi.gradeQuest()` also shares one in-flight promise. If another cast
+   kills while a check is pending, that cast's grading opportunity is consumed;
+   it does not queue a follow-up check after the pending request completes.
+5. A separate later cast or ordinary melee kill may request another check.
+   No quest means zero grading requests. Successful grading clears the matching
+   active quest and updates verified mission progression.
+
+The scope is **one browser game instance and its current in-memory cast**.
+`GraderFunction` does not accept a durable idempotency key or maintain a
+server-side per-cast receipt. Another tab/device, a reload, direct API calls,
+or another cast after a timeout can therefore execute another grader invocation.
+A client abort stops waiting; it does not prove Lambda or its AWS resource
+checks stopped. The grader may itself run multiple unit tests and AWS API calls,
+so one browser AJAX request is not one downstream AWS request.
+
+Mass kills still update individual death animations, kill counts, XP, boss
+cosmetics and respawn scheduling. Those effects do not each request another
+mission grade. Boss progression and a grading result can separately schedule
+checkpoint saves; these are not additional grader calls.
+
+### MP reservations, retries and account changes
+
+`MagicWallet.busy` and `checking` block overlapping cast submissions within a
+game instance. The complete spell selection is validated and its total cost is
+checked before reserving. The server atomically writes a revised wallet and
+an owner-scoped cast receipt. Duplicate or reordered combined requests return
+the same stored receipt without charging again; a changed selection using the
+same ID returns 409. Wallet revision checks serialize requests from different
+tabs/devices and prevent overspending.
+
+A network failure, 5xx response, invalid JSON or mismatched authorization keeps
+the same pending request ID for an explicit retry. A confirmed 4xx response
+clears it; 409 also refreshes the wallet. Cast POSTs are not automatically retried.
+An authorization received while gameplay has become invalid is held for retry
+without another charge. The local receipt is marked applied before effects run,
+preventing effect replay if local rendering throws.
+
+Pending cast IDs are in memory, not durable browser recovery records. Reloading
+after an uncertain reservation can lose the local retry ID even if the server
+debited MP. There is no automatic refund or replay of a paid effect after reload.
+Prefer retrying the same pending selection before refreshing the page.
+
+Changing the key resets wallet state, pending local IDs and applied-effect
+tracking; late responses from the old epoch cannot affect the new wallet or
+execute its effects. This does not undo a request already accepted by the server
+for the previous owner. Mission result and error UI also check the key, marks
+reset value and progress version before changing the current account's display.
+
+### Voice assessment, polling and checkpoint recovery
+
+Speech submissions are deduplicated by the server's normalized transcript and
+language hash within a session. Attempt count, daily budget and work reservation
+are conditional/transactional. Duplicate deliveries do not grant another reward.
+First-pass progress, immutable grade and wallet credit are committed together.
+Different sessions can still produce distinct assessments; the shared activity
+record prevents duplicate first-pass MP.
+
+Only an evaluating/generating session schedules automatic status checks.
+Terminal/ready states stop that schedule. A network/status error stops polling
+and exposes recovery controls; it does not automatically resubmit the transcript.
+After an uncertain submission, check the saved session before submitting again.
+Status GETs may conditionally redispatch a stalled grading attempt; they are not
+unconditionally read-only, and workers enforce their own leases/idempotency.
+See the atomicity section below for the bounded worker-recovery policy.
+
+Session creation and transfer have UI guards but no general client-supplied
+request-ID contract. A timed-out create followed by another explicit Start may
+leave an unused earlier session; it must not be described as exactly-once
+creation. Availability and result GETs can repeat across modal lifecycle events.
+Owner/session epochs prevent stale rendering, not necessarily duplicate HTTP
+traffic. Repeated result checks can also refresh the wallet, without adding MP.
+
+Checkpoint POSTs are different: the pending revision, request ID and immutable
+payload are stored in an account-scoped local recovery record. Network failures
+retry with the same payload, using backoff from 2 to 30 seconds. A successful
+POST followed by a lost response can be acknowledged by GET using its request ID.
+New edits while a save is pending are sent later with a new revision and ID.
+409 conflicts stop automatic writes and require explicit loading of the latest
+save; auth, malformed-request and unsupported-version failures do not loop.
+The saved server record retains only the latest save request ID, not a permanent
+history of all save receipts.
+
+### Audit evidence and limits
+
+Focused regressions cover cast-batch identity across delayed hits, checks after
+completed/failed AJAX requests, shared in-flight grading, stale-account errors,
+atomic multi-art debit, uncertain-response retries, save conflicts, session
+submission guards and bounded polling. The served-page browser harness exercises
+real monster deaths and map travel with mocked API responses. These checks do
+not prove production exactly-once Lambda execution or test a physical microphone.
+No student records, marks or MP are changed by the local audit.
+
+## Client gameplay and release scope
+
+The player-facing [cloud-art guide](../../README.md#cloud-arts-and-combined-attacks)
+documents costs, multi-selection and Global Deployment. Selecting all five
+uses the ordinary cast control; there is no separate ultimate button.
+Its four six-times-size avatars animate three expanding execution waves.
+Effects, range display and temporary camera framing use the same 128-unit range;
+the server continues to authorize only the 87 MP debit and 60-second cooldown.
+One client-side grading batch spans every damaging component of a cast, so later
+kills from its clones, fields or waves do not issue additional mission-grader
+requests. A later independent attack may trigger another check.
+
+World populations are 24 ordinary enemies plus the Warden in the village, and
+14 ordinary enemies plus one elite in each expedition. Boss models are twice
+their earlier size, without changing their HP or the execution-wave rule.
+Existing actor pools and respawn behavior are retained; these frontend changes
+do not migrate student data or create new rewards.
+
+Attack announcements use browser text-to-speech, separate from voice-practice
+recognition and grading. Cantonese voice choice and preview depend on the
+device's exposed voices; a male voice is not guaranteed. Global Deployment reads
+both its Chinese and English names. These announcements do not invoke Bedrock
+or upload application audio.
+
+For gameplay releases, publish changed dependencies before `v2/main.js` and
+`game-v2.html`, update module cache tags, invalidate affected CloudFront paths
+including query-string variants, and verify served files against local hashes.
+Relevant dependencies include `v2/magic.js`, `v2/magic-effects.js`,
+`v2/audio.js`, `v2/maps.js`, `v2/monsters.js` and `v2/style.css`.
+Deploy Lambda first when cast request/response contracts change. Back up replaced
+assets, review resource changes, and preserve all grades, wallets, questions
+and saved progress. A frontend-only visual or naming change requires no
+question-bank republication or backend deployment.
 
 ## V2 checkpoint saves
 

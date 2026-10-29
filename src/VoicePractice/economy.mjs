@@ -11,17 +11,35 @@ export const walletView = row => ({
   balance: row?.balance ?? 0, max: 100, earned: row?.earned ?? 0,
   spent: row?.spent ?? 0, revision: row?.revision ?? 0,
 });
-const cooldowns = { lightning: 6, fireball: 5, frost: 4, storm: 9, shockwave: 2 };
+// IDs remain compatible with existing equipment saves; levels no longer alter cloud arts.
+const arts = {
+  lightning: { cost: 12, cooldown: 12 }, fireball: { cost: 15, cooldown: 20 },
+  frost: { cost: 20, cooldown: 45 }, storm: { cost: 15, cooldown: 25 },
+  shockwave: { cost: 25, cooldown: 60 },
+};
 const uuid = value => typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export function createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey, activities = authoredActivities }) {
   const wallet = async owner => walletView(await store.get(walletKey(owner)));
+  const savedActivities = owner => store.listActivities ? store.listActivities(owner) :
+    Promise.all(activities.map(activity => store.get(activityKey(owner, activity.activityId))));
+  const readingCooldowns = rows => {
+    const cooldowns = new Map();
+    for (const row of rows.filter(Boolean)) {
+      if (row.type === "question_answer") continue;
+      cooldowns.set(row.serviceId, Math.max(cooldowns.get(row.serviceId) ?? 0, taskAvailableAt(row)));
+    }
+    return cooldowns;
+  };
+  const readingAvailableAt = async (owner, serviceId) =>
+    readingCooldowns(await savedActivities(owner)).get(serviceId) ?? 0;
   const summaries = async (owner, extraActivities = []) => {
     const catalog = [...activities, ...extraActivities];
     const savedRows = store.listActivities ? await store.listActivities(owner) :
       await Promise.all(catalog.map(activity => store.get(activityKey(owner, activity.activityId))));
     const rows = new Map(savedRows.filter(Boolean).map(row => [row.activityId, row]));
+    const readingLocks = readingCooldowns(savedRows);
     const ids = new Set(catalog.map(activity => activity.activityId));
     for (const row of rows.values()) {
       if (row.type === "question_answer" && !ids.has(row.activityId))
@@ -29,6 +47,8 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     }
     return catalog.map(activity => {
       const saved = rows.get(activity.activityId);
+      const availableAt = activity.type === "question_answer" ? taskAvailableAt(saved)
+        : readingLocks.get(activity.serviceId) ?? 0;
       return { activityId: activity.activityId, serviceId: activity.serviceId, label: activity.label,
         type: activity.type ?? "read_aloud",
         ...(activity.type === "question_answer" ? { title: activity.title, questionId: activity.questionId,
@@ -37,7 +57,7 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
         bestScore: saved?.bestScore ?? null, latestScore: saved?.latestScore ?? null,
         feedback: saved?.feedback ?? null, mpAwarded: saved?.mpAwarded ?? 0,
         completedAt: saved?.completedAt ?? null,
-        availableAt: taskAvailableAt(saved), onCooldown: taskAvailableAt(saved) > now() };
+        availableAt, onCooldown: availableAt > now() };
     });
   };
   const choose = async (owner, requested) => {
@@ -52,29 +72,39 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     return activities.find(a => a.activityId === selected.activityId);
   };
   const cast = async (owner, body) => {
-    if (!uuid(body.requestId) || !Object.hasOwn(cooldowns, body.spell) ||
-        !Number.isInteger(body.level) || body.level < 1 || body.level > 3) {
-      fail(400, "A UUID requestId, supported spell and level from 1 to 3 are required");
+    const combined = body.spells !== undefined;
+    const spells = combined ? body.spells : [body.spell];
+    if (!uuid(body.requestId) || !Array.isArray(spells) || spells.length < 1 || spells.length > 5 ||
+        new Set(spells).size !== spells.length || spells.some(spell => !Object.hasOwn(arts, spell)) ||
+        (combined ? body.spell !== undefined || body.level !== undefined :
+          !Number.isInteger(body.level) || body.level < 1 || body.level > 3)) {
+      fail(400, "Supply a UUID requestId and 1-5 unique supported spells, or a single spell with level 1-3");
     }
+    const ids = [...spells].sort();
+    const selection = combined ? { spells: ids } : { spell: body.spell, level: body.level };
     const key = castKey(owner, body.requestId.toLowerCase());
+    const cost = ids.reduce((sum, id) => sum + arts[id].cost, 0);
+    const cooldown = Math.max(...ids.map(id => arts[id].cooldown));
     for (let retry = 0; retry < 6; retry++) {
       const old = await store.get(key);
       if (old) {
-        if (old.spell !== body.spell || old.level !== body.level) fail(409, "requestId was already used with a different spell or level");
+        if (combined ? JSON.stringify(old.spells) !== JSON.stringify(ids) :
+          old.spell !== body.spell || old.level !== body.level || old.spells)
+          fail(409, "requestId was already used with a different spell selection");
         return old.response;
       }
       const before = await store.get(walletKey(owner));
       const current = walletView(before);
-      if (current.balance < body.level) fail(409, "Insufficient MP");
+      if (current.balance < cost) fail(409, "Insufficient MP");
       if ((before?.cooldownUntil ?? 0) > now()) fail(409, "Spell cooldown is active; wait before casting again");
       const next = { ...before, ...walletKey(owner), ...current,
-        balance: current.balance - body.level, spent: current.spent + body.level,
-        revision: current.revision + 1, cooldownUntil: now() + cooldowns[body.spell] };
-      const response = { requestId: body.requestId.toLowerCase(), spell: body.spell, level: body.level,
-        cost: body.level, cooldownUntil: next.cooldownUntil, wallet: walletView(next) };
+        balance: current.balance - cost, spent: current.spent + cost,
+        revision: current.revision + 1, cooldownUntil: now() + cooldown };
+      const response = { requestId: body.requestId.toLowerCase(), ...selection,
+        cost, cooldownUntil: next.cooldownUntil, wallet: walletView(next) };
       try {
         await store.atomic([{ item: next, previous: before?.revision },
-          { item: { ...key, spell: body.spell, level: body.level, response, createdAt: now() } }]);
+          { item: { ...key, ...selection, response, createdAt: now() } }]);
         return response;
       } catch (e) { if (!store.isConflict(e)) throw e; }
     }
@@ -132,5 +162,5 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     }
     throw new Error("Grade credit contention");
   };
-  return { wallet, summaries, choose, cast, finish };
+  return { wallet, summaries, choose, cast, finish, readingAvailableAt };
 }

@@ -13,6 +13,7 @@ const response = (body, status = 200) => ({
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const EN_PASSAGE = 'Amazon S3 stores data as objects in buckets.';
 const ZH_PASSAGE = 'Amazon S3 以物件形式將資料儲存在儲存桶內。';
+const CN_PASSAGE = 'Amazon S3 将数据作为对象存储在存储桶中。';
 
 test('voice pages have one refresh control and one status message per device', () => {
   const pc = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
@@ -535,6 +536,32 @@ test('configured languages with no translated passage never silently display an 
   assert.match(app.elements.get('mobile-voice-status').textContent, /no available reading language/);
 });
 
+test('phone Mandarin reading and Q&A display Simplified Chinese and submit zh-CN speech', async () => {
+  for (const mode of ['graded_read_aloud', 'graded_question_answer']) {
+    const text = mode === 'graded_read_aloud' ? CN_PASSAGE : '如何在 Amazon S3 中安全地存储游戏截图？';
+    const app = mobileFixture({ recognition: {}, claimStatus: 'ready',
+      serverData: { mode, [mode === 'graded_read_aloud' ? 'readingTexts' : 'questionTexts']:
+        { 'en-US': EN_PASSAGE, 'zh-HK': ZH_PASSAGE, 'zh-CN': text },
+      languages: [
+        { id: 'en-US', label: 'English', speechLocale: 'en-US' },
+        { id: 'zh-HK', label: '廣東話', speechLocale: 'zh-HK' },
+        { id: 'zh-CN', label: '普通话', speechLocale: 'zh-CN' },
+      ] } });
+    await tick();
+    const select = app.elements.get('mobile-voice-language');
+    assert.ok(select.children.some(option => option.value === 'zh-CN' && option.textContent === '普通话'));
+    select.value = 'zh-CN'; select.change();
+    assert.equal(app.elements.get('mobile-voice-question').textContent, text);
+    app.api.speak();
+    assert.equal(app.recognition.instance.lang, 'zh-CN');
+    app.recognition.instance.onresult({ results: [Object.assign([{ transcript: CN_PASSAGE }], { isFinal: true })] });
+    app.api.releaseSpeech();
+    await app.api.submitTranscript();
+    const sent = app.requests.find(request => request.url.endsWith('/voice/mobile/answer'));
+    assert.equal(JSON.parse(sent.options.body).language, 'zh-CN');
+  }
+});
+
 test('a ready session with historical completed true still accepts this read-aloud participation', async () => {
   const app = mobileFixture({ recognition: {}, serverData: { completed: true }, claimStatus: 'ready' });
   await tick();
@@ -657,7 +684,9 @@ test('desktop ownership fingerprints do not persist API keys and session checks 
 });
 
 function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus = 'completed', unsupported = false,
-  questions = [], availabilityGate, returnedService, statusGate, statusError } = {}) {
+  questions = [], availabilityGate, returnedService, statusGate, statusError, round = 1,
+  readings = ['s3', 'vpc', 'ec2', 'ecs'].map(serviceId =>
+    ({ serviceId, activityId: `${serviceId}-reading-r1-v1`, type: 'read_aloud', onCooldown: false })) } = {}) {
   const previous = {
     document: globalThis.document, window: globalThis.window, localStorage: globalThis.localStorage,
     sessionStorage: globalThis.sessionStorage, fetch: globalThis.fetch, location: globalThis.location,
@@ -708,7 +737,7 @@ function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus =
     if (failStart) return response({ message: 'Missing Authentication Token' }, 403);
     if (String(url).endsWith('/voice/completions')) {
       if (availabilityGate) await availabilityGate;
-      return response({ activities: questions });
+      return response({ activities: structuredClone([...readings, ...questions]) });
     }
     if (String(url).endsWith('/transfer')) {
       return response({ id: 'desktop-session', inputDevice: 'phone', pairingToken: 'qr-secret', status: 'pairing' });
@@ -720,12 +749,13 @@ function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus =
     if (options.method === 'POST') {
       const body = JSON.parse(options.body);
       activeSession = { id: 'desktop-session', pairingToken: 'qr-secret', pairCode: '123456',
-        serviceId: returnedService ?? body.serviceId, serviceLabel: 'Amazon S3', mode: 'graded_read_aloud', inputDevice: 'desktop',
-        readingTexts: { 'en-US': EN_PASSAGE, 'zh-HK': ZH_PASSAGE }, question: EN_PASSAGE,
+        serviceId: returnedService ?? body.serviceId, serviceLabel: 'Amazon S3', mode: 'graded_read_aloud', inputDevice: 'desktop', round,
+        readingTexts: { 'en-US': EN_PASSAGE, 'zh-HK': ZH_PASSAGE, 'zh-CN': CN_PASSAGE }, question: EN_PASSAGE,
         status: 'ready', expiresAt: Math.floor(Date.now() / 1000) + 1200, attempts: 0, maxAttempts: 6 };
       if (body.type === 'question_answer') Object.assign(activeSession, {
         mode: 'graded_question_answer', activityId: 'qa:s3:private', questionId: 'private',
-        questionTexts: { 'en-US': 'How do you store private screenshots?', 'zh-HK': '你會點樣儲存私人截圖？' },
+        questionTexts: { 'en-US': 'How do you store private screenshots?', 'zh-HK': '你會點樣儲存私人截圖？',
+          'zh-CN': '如何存储私人截图？' },
         question: 'How do you store private screenshots?',
       });
       return response(activeSession);
@@ -746,16 +776,50 @@ function desktopFixture({ apiKey = 'desktop-key', failStart = false, getStatus =
   const controller = bindVoicePractice(game);
   return {
     previous, documentRef, elements, windowEvents, values, saved, created, requests, game, controller, recognition,
+    async openReading(serviceId) {
+      controller.open(serviceId);
+      await tick();
+      await elements.get('voice-start').click();
+      await tick();
+    },
     restore() { Object.assign(globalThis, previous); },
   };
 }
+
+test('desktop reading tasks have distinct numbered titles and explain the per-task cooldown', async () => {
+  for (const round of [1, 2]) {
+    const app = desktopFixture({ round });
+    try {
+      await app.openReading('s3');
+      assert.equal(app.elements.get('voice-desktop-title').textContent, `Amazon S3 - Reading task ${round}`);
+      assert.match(app.elements.get('pc-question-heading').textContent, new RegExp(`Reading task ${round}`));
+      assert.match(app.elements.get('voice-desktop-intro').textContent, /locks all reading.*one week/);
+    } finally { app.restore(); }
+  }
+});
+
+test('phone reading tasks show their number and explain the lock after passing', async () => {
+  for (const round of [1, 2]) {
+    const app = mobileFixture({ recognition: {}, claimStatus: 'ready',
+      serverData: { round, serviceLabel: 'Amazon S3', mode: 'graded_read_aloud' },
+      immediateResult: false, answerOutcome: 'passed' });
+    await tick();
+    assert.equal(app.elements.get('mobile-voice-title').textContent, `Amazon S3 - Reading task ${round}`);
+    speakFinal(app, EN_PASSAGE);
+    await app.api.submitTranscript();
+    assert.match(app.elements.get('mobile-voice-status').textContent, /All reading.*locked for one week/);
+  }
+});
 
 test('desktop defaults to PC speech without QR and refreshes authoritative wallet after a passed result', async () => {
   const app = desktopFixture();
   try {
     app.controller.open('s3');
-    assert.equal(app.requests.length, 2);
+    assert.equal(app.requests.length, 1);
+    assert.equal(app.elements.get('voice-start').disabled, true);
     await tick();
+    assert.equal(app.requests.length, 1, 'opening checks availability without creating a session');
+    await app.elements.get('voice-start').click();
     assert.equal(app.requests.length, 2);
     assert.match(app.requests[1].url, /voice\/sessions$/);
     assert.equal(app.requests[1].options.headers['x-api-key'], 'desktop-key');
@@ -789,11 +853,68 @@ test('desktop defaults to PC speech without QR and refreshes authoritative walle
   } finally { app.restore(); }
 });
 
+test('opening S3 checks the database and immediately selects Q&A when all reading is locked', async () => {
+  const until = Math.floor(Date.now() / 1000) + 7 * 86400;
+  const readings = [1, 2].map(round => ({ serviceId: 's3', type: 'read_aloud',
+    activityId: `s3-reading-r${round}-v1`, onCooldown: true, availableAt: until, completed: round === 1 }));
+  const app = desktopFixture({ readings, questions: [approvedQuestion] });
+  try {
+    app.controller.open('s3');
+    assert.equal(app.elements.get('voice-start').disabled, true);
+    await tick();
+    assert.equal(app.requests.filter(r => r.url.endsWith('/voice/sessions')).length, 0);
+    assert.equal(app.elements.get('voice-reading-option').disabled, true);
+    assert.deepEqual(app.elements.get('voice-task-type').children, [app.elements.get('voice-question-option')]);
+    assert.equal(app.elements.get('voice-task-type').hidden, true);
+    assert.equal(app.elements.get('voice-task-type').value, 'question_answer');
+    assert.equal(app.elements.get('voice-start').textContent, 'Start Q&A');
+    assert.equal(app.elements.get('voice-start').disabled, false);
+    assert.match(app.elements.get('voice-question-availability').textContent, /Read aloud: Locked until.*1 available now/);
+    assert.equal(app.elements.get('pc-practice-content').hidden, true);
+    app.elements.get('voice-task-type').value = 'read_aloud';
+    app.elements.get('voice-task-type').change();
+    assert.equal(app.elements.get('voice-task-type').value, 'question_answer');
+    await app.elements.get('voice-start').click();
+    assert.equal(JSON.parse(app.requests.at(-1).options.body).type, 'question_answer');
+  } finally { app.restore(); }
+});
+
+test('opening a service with no available tasks never starts or exposes speaking controls', async () => {
+  const app = desktopFixture({ readings: [{ serviceId: 's3', type: 'read_aloud',
+    onCooldown: true, availableAt: Math.floor(Date.now() / 1000) + 604800 }] });
+  try {
+    app.controller.open('s3');
+    await tick();
+    assert.equal(app.elements.get('voice-start').disabled, true);
+    assert.equal(app.elements.get('voice-question-option').disabled, true);
+    assert.deepEqual(app.elements.get('voice-task-type').children, []);
+    assert.equal(app.elements.get('voice-task-type').hidden, true);
+    await app.elements.get('voice-start').click();
+    assert.equal(app.requests.length, 1);
+    assert.equal(app.elements.get('pc-practice-content').hidden, true);
+  } finally { app.restore(); }
+});
+
+test('a saved ready reading is discarded if a phone pass has locked the service', async () => {
+  const readings = [{ serviceId: 's3', type: 'read_aloud', onCooldown: false }];
+  const app = desktopFixture({ readings, questions: [approvedQuestion] });
+  try {
+    await app.openReading('s3');
+    readings[0].onCooldown = true;
+    readings[0].availableAt = Math.floor(Date.now() / 1000) + 604800;
+    app.controller.open('s3');
+    await tick();
+    assert.equal(app.elements.get('pc-practice-content').hidden, true);
+    assert.equal(app.elements.get('voice-task-type').value, 'question_answer');
+    assert.equal(app.saved.has('aws-warrior:voice:desktop'), false);
+    assert.equal(app.requests.some(r => r.url.endsWith('/voice/sessions/desktop-session')), false);
+  } finally { app.restore(); }
+});
+
 test('desktop starts voice for services outside the original six-service pilot', async () => {
   const app = desktopFixture();
   try {
-    app.controller.open('ecs');
-    await tick();
+    await app.openReading('ecs');
     assert.equal(JSON.parse(app.requests[1].options.body).serviceId, 'ecs');
     assert.equal(app.elements.get('pc-speak').disabled, false);
   } finally { app.restore(); }
@@ -802,8 +923,7 @@ test('desktop starts voice for services outside the original six-service pilot',
 test('desktop rejects a task for another service instead of switching away from the game discovery', async () => {
   const app = desktopFixture({ returnedService: 'vpc' });
   try {
-    app.controller.open('ec2');
-    await tick();
+    await app.openReading('ec2');
     assert.equal(JSON.parse(app.requests[1].options.body).serviceId, 'ec2');
     assert.equal(app.elements.get('pc-speak').disabled, true);
     assert.equal(app.saved.has('aws-warrior:voice:desktop'), false);
@@ -813,8 +933,7 @@ test('desktop rejects a task for another service instead of switching away from 
 test('missing saved sessions automatically reopen the same service without a retry click', async () => {
   const app = desktopFixture({ statusError: { status: 404, message: 'Session not found' } });
   try {
-    app.controller.open('vpc');
-    await tick();
+    await app.openReading('vpc');
     app.controller.open('vpc');
     await tick();
     assert.equal(JSON.parse(app.saved.get('aws-warrior:voice:desktop')).status, 'ready');
@@ -827,8 +946,7 @@ test('missing saved sessions automatically reopen the same service without a ret
 test('desktop result polling recovers a missing session without exposing a refresh action', async () => {
   const app = desktopFixture({ statusError: { status: 404, message: 'Session not found' } });
   try {
-    app.controller.open('vpc');
-    await tick();
+    await app.openReading('vpc');
     assert.equal(app.elements.get('voice-check').hidden, true);
     await app.controller.speech.refresh();
     assert.equal(app.requests.filter(request => request.url.endsWith('/voice/sessions')).length, 2);
@@ -840,8 +958,7 @@ test('desktop result polling recovers a missing session without exposing a refre
 test('expired saved VPC sessions are not requested again when reopening the task', async () => {
   const app = desktopFixture();
   try {
-    app.controller.open('vpc');
-    await tick();
+    await app.openReading('vpc');
     const key = 'aws-warrior:voice:desktop';
     const saved = JSON.parse(app.saved.get(key));
     app.saved.set(key, JSON.stringify({ ...saved, expiresAt: Math.floor(Date.now() / 1000) - 1 }));
@@ -879,8 +996,7 @@ test('an old reading status error cannot overwrite the newly selected Q&A task',
   const app = desktopFixture({ questions: [{ ...approvedQuestion, serviceId: 'vpc' }], statusGate,
     statusError: { status: 404, message: 'Session not found' } });
   try {
-    app.controller.open('vpc');
-    await tick();
+    await app.openReading('vpc');
     const checking = app.elements.get('voice-check').click();
     app.elements.get('voice-task-type').value = 'question_answer';
     app.elements.get('voice-task-type').change();
@@ -894,8 +1010,7 @@ test('an old reading status error cannot overwrite the newly selected Q&A task',
 test('desktop transfers the same session explicitly and removes consumed QR codes', async () => {
   const app = desktopFixture({ getStatus: 'ready' });
   try {
-    app.controller.open('vpc');
-    await tick();
+    await app.openReading('vpc');
     assert.equal(app.created.some(element => element.tagName === 'canvas'), false);
     await app.elements.get('voice-transfer').click();
     assert.match(app.requests.at(-1).url, /sessions\/desktop-session\/transfer$/);
@@ -912,8 +1027,7 @@ test('desktop transfers the same session explicitly and removes consumed QR code
 test('PC uses click-to-start and click-to-stop without stopping on mouse release', async () => {
   const app = desktopFixture();
   try {
-    app.controller.open('s3');
-    await tick();
+    await app.openReading('s3');
     const button = app.elements.get('pc-speak');
     assert.equal(button.textContent, 'Start speaking');
     await button.click();
@@ -933,8 +1047,7 @@ test('PC uses click-to-start and click-to-stop without stopping on mouse release
 test('PC uses authenticated submission, then shows grade and refreshes MP', async () => {
   const app = desktopFixture();
   try {
-    app.controller.open('s3');
-    await tick();
+    await app.openReading('s3');
     app.controller.speech.speak();
     assert.equal(app.recognition.started, true);
     app.recognition.instance.onresult({ results: [Object.assign([{ transcript: EN_PASSAGE }], { isFinal: true })] });
@@ -948,7 +1061,7 @@ test('PC uses authenticated submission, then shows grade and refreshes MP', asyn
     assert.deepEqual(JSON.parse(sent.options.body),
       { transcript: EN_PASSAGE, source: 'browser', speechCompleted: true, language: 'en-US' });
     assert.match(app.elements.get('pc-voice-result').textContent, /85\/100.*MP earned: 10/);
-    assert.equal(app.elements.get('pc-voice-status').textContent, '');
+    assert.match(app.elements.get('pc-voice-status').textContent, /Reading task 1 passed.*All reading.*locked for one week/);
     assert.equal(app.elements.get('voice-start').hidden, true);
     assert.equal(app.elements.get('voice-desktop-panel').children.length, 0);
     assert.equal(app.game.walletRefreshed, true);
@@ -959,8 +1072,7 @@ test('PC uses authenticated submission, then shows grade and refreshes MP', asyn
 test('PC without a working microphone releases controls and can transfer the same task to phone', async () => {
   const app = desktopFixture();
   try {
-    app.controller.open('vpc');
-    await tick();
+    await app.openReading('vpc');
     app.controller.speech.speak();
     app.recognition.instance.onerror({ error: 'audio-capture' });
     assert.equal(app.controller.speech.isBusy(), false);
@@ -974,8 +1086,7 @@ test('PC without a working microphone releases controls and can transfer the sam
 test('PC without speech recognition offers phone transfer without claiming QR automatically', async () => {
   const app = desktopFixture({ unsupported: true });
   try {
-    app.controller.open('s3');
-    await tick();
+    await app.openReading('s3');
     assert.equal(app.elements.get('pc-speak').disabled, true);
     assert.match(app.elements.get('pc-voice-status').textContent, /unavailable/);
     assert.equal(app.elements.get('voice-transfer').disabled, false);
@@ -989,8 +1100,7 @@ test('PC without speech recognition offers phone transfer without claiming QR au
 test('desktop API key changes clear owned session data and disabled endpoints explain unavailability in-dialog', async () => {
   const app = desktopFixture();
   try {
-    app.controller.open('s3');
-    await tick();
+    await app.openReading('s3');
     assert.ok(app.saved.has('aws-warrior:voice:desktop'));
     app.values.set('api_key', 'different-account-key');
     app.windowEvents.get('storage')({ key: 'api_key' });
@@ -1001,19 +1111,45 @@ test('desktop API key changes clear owned session data and disabled endpoints ex
   try {
     disabled.controller.open('s3');
     await tick();
-    assert.match(disabled.elements.get('voice-desktop-panel').children[0].textContent, /not enabled/i);
+    assert.match(disabled.elements.get('voice-question-availability').textContent, /could not be checked/i);
+    assert.equal(disabled.elements.get('voice-start').disabled, true);
     assert.equal(disabled.documentRef.getElementById('service-dialog').open, undefined);
   } finally { disabled.restore(); }
 });
 
 const approvedQuestion = { activityId: 'qa:s3:private', serviceId: 's3', type: 'question_answer',
-  title: 'Private screenshots', questionId: 'private', available: true, completed: false, languages: ['en-US', 'zh-HK'] };
+  title: 'Private screenshots', questionId: 'private', available: true, completed: false, languages: ['en-US', 'zh-HK', 'zh-CN'] };
+
+test('PC Mandarin reading and Q&A pin browser recognition and authenticated submissions to zh-CN', async () => {
+  for (const type of ['read_aloud', 'question_answer']) {
+    const app = desktopFixture({ questions: [approvedQuestion] });
+    try {
+      app.controller.open('s3');
+      await tick();
+      if (type === 'question_answer') {
+        app.elements.get('voice-task-type').value = type;
+        app.elements.get('voice-task-type').change();
+      }
+      await app.elements.get('voice-start').click();
+      const select = app.elements.get('pc-voice-language');
+      select.value = 'zh-CN'; select.change();
+      assert.equal(app.elements.get('pc-voice-question').textContent,
+        type === 'read_aloud' ? CN_PASSAGE : '如何存储私人截图？');
+      app.controller.speech.speak();
+      assert.equal(app.recognition.instance.lang, 'zh-CN');
+      app.recognition.instance.onresult({ results: [Object.assign([{ transcript: CN_PASSAGE }], { isFinal: true })] });
+      app.controller.speech.releaseSpeech();
+      await app.controller.speech.submitTranscript();
+      const sent = app.requests.find(request => request.url.endsWith('/answer'));
+      assert.equal(JSON.parse(sent.options.body).language, 'zh-CN');
+    } finally { app.restore(); }
+  }
+});
 
 test('a delayed close event from an old dialog does not suspend newly reopened speech', async () => {
   const app = desktopFixture();
   try {
-    app.controller.open('s3');
-    await tick();
+    await app.openReading('s3');
     app.elements.get('voice-desktop-dialog').events.get('close')();
     assert.equal(app.elements.get('pc-practice-content').hidden, false);
     assert.equal(app.elements.get('pc-speak').disabled, false);
@@ -1046,7 +1182,7 @@ test('desktop enables Q&A only from approved database availability and submits a
     assert.equal(app.elements.get('pc-send-answer').disabled, false);
     await app.controller.speech.submitTranscript();
     assert.match(app.elements.get('pc-voice-result').textContent, /MP earned: 20/);
-    assert.equal(app.elements.get('pc-voice-status').textContent, '');
+    assert.match(app.elements.get('pc-voice-status').textContent, /Question passed.*locked for one week/);
     assert.equal(app.elements.get('voice-start').hidden, true);
     assert.equal(app.elements.get('voice-desktop-panel').children.length, 0);
     assert.equal(app.game.readServices.has('s3'), false, 'Comprehension is not a read-aloud badge');

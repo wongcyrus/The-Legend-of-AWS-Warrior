@@ -36,7 +36,11 @@ const COOLDOWNS = { yeti: 0.6, bat: 0.35, cactus: 0.3, spike: 0.12, slam: 0.15,
 
 export class SoundEffects {
   constructor({ storage = globalThis.localStorage,
+    synthesis = globalThis.speechSynthesis, Utterance = globalThis.SpeechSynthesisUtterance,
     createContext = BrowserAudioContext ? () => new BrowserAudioContext() : null } = {}) {
+    this.synthesis = synthesis;
+    this.Utterance = Utterance;
+    this.speechUnlocked = false;
     this.storage = storage;
     this.createContext = createContext;
     this.available = typeof createContext === "function";
@@ -45,6 +49,7 @@ export class SoundEffects {
     this.resuming = null;
     this.pending = [];
     this.muted = this.read("muted") === "true";
+    this.voiceURI = this.read("voice") || "";
     const savedVolume = this.read("volume");
     const volume = savedVolume === null ? 0.45 : Number(savedVolume);
     this.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0.45;
@@ -62,6 +67,7 @@ export class SoundEffects {
   }
 
   async unlock() {
+    this.unlockSpeech();
     if (!this.available || this.muted || this.volume === 0) return false;
     if (!this.context) {
       try {
@@ -89,9 +95,59 @@ export class SoundEffects {
   }
 
   updateGain() {
+    if (this.muted || this.paused || this.volume === 0) this.stopSpeech();
     if (this.master) {
       this.master.gain.setTargetAtTime(this.muted || this.paused ? 0 : this.volume, this.context.currentTime, 0.01);
     }
+  }
+
+  stopSpeech() {
+    try { this.synthesis?.cancel(); } catch { /* Speech must never interrupt combat. */ }
+    this.utterance = null;
+  }
+
+  unlockSpeech() {
+    if (this.speechUnlocked || !this.synthesis || !this.Utterance ||
+        this.muted || this.paused || !this.volume) return;
+    try {
+      const utterance = new this.Utterance(" ");
+      utterance.volume = 0;
+      utterance.lang = "zh-HK";
+      this.synthesis.speak(utterance);
+      this.speechUnlocked = true;
+    } catch { /* Unsupported speech remains optional. */ }
+  }
+
+  speakAttack(name) {
+    if (!this.synthesis || !this.Utterance || this.muted || this.paused || !this.volume) return false;
+    try {
+      this.stopSpeech();
+      const utterance = new this.Utterance(name.replace(/・/g, "，"));
+      const cantonese = this.cantoneseVoices();
+      utterance.voice = cantonese.find(voice => voice.voiceURI === this.voiceURI) ||
+        cantonese.find(voice => voice.localService) || cantonese[0] || null;
+      utterance.lang = utterance.voice?.lang || "zh-HK";
+      utterance.volume = this.volume;
+      utterance.rate = 0.95;
+      this.utterance = utterance;
+      this.synthesis.speak(utterance);
+      return true;
+    } catch { return false; }
+  }
+
+  cantoneseVoices() {
+    try {
+      return (this.synthesis?.getVoices() || []).filter(voice =>
+        /^(zh[-_]HK|yue)(?:[-_]|$)/i.test(voice.lang));
+    } catch { return []; }
+  }
+
+  selectVoice(uri) {
+    if (uri && !this.cantoneseVoices().some(voice => voice.voiceURI === uri)) return false;
+    this.stopSpeech();
+    this.voiceURI = uri;
+    this.save("voice", uri);
+    return true;
   }
 
   setMuted(muted) {

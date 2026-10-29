@@ -181,7 +181,9 @@ export function createService(deps) {
     const hash = digest(`browser:${transcript}${language !== "en-US" ? `:${language}` : ""}`);
     const old = await store.get(attemptKey(s.id, hash));
     if (gradedSession(s) && (!old || old.state === "failed")) {
-      const availableAt = taskAvailableAt(await store.get(activityKey(s.owner, s.activityId)));
+      const availableAt = s.mode === "graded_read_aloud"
+        ? await economy.readingAvailableAt(s.owner, s.serviceId)
+        : taskAvailableAt(await store.get(activityKey(s.owner, s.activityId)));
       if (availableAt > now()) fail(409, `This task is on a one-week cooldown. Available again ${new Date(availableAt * 1000).toISOString()}. Return to the game or choose a different task.`);
     }
     if (gradedSession(s) && old?.state === "failed" && s.status === "ready") {

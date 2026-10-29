@@ -12,6 +12,12 @@
       "label": "廣東話（香港） · Cantonese (Hong Kong)",
       "speechLocale": "zh-HK",
       "feedbackLanguage": "natural Hong Kong Cantonese using Traditional Chinese characters, not Mandarin. Keep AWS service names in English"
+    },
+    {
+      "id": "zh-CN",
+      "label": "普通话 · Mandarin (Simplified Chinese)",
+      "speechLocale": "zh-CN",
+      "feedbackLanguage": "natural Mandarin Chinese using Simplified Chinese characters, not Cantonese. Keep AWS service names in English"
     }
   ]
 }

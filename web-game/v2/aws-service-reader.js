@@ -1,5 +1,5 @@
 import { AWS_SERVICES } from "./aws-theme.js?v=20261028-voice-1";
-import { bindVoicePractice } from "./voice-practice.js?v=20261029-facing-2";
+import { bindVoicePractice } from "./voice-practice.js?v=20261029-mandarin-door-1";
 
 export const READ_SERVICES_KEY = "aws-warrior:v2:read-services";
 
@@ -16,9 +16,31 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
   const voice = bindVoice(game);
   game.readServices = loadReadServices(localStorage);
   let selected;
+  let availabilityEpoch = 0;
+  const checkAvailability = async id => {
+    if (!voice.getAvailability) return;
+    const epoch = ++availabilityEpoch, button = get("service-explain");
+    button.disabled = true;
+    button.textContent = "Checking voice tasks...";
+    try {
+      const activities = await voice.getAvailability(id);
+      if (epoch !== availabilityEpoch || selected !== id) return;
+      const reading = activities.some(activity => activity.type === "read_aloud" && !activity.onCooldown);
+      const qa = activities.some(activity => activity.type === "question_answer" &&
+        activity.available === true && activity.languages?.length && !activity.onCooldown);
+      button.textContent = reading && qa ? "Available: Read aloud / Q&A"
+        : reading ? "Available: Read aloud" : qa ? "Available: Q&A" : "No voice tasks available";
+      button.disabled = false;
+    } catch {
+      if (epoch !== availabilityEpoch || selected !== id) return;
+      button.textContent = "Check voice task availability";
+      button.disabled = false;
+    }
+  };
   game.refreshServiceReader = () => {
     if (!selected) return;
     get("service-read-state").textContent = game.readServices.has(selected) ? "Read" : "New discovery";
+    checkAvailability(selected);
   };
   const showService = id => {
     const service = Object.hasOwn(AWS_SERVICES, id) ? AWS_SERVICES[id] : null;
@@ -38,6 +60,7 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     selected = id;
     get("service-explain").hidden = false;
     get("service-read-state").textContent = game.readServices.has(id) ? "Read" : "New discovery";
+    checkAvailability(id);
     game.readingService = true;
     if (!dialog.open) dialog.showModal();
     content.scrollTop = 0;

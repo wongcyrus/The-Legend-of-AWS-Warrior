@@ -237,6 +237,28 @@ test("reading rejects malformed, truncated and failed model output rather than i
   await assert.rejects(() => unavailable(payload), /model down/);
 });
 
+test("Mandarin reading uses its translated passage and Simplified Chinese feedback instructions", async () => {
+  const commands = [];
+  const grade = { score: 100, breakdown: { coverage: 70, content: 30 }, feedback: "你读出了文章的主要内容。" };
+  const agent = createAgent({ modelId: "test-model", send: async command => {
+    commands.push(command);
+    return response(grade);
+  } });
+  const payload = {
+    operation: "grade_reading", language: "zh-CN",
+    feedbackLanguage: "natural Mandarin Chinese using Simplified Chinese characters, not Cantonese",
+    readingTexts: { "en-US": "S3 stores objects in buckets.", "zh-HK": "S3 用 bucket 儲存物件。",
+      "zh-CN": "S3 将对象存储在存储桶中。" },
+    transcript: "S3 将对象存储在存储桶中。",
+  };
+  assert.deepEqual(await agent(payload), grade);
+  assert.equal(commands.length, 1);
+  assert.match(commands[0].input.system[0].text, /Mandarin Chinese using Simplified Chinese/);
+  const input = JSON.parse(commands[0].input.messages[0].content[0].text);
+  assert.equal(input.readingTexts["zh-CN"], payload.readingTexts["zh-CN"]);
+  assert.equal(input.transcript, payload.transcript);
+});
+
 test("reading canonicalizes DynamoDB language-map order and keeps weighted grading strict", async () => {
   const commands = [];
   const result = { score: 100, breakdown: { coverage: 70, content: 30 }, feedback: "All passage points covered." };

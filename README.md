@@ -84,8 +84,8 @@ there is no active recording upload or Amazon Transcribe path. The retained
 legacy audio bucket is not used by this flow.
 
 AWS assessment marks, voice grades/MP and cosmetic game progress are separate.
-Normal magic casts reserve server MP; Infinitive Magic Mode is local-only and
-does not modify the wallet. Checkpoint saves use conditional revisions and an
+Cloud-art casts reserve server MP before their combat effects run locally.
+Checkpoint saves use conditional revisions and an
 account-scoped local recovery cache; saved mission claims are checked against
 passed AWS tests. The marks page loads server results and filters them locally.
 
@@ -93,7 +93,8 @@ Reading configuration covers 302 services and 308 activities. Q&A additionally
 supports many database-backed questions per service, available after explicit
 batch publication. `question-bank.mjs publish` imports ready questions directly;
 `export` downloads the private bank for editing. No draft-review step is required.
-The supplied bank contains 12 bilingual questions across six services.
+The supplied bank contains 12 questions in English, Cantonese and Simplified
+Mandarin across six services.
 Q&A earns 10/20/30 MP for scores of 60/75/90, once per question, sharing the
 existing 100 MP wallet cap. Reading remains at 5/10/15 MP.
 Bundled reading configuration changes require deployment; approved question-bank
@@ -104,7 +105,7 @@ CloudTrail trail configured for durable audit retention.
 
 ## Managing Q&A questions
 
-Q&A is deployed with 12 English/Cantonese questions across S3, EC2, IAM, VPC,
+Q&A is deployed with 12 English/Cantonese/Mandarin questions across S3, EC2, IAM, VPC,
 Lambda and DynamoDB. Each service can have many questions. Publish new questions
 directly to the database; no draft-review step or application redeployment is
 required for existing services and configured languages.
@@ -232,8 +233,9 @@ python3 -m http.server
 ```
 
 Open `http://localhost:8000/game-v2.html` for V2. Use WASD to move and turn,
-Shift to run, Space to attack, E near a guide to get a task, and T near a gate to
-travel. Scroll over the world to zoom the camera; Shift + scroll switches weapons.
+Shift to run, Space to attack, and E near a guide to get a task. Walk into a
+glowing gate to travel automatically; T remains an optional nearby-gate shortcut.
+Scroll over the world to zoom the camera; Shift + scroll switches weapons.
 You can explore without an API key; set a key to request and grade quests.
 Receive new tasks only by pressing E near a character with a golden marker.
 Clicking characters or markers does not request tasks, and there is no task-fetch button.
@@ -242,7 +244,7 @@ monster warnings and attacks, spikes, travel gates, chests, healing, impacts,
 monster deaths, and task/result sounds. Enemy cues fade with distance and are
 rate-limited to avoid overlapping noise. Audio starts after the first key press or click. Mute and
 volume controls are in the top navigation; their settings persist in this browser.
-The Marks navigation link is omitted so it cannot take you out of the game.
+The **Voice marks** link opens a separate tab so the current game stays open.
 Click the weapon and shield icons to equip items, or Shift + scroll over the game to
 cycle weapons. Scroll zooms the camera; keys 1/2/0 select Sword/Axe/Unarmed.
 The equipped icons have an orange border. Hover an icon for its name; the weapon
@@ -255,7 +257,8 @@ stop frontal melee hits and cactus spikes; guarding slows movement and prevents
 attacks. Your back remains exposed. Heavy Yeti and Warden blows deal half damage
 through a block and break the guard for 1.5 seconds; release R before blocking again.
 Blocking lasts only while R is held; it is not a toggle.
-Selecting No shield removes protection. Bows and ranged player attacks are not included.
+Selecting No shield removes protection. Bows are not included; cloud arts provide
+ranged and area attacks.
 The bottom control bar holds the keyboard hints; the equipment panel only shows
 blocking, guard-break and dodge status while active, plus nearby targets.
 Sword attacks are fast; the axe hits harder but swings more slowly. Q dodges
@@ -279,9 +282,11 @@ to, and keep their golden markers and minimap positions as they move.
 Defeated monsters return after a short delay at random walkable locations outside
 the village and away from players and other actors. The existing monster pool is
 reused so encounters continue without growing the population or accumulating bodies.
-Three glowing gates in the village lead to Frostpeak Highlands, Sunspire Desert,
-and the nine-room Forgotten Vault. Stand near a gate and press T to
-enter; each map has a return gate, and Return to village also works after death.
+Three glowing gates at the outer road ends lead to Frostpeak Highlands, Sunspire
+Desert, and the nine-room Forgotten Vault. Walk into a gate to enter. Gate travel
+arrives at the matching doorway facing into the destination, without immediately
+bouncing back. Each map has a return gate; **Return to village** uses the village's
+safe spawn and also works after death.
 Highlands mix slow, heavy-hitting Yetis with existing monsters; the desert adds
 stationary Cacti with aimed, dodgeable spikes; the vault adds fast, fragile Bats.
 New monster models load on the first visit and are cached for later trips.
@@ -293,17 +298,23 @@ fixed character pool are reused. Inactive characters do not update or collide.
 The new terrain uses procedural geometry and the existing licensed asset packs.
 Shared scenery is cached at startup; map-specific monster models download on the
 first visit only. Terrain is built on demand rather than loading every map at once.
+Desert pyramids and mountain obstacles are sized to their declared collision
+footprints. Player and monster movement checks the whole travelled segment,
+not just its destination, so a large movement step cannot skip a thin wall.
+Dodge movement also checks intermediate positions.
+
+| Map | Ordinary monsters | Boss |
+|---|---:|---|
+| Cloudlands Village | 24 | Crystal Warden |
+| Frostpeak Highlands | 14 | Frostpeak Titan |
+| Sunspire Desert | 14 | Sunspire Overlord |
+| Forgotten Vault | 14 | Vault Nightlord |
+
+Ordinary populations are doubled and all four bosses are twice their earlier
+visual size. Added spawns avoid walls, scenery, gates and safe camps. Boss HP and
+attack values are unchanged; Global Deployment can still defeat a boss in one hit.
 
 ### Safe saves and recovery
-
-For local magic testing, press **Ctrl+Alt+M** (macOS: **Control+Option+M**) to
-toggle **Infinitive Magic Mode**. It allows all spell levels without MP costs
-or cooldowns, while the MP bar continues to show the real server balance.
-The shortcut is ignored in dialogs/text fields and during unresolved MP
-reservations. It does not bypass movement/combat safety checks, award MP or
-manufacture grades. There is no visible toggle or URL flag; the active mode is
-labelled in the magic panel and resets on reload, never entering game saves.
-This is a local testing convenience, not an administrator/security boundary.
 
 V2 saves at travel, equipment/spell changes, caches, boss victories and mission
 completion, not on each movement/frame. Resume uses the map's safe spawn and fresh
@@ -326,8 +337,11 @@ the village, highlands and desert, with a sign in each of the nine vault chamber
 Click a service sign, building plaque or mission badge to read a short service
 introduction and open its official AWS page. Gameplay pauses while reading
 and resumes when the description is closed. Signs show **New** and **Click to
-learn** for new discoveries. **Read aloud** is the single practice action for every
-service; there is no **Mark as read** button. Reading, scrolling and closing a
+learn** for new discoveries. Clicking an icon checks server task availability;
+**Voice practice** offers reading and approved Q&A where available. Locked task
+types are removed from the selector, which is hidden when only one choice remains.
+Opening the chooser does not create a session until Start is pressed.
+There is no **Mark as read** button. Reading, scrolling and closing a
 sign never mark it complete or award MP. Passed voice activities update the local
 **Read** indicator, while existing local read history remains preserved.
 Only server-graded passing voice activities can award MP.
@@ -351,40 +365,90 @@ AWS documentation searches; check current availability before using an offering.
 Icons load only for the starting map and visited maps, with late downloads
 updating individual signs without rebuilding the world.
 
-Choose **Lightning**, **Fireball**, **Frost wave**, **Thunderstorm** or
-**Shockwave** in the Magic bar, select power **I / II / III**, then press **X**
-or **Cast X**. Power levels cost 1 / 2 / 3 MP and multiply damage while
-increasing range. A cast consumes MP even if it misses. Lightning hits
-forward and chains to up to 2 / 3 enemies at higher levels; fireballs travel
-forward and explode on impact; frost damages a forward cone and slows enemies;
-thunderstorm strikes nearby enemies; shockwave damages and pushes them back.
-Walls block spells, and a shared 2-9 second spell-dependent cooldown prevents
-rapid casting. Magic pauses with service reading and projectiles clear on
-travel or death. Magic kills use the same normal kill-to-grade path as melee.
+### Cloud arts and combined attacks
 
-The MP bar below HP shows the server-backed balance out of 100. Reading,
-waiting, kills and missions do not replenish MP. Cast requests reserve MP on
-the server with an idempotency key before displaying the spell; retries cannot
-spend twice. An API key and a working connection are required. URL parameters
-such as `magicTest=1` no longer bypass MP costs or cooldowns.
+Select one or more cloud arts, then press **X** or the cast button. Selected
+buttons show a check mark and service-coloured accent. The summary shows the
+selection count, total MP and shared cooldown. There are no selectable power
+levels. Ordinary damage scales with current Power; MP costs are fixed.
 
-Open **Combat manual** in the top navigation for all 15 weapons, five shields,
-and five spells. Tables show weapon damage at your current Power, animation
-speed, reach, and spell damage/range/effects for powers I / II / III. The
-manual pauses gameplay and shows MP costs and cooldowns.
-Magic damage scales with current player Power: level I uses 6.4x (Lightning),
-5.2x (Fireball), 3.2x (Frost wave), 4.4x (Thunderstorm), or 3.6x (Shockwave).
-Levels II / III double / triple that damage; projectile damage is fixed at cast
-time. All spells cost the same 1 / 2 / 3 MP, but have different roles:
-Lightning targets distant tough enemies (40 range, 6s cooldown, half damage per
-chain bounce); Fireball blasts packed groups (36 range, 5s); Frost controls an
-approaching cone (18 range, 4s, slow for 4 / 5 / 6s); Thunderstorm hits surrounding
-groups (15 range, 9s); Shockwave creates an escape opening (10 range, 2s,
-knockback). Cooldown is shared across spells. The Combat manual modal
-contains all weapon/spell power values, rules, best situations and tradeoffs.
-Gameplay shows only selection controls and MP balance, without
-explanatory paragraphs or magic pop-up messages. The latest cast message is
-available inside the manual and on the Cast button's tooltip.
+| Cloud art | AWS theme / colour | MP | Shared cooldown | Effect |
+|---|---|---:|---:|---|
+| 瞬式・事件雷切 / **Event-Driven λ** | Lambda / orange | 12 | 12s | Forward lightning reaches 40 units and chains to three enemies at 100%, 50%, then 25% damage. |
+| 影分身・彈性軍勢 / **Auto Scaling Army** | EC2 Auto Scaling / dark orange | 15 | 20s | Five animated copies of the player advance and strike three times each; walls stop their movement. |
+| 領域展開・無量儲存 / **Domain: Infinite Storage** | S3 / green | 20 | 45s | A stationary 16-unit domain deals six damage pulses and a final burst over six seconds, slowing enemies with reduced boss control. |
+| 結界術・私有雲界 / **Private Cloud Barrier** | VPC / purple | 15 | 25s | An eight-second, 12-unit ward halves incoming damage while inside and damages/pushes each intruder once. |
+| 終式・跨區復甦 / **Cross-Region Recovery** | Recovery concept / teal and gold | 25 | 60s | After a one-second windup, a 12-second anchor catches one hit that would take HP to 25% or below, including a lethal hit, returning the player to a clear anchor location with 35% HP. |
+
+These are fictional AWS-inspired effects, not real AWS service capabilities.
+The recovery colour scheme represents a concept rather than one official service.
+Attack banners show Chinese and English names with matching service-colour accents.
+The book icon in the top navigation opens the **Combat manual** with live weapon,
+shield and cloud-art values; the manual pauses gameplay.
+
+Combined casts add the selected MP costs and use the longest selected cooldown.
+The server reserves the whole selection in one transaction: insufficient MP means
+none of the attacks fire, and retries cannot debit twice. A miss still consumes MP.
+Switching selections does not bypass the shared cooldown. Reloading restores the
+saved primary art, not the entire multi-selection.
+
+#### 全域部署 / Global Deployment
+
+Select all five arts to turn the existing cast button into **全域部署**; there is
+no separate ultimate button. It costs **87 MP** with a **60-second shared cooldown**.
+Deselect any art to return to an ordinary combination.
+
+Alongside the five arts, four avatars appear ahead, behind, left and right,
+facing outward. Each is six times the player's size and performs three slashes
+during its six-second appearance. Three execution waves expand to a **128-unit
+radius** over 1.2 seconds each. Their visible radius and hit detection share the
+same progression: a monster is defeated when the wave reaches it, not at cast
+time. This includes bosses. Buildings and solid walls block these waves; water,
+trees and ground clutter do not. An outer ring marks the maximum radius.
+
+The camera automatically pulls back to frame the attack and returns smoothly to
+the chosen zoom afterwards; nearby walls may limit that view. Avatars do not
+block movement or grant invulnerability. Travel, death and account changes clear
+active effects and pending waves.
+
+All kills from a single cast, including its delayed waves, trigger at most
+**one AWS mission-grading request**. Later waves do not repeat a completed or
+failed check. A new cast or a later ordinary melee kill can retry validation.
+Kills, XP, boss cosmetics and respawning still follow their normal paths.
+
+This grading deduplication is per running game instance, not a server-wide
+exactly-once guarantee. Other tabs, reloads and retries after a timeout can cause
+another grader invocation. Cast debits and checkpoint saves have separate
+server-side idempotency rules. The
+[AJAX audit and request lifecycle](src/VoicePractice/OPERATIONS.md#browser-ajax-audit-and-request-lifecycle)
+lists every V2 request trigger, timeout, retry policy, polling limit and
+account-change safeguard, including intentionally repeated availability reads.
+
+#### MP and attack announcements
+
+The MP bar below HP shows the server-backed balance out of **100**; using Global
+Deployment at 100 leaves 13 MP. First-pass graded readings earn 5/10/15 MP and Q&A
+earns 10/20/30 MP at the corresponding score thresholds. Reading signs, waiting,
+kills and missions do not replenish MP. An API key and a working connection are
+required for cast reservations. Combat runs locally; the server controls MP
+accounting and reservation cooldowns.
+
+Browser text-to-speech announces ordinary combinations' selected attack names
+in Cantonese, one after another. The ultimate instead reads **全域部署**, then
+**Global Deployment**. A new cast replaces the previous announcement instead of
+building a speech queue. Speech follows mute, volume and page-visibility settings.
+
+Use **Voice** to choose an available Cantonese system voice and **Preview** to
+hear it; the choice is saved in this browser. A male voice can be selected only
+if the device exposes one. The game does not create a male voice or assume a
+voice's gender from browser metadata. Voice availability, mixed-language
+pronunciation and iOS playback depend on the device/browser; interact with the
+page before casting. If speech is unavailable, combat still works.
+
+iOS character shadows and avatars use a CPU-skinning compatibility path, while
+other devices use GPU skinning. Effects and attack timing use elapsed time so
+low frame rates do not stretch magic durations. Reduced graphics settings limit
+visual detail; desktop automation does not replace physical iOS testing.
 
 ### Oral service practice (opt-in)
 
@@ -394,11 +458,12 @@ Transfer disables desktop submission; it does not create another question or
 reward. The short-lived QR link grants one phone access; keep it private.
 The phone stores its short-lived capability for session recovery, so reloading or
 rescanning on the same browser resumes the reading without repeating pairing.
-Desktop **Start another practice** recovers an inaccessible session without
-resetting its activity's reward eligibility.
+Missing or expired sessions can be recovered without resetting the activity's
+reward eligibility.
 Both devices require browser speech recognition; the transcript is read-only
-and cannot be typed or pasted. Hold the microphone button while reading and
-release it to finish recognition, then submit. Keyboard users hold Space or Enter.
+and cannot be typed or pasted. On desktop, click Start/Stop to capture speech.
+On phone, hold the microphone button and release it to finish, then submit;
+keyboard users can hold Space or Enter.
 The game sets no speaking-duration timer; browser interruptions are restarted
 while held, preserving earlier final words. Repeated empty recognition failures
 stop with a retry message. After release, finalization waits for browser final
@@ -411,7 +476,8 @@ to the browser provider and is not necessarily on-device. It does not prove spea
 replay/devtools cheating; this is learning practice, not a secure oral exam.
 
 Choose an available reading language before speaking; matching authored text
-appears immediately. English and Cantonese (Hong Kong) are initially configured.
+appears immediately. English (`en-US`), Hong Kong Cantonese (`zh-HK`) and
+Mandarin with Simplified Chinese (`zh-CN`) are configured on PC and phone.
 An LLM grades recognised passage coverage (70 points) and
 content (30), tolerating speech-recognition errors and mixed AWS terminology.
 It does not grade pronunciation or assess comprehension. Score 60 passes:
@@ -421,9 +487,13 @@ Retries, repeated QR sessions and better subsequent scores cannot farm MP.
 
 The configuration contains 308 authored activities covering all 302 discoveries:
 one round per service and the existing second round for S3, EC2, IAM, VPC,
-Lambda and DynamoDB. Unfinished services in the current round come before the
-next round. Once all configured activities are passed, no further rewarded repetitions are offered; new
-content requires a new authored activity version. A first pass consumes its
+Lambda and DynamoDB. Within the selected service, unfinished reading activities
+are preferred, starting with the earliest available round. Passing any reading
+locks all reading rounds at that service for seven days, across devices and
+languages. Q&A questions have independent seven-day locks; other services remain
+available. After a lock expires, completed tasks can be retried but cannot earn
+their reward again. An unfinished reading round can earn its first reward when
+the service unlocks. A first pass consumes its
 reward even when the MP bar is full; capped rewards are not held for later.
 Existing participation records
 remain ungraded and do not receive invented grades or historical MP.
@@ -435,7 +505,8 @@ with a bounded retry count. Desktop checks for phone results remain manual.
 Model failures award neither a failing grade nor MP and allow a retry.
 Requests time out after twenty seconds with recovery guidance.
 
-All discovery signs offer authored English and Cantonese voice activities.
+All discovery signs offer authored English, Cantonese and Mandarin reading activities;
+Q&A is offered where the database has approved questions.
 Historical reading records are preserved. Spoken grades and MP are stored
 separately from AWS task grades; normal task assignment and kill-to-grade do
 not change.
@@ -446,8 +517,8 @@ code alone decides pass thresholds and MP. DynamoDB transactions protect
 grades, once-only rewards and MP deductions. **Voice marks** in game navigation
 opens `voice-marks.html` in a separate tab for saved grades, feedback, activity
 progress and MP, keeping the current game session open.
-Legacy sessions and approved question banks remain unchanged. Future interview
-activities can use separate rubrics without changing the wallet rules.
+Existing sessions retain their saved content/language snapshots. Approved Q&A
+questions use their own understanding rubrics without changing the wallet rules.
 
 The marks page separates configured graded activities from the six historical
 service-completion records. Grades, feedback, actual MP awarded and Hong Kong
@@ -489,6 +560,8 @@ python3 -m unittest discover -s tests -p test_voice_deployment.py
 served PC/phone flow in Chrome using mocked speech recognition and API
 responses. It requires Chrome at `/opt/google/chrome/chrome`; it is not
 a physical microphone acceptance test and does not call student AWS accounts.
+It also exercises multi-art casting, Global Deployment wave timing, stationary
+boss defeats, avatar deformation, voice choice, map populations and gate returns.
 
 `EnableVoicePractice` defaults to `false` in `template.yaml`. The
 `AWS::BedrockAgentCore::Runtime` and endpoint are ordinary CloudFormation
@@ -533,10 +606,10 @@ spawn: the **Frostpeak Titan**, **Sunspire Overlord**, or **Vault Nightlord**.
 They have more health, stronger attacks, an overhead **SUPER MONSTER** nameplate
 with their name and health bar, and longer
 attack warnings. Frontal melee hits break shields like the existing heavy
-attacks. They respawn normally and do not grant extra magic badges or marks.
+attacks. They respawn normally and do not grant extra MP or marks.
 There are no icon-gallery walls,
 decorative activation circles or all-services browser. Glowing travel gates
-remain functional: stand near one and press T to change maps.
+remain functional: walk into a glowing gate to change maps.
 Restoring a building lights its plaque's frame. These are
 thematic landmarks, not service unlocks or requirements for a particular mission.
 The AWS Mission panel shows service badges only when a supported service is

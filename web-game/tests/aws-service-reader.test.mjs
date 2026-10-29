@@ -38,7 +38,7 @@ test('read badges recover from corrupt or unavailable browser storage and reject
   assert.deepEqual([...load('["s3","ecs","cloudfront","rds","ecs","unknown"]')], ['s3', 'ecs', 'cloudfront', 'rds']);
 });
 
-test('reading and scrolling never mark completion; every service keeps its voice action', () => {
+test('icon clicks check current voice availability without marking completion from reading or scrolling', async () => {
   const previous = { document: globalThis.document, window: globalThis.window,
     localStorage: globalThis.localStorage, requestAnimationFrame: globalThis.requestAnimationFrame };
   const elements = new Map(), listeners = new Map(), values = new Map(), frames = [];
@@ -70,6 +70,8 @@ test('reading and scrolling never mark completion; every service keeps its voice
     const keys = { forward: true, space: true };
     const quest = { name: 'unchanged' };
     const voiceRequests = [];
+    const availabilityRequests = [];
+    let readingLocked = false;
     const game = { ready: true, guard: { release() {} }, player: { GetComponent: () => ({ _keys: keys }) },
       renderer: { domElement: canvas }, world: { servicePlaques: [plaque, hidden] }, api: { quest } };
     let target = plaque;
@@ -79,7 +81,16 @@ test('reading and scrolling never mark completion; every service keeps its voice
         setFromCamera() {}
         intersectObjects(objects) { assert.deepEqual(objects, [plaque]); return target ? [{ object: target }] : []; }
       },
-    }, { bindVoice: () => ({ open: id => voiceRequests.push(id) }) });
+    }, { bindVoice: () => ({
+      open: id => voiceRequests.push(id),
+      async getAvailability(id) {
+        availabilityRequests.push(id);
+        return [
+          { type: 'read_aloud', onCooldown: readingLocked },
+          { type: 'question_answer', available: true, languages: ['en-US'], onCooldown: false },
+        ];
+      },
+    }) });
     const event = { target: canvas, button: 0, pointerId: 1, clientX: 40, clientY: 40 };
     const click = () => { listeners.get('pointerdown')(event); listeners.get('pointerup')(event); frames.splice(0).forEach(fn => fn()); };
     listeners.get('pointermove')(event);
@@ -93,6 +104,11 @@ test('reading and scrolling never mark completion; every service keeps its voice
     assert.equal(get('service-title').textContent, 'Amazon ECS');
     assert.equal(get('service-example').textContent, AWS_SERVICES.ecs.example);
     assert.equal(get('service-explain').hidden, false);
+    assert.equal(get('service-explain').disabled, true);
+    await Promise.resolve();
+    assert.deepEqual(availabilityRequests, ['ecs']);
+    assert.equal(get('service-explain').textContent, 'Available: Read aloud / Q&A');
+    assert.equal(get('service-explain').disabled, false);
     get('service-explain').onclick();
     assert.deepEqual(voiceRequests, ['ecs']);
     voiceRequests.length = 0;
@@ -110,7 +126,10 @@ test('reading and scrolling never mark completion; every service keeps its voice
     assert.equal(plaque.userData.serviceRead, undefined);
     assert.equal(values.size, 0);
     game.readServices.add('ecs');
+    readingLocked = true;
     click();
+    await Promise.resolve();
+    assert.equal(get('service-explain').textContent, 'Available: Q&A');
     assert.equal(get('service-read-state').textContent, 'Read');
     assert.equal(get('service-explain').hidden, false);
     get('service-explain').onclick();

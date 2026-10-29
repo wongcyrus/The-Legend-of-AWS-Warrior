@@ -225,7 +225,7 @@ test('floating damage feedback is capped and expires without accumulating DOM no
 
 test('only successful current-account grading awards AWS progression', async () => {
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
-  const source = main.match(/  async grade\(\)[\s\S]*?(?=\n  returnHome\()/)[0];
+  const source = main.match(/  async grade\(batch\)[\s\S]*?(?=\n  returnHome\()/)[0];
   const entries = new Map([['api_key', 'a']]);
   const { progress } = fixture();
   await progress.selectAccount('a');

@@ -40,7 +40,7 @@ export class GameApi {
     try {
       const response = await this.fetcher(url, {
         headers: { "x-api-key": key },
-        signal: abort.signal,
+        signal: abort.signal, cache: "no-store",
       });
       if (!response.ok) {
         throw new Error(response.status === 403 || response.status === 401

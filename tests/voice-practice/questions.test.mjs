@@ -17,16 +17,18 @@ const assessment = {
   feedback: "You explained the ideas.",
 };
 
-test("pilot includes two bilingual questions per service for explicit direct publication", () => {
+test("pilot includes two questions per service in English, Cantonese and Mandarin for direct publication", () => {
   assert.equal(validateQuestionBatch(published, "approved").length, 12);
   assert.equal(validateDrafts(drafts).length, 12);
   const counts = new Map();
   for (const draft of drafts) {
     assert.equal(draft.status, "draft");
     assert.equal(draft.expectedRevision, null);
-    assert.deepEqual(Object.keys(draft.prompts), ["en-US", "zh-HK"]);
+    assert.deepEqual(Object.keys(draft.prompts), ["en-US", "zh-HK", "zh-CN"]);
     counts.set(draft.serviceId, (counts.get(draft.serviceId) ?? 0) + 1);
     assert.match(draft.prompts["zh-HK"], /\p{Script=Han}/u);
+    assert.match(draft.prompts["zh-CN"], /\p{Script=Han}/u);
+    assert.doesNotMatch(draft.prompts["zh-CN"], /[嘅喺唔畀佢哋乜啲揀嚟]/u);
   }
   assert.equal(counts.size, 6);
   assert.ok([...counts.values()].every(count => count === 2));

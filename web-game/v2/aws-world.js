@@ -89,11 +89,11 @@ export function servicePlaque(world, parent, id, { x, y, z, width = 8, rotation 
 }
 
 export function buildServiceLandmarks(world) {
-  const post = new THREE.BoxGeometry(0.3, 5, 0.3);
+  const post = new THREE.BoxGeometry(0.3, 3.3, 0.3);
   const wood = world.material(0x5a4031);
   for (const landmark of AWS_LANDMARKS[world.map.id]) {
     const { service, x, z, label } = landmark;
-    world.mesh(post, wood, x, 2.5, z - 0.08);
+    world.mesh(post, wood, x, 1.65, z);
     const sign = servicePlaque(world, world.scene, service,
       { x, y: 4.6, z, width: 6, subtitle: label });
     sign.userData.awsLandmark = service;
