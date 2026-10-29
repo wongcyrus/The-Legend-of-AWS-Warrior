@@ -106,6 +106,85 @@ test('melee enemy attacks require line of sight to wind up and land, and track e
   assert.equal(hits[0].value, 18);
 });
 
+test('expedition super monsters use region-specific volley, glacial shockwave and shadow-step mechanics', () => {
+  const { spikes, options } = shots();
+  assert.equal(spikes.fireFan({ x: 0, z: 0 }, options.player, 22, { id: 'overlord' }), true);
+  assert.equal(spikes.active.length, 3);
+
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const effects = [], hits = [];
+  let fanFired = 0;
+  const Attack = runInNewContext(main.match(/class EnemyAttackController[\s\S]*?(?=\nclass HealthComponent)/)[0] +
+    '\nEnemyAttackController;', {
+    entity: { Component: class {} },
+    isSafePosition: () => false,
+    clearShot: () => true,
+    findMovementBlockers: () => [],
+  });
+  const player = {
+    _position: { x: 0, z: 16 },
+    GetComponent: () => ({ IsAlive: () => true }),
+    Broadcast: msg => hits.push(msg),
+  };
+  const game = {
+    map: { id: 'dungeon' }, traveling: false, player,
+    world: { canWalk: () => true },
+    sound: { play() {} },
+    magicEffects: { spawn: (...args) => effects.push(args) },
+    spikes: {
+      fire: () => false,
+      fireFan: () => { fanFired++; return true; },
+    },
+  };
+  const attack = new Attack(game, true);
+  const parentPos = {
+    x: 0, z: 0,
+    set(x, y, z) { this.x = x; this.z = z; },
+    distanceTo: other => Math.hypot(parentPos.x - other.x, parentPos.z - other.z),
+  };
+  attack._parent = { _position: parentPos, SetPosition(pos) { parentPos.x = pos.x; parentPos.z = pos.z; } };
+  attack.ring = {
+    visible: false,
+    position: { set() {} },
+    scale: { setScalar() {} },
+    material: { color: { setHex() {} } },
+  };
+  attack.aimLine = {
+    visible: false,
+    geometry: { attributes: { position: { setXYZ() {}, needsUpdate: false } }, computeBoundingSphere() {} },
+  };
+  const controller = {
+    elite: true, kind: 'Bat',
+    profile: { label: 'Vault Nightlord', range: 8, reach: 7.5, windup: 1, cooldown: 1.2, ranged: false, color: 0xc98bff },
+    _stateMachine: { _currentState: { Name: 'idle' }, SetState() {} },
+    _velocity: { set() {} },
+    _position: parentPos,
+    _target: { visible: false, position: { set() {} } },
+  };
+  const health = { _health: 270, _maxHealth: 270, _params: { strength: 18 }, IsAlive: () => true };
+  attack.GetComponent = name => name === 'NPCController' ? controller : health;
+
+  attack.Update(0.1);
+  assert.ok(Math.hypot(parentPos.x - player._position.x, parentPos.z - player._position.z) <= 4.6,
+    'Vault Nightlord shadow-steps close to the player before winding up');
+  assert.equal(attack.remaining, 1);
+
+  game.map.id = 'mountains';
+  controller.kind = 'Yeti';
+  controller.profile = { label: 'Frostpeak Titan', range: 9, reach: 9, windup: 1, cooldown: 2, ranged: false, color: 0x7ddaff };
+  attack.Update(1);
+  assert.equal(hits.at(-1)?.chill, true);
+  assert.ok(effects.some(([kind]) => kind === 'ward'));
+
+  game.map.id = 'desert';
+  controller.kind = 'Cactus';
+  controller.profile = { label: 'Sunspire Overlord', range: 38, reach: 38, windup: 1, cooldown: 2, ranged: true, color: 0xff9b54 };
+  attack.cooldown = 0;
+  attack.Update(0.1);
+  attack.Update(1);
+  assert.equal(fanFired, 1);
+});
+
 function shots() {
   const removed = [], spawned = [], hits = [];
   const spikes = new SpikeShots({ spawn: shot => spawned.push(shot), remove: shot => removed.push(shot) });

@@ -18,8 +18,9 @@ import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js?v=20261029-ajax-co
 import { GameSave, initialGameSave } from "./game-save.js?v=20261029-save-1";
 import { World } from "./world.js?v=20261029-ajax-collision-1";
 import { MAPS, isSafePosition, nearbyGate, isMagicWaveClear } from "./maps.js?v=20261029-monster-density-1";
-import { sharedResources, disposeMap, cleanupExpiredEffects } from "./map-lifecycle.js?v=20261029-v2-review-1";
-import { drawMinimap } from "./minimap.js?v=20261029-v2-review-1";
+import { sharedResources, disposeMap, cleanupExpiredEffects } from "./map-lifecycle.js?v=20261029-v2-features-1";
+import { drawMinimap } from "./minimap.js?v=20261029-v2-features-1";
+import { WorldEvents } from "./world-events.js?v=20261029-v2-features-1";
 import { createRenderer, WebGLUnavailableError } from "./renderer.js";
 import { findMeleeTargets, findMovementBlockers } from "./combat.js?v=20261027-equipment-1";
 import { GuidePatrol } from "./guides.js";
@@ -28,20 +29,22 @@ import { WEAPONS, FINISHES, AdventureProgress, DodgeMotion } from "./adventure.j
 import { CombatFeedback } from "./feedback.js";
 import { findMonsterSpawn, MonsterRespawns } from "./spawning.js?v=20261027-maps-1";
 import { BUILDINGS, GUIDES, LAKE, PLAYER_SPAWN, CHESTS, BOSS, regionAt, seededRandom } from "./layout.js";
-import { MONSTERS, monsterFor, superMonsterProfile, clearShot, SpikeShots } from "./monsters.js?v=20261029-monster-density-1";
+import { MONSTERS, monsterFor, superMonsterProfile, clearShot, SpikeShots } from "./monsters.js?v=20261029-v2-features-1";
 import { MonsterModels } from "./monster-models.js?v=20261028-magic-1";
-import { SHIELDS, ShieldGuard } from "./shields.js?v=20261027-equipment-1";
+import { SHIELDS, ShieldGuard } from "./shields.js?v=20261029-v2-features-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
 import { bindServiceReader } from "./aws-service-reader.js?v=20261029-mandarin-door-1";
-import { SPELLS, FULL_RELEASE_RANGE, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261029-global-128-1";
+import { SPELLS, FULL_RELEASE_RANGE, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261029-v2-features-1";
 import { MagicEffects } from "./magic-effects.js?v=20261029-global-128-1";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
   Update(dt) {
     const game = this._params.game;
-    this._animations.attack?.action.setEffectiveTimeScale(WEAPONS[game.weapon].speed);
+    this._animations.attack?.action.setEffectiveTimeScale(
+      WEAPONS[game.weapon].speed * (game.worldEvents?.attackSpeedMultiplier || 1));
+    if (this.frostSlow > 0) this.frostSlow = Math.max(0, this.frostSlow - dt);
     if (game.dodge.active || game.progressChanging || game.traveling) {
       this._velocity.set(0, 0, 0);
       this._mixer?.update(dt);
@@ -51,6 +54,7 @@ class BasicCharacterController extends player_entity.BasicCharacterController {
     const shift = keys.shift, acceleration = this._acceleration.z;
     const equipped = this.GetComponent("EquipWeapon");
     if (game.guard.active || (game.weapon !== "Unarmed" && !equipped._target?.parent)) keys.space = false;
+    this._acceleration.z *= (game.worldEvents?.speedMultiplier || 1) * (this.frostSlow > 0 ? 0.7 : 1);
     if (game.guard.active) {
       keys.shift = false;
       this._acceleration.z *= 0.4;
@@ -295,6 +299,7 @@ class NPCController extends npc_entity.NPCController {
 
   Update(dt) {
     if (this._params.game.traveling) return;
+    if (this.parried > 0) this.parried = Math.max(0, this.parried - dt);
     if (this.magicSlow > 0) {
       this.magicSlow = Math.max(0, this.magicSlow - dt);
       dt *= 0.4;
@@ -311,6 +316,7 @@ class NPCController extends npc_entity.NPCController {
     this._params.game.sound.play("death");
     this._params.game.defeated++;
     document.getElementById("defeated").textContent = this._params.game.defeated;
+    this._params.game.onMonsterDefeated?.(this._parent._position);
     this._params.game.grade(this.GetComponent("HealthComponent").deathGradeBatch);
     if (this._params.boss) this._params.game.rewardBoss();
     else this._params.game.respawns.schedule(this._parent);
@@ -420,7 +426,23 @@ class EnemyAttackController extends entity.Component {
     const clear = () => clearShot(this._parent._position, player._position,
       (x, z) => this.game.world.canWalk(x, z));
     if (this.remaining === null) {
-      if (distance > profile.range || this.cooldown > 0 || !clear()) return;
+      if (this.cooldown > 0 || !clear()) return;
+      if (distance > profile.range) {
+        if (controller.elite && this.game.map?.id === "dungeon" && distance <= 22) {
+          const dx = this._parent._position.x - player._position.x;
+          const dz = this._parent._position.z - player._position.z;
+          const stepX = player._position.x + dx / distance * 4.5;
+          const stepZ = player._position.z + dz / distance * 4.5;
+          if (this.game.world.canWalk(stepX, stepZ) &&
+              (!this.game.grid || findMovementBlockers(this.game.grid, this._parent, { x: stepX, z: stepZ }).length === 0)) {
+            this.game.magicEffects?.spawn("seal", this._parent._position, { range: 3.5, color: profile.color }, 1);
+            controller._position?.set?.(stepX, 0, stepZ);
+            controller._target?.position?.set?.(stepX, controller.profile.hover || 0, stepZ);
+            this._parent.SetPosition?.(controller._position || { x: stepX, y: 0, z: stepZ });
+            this.game.magicEffects?.spawn("seal", this._parent._position, { range: 3.5, color: profile.color }, 1);
+          } else return;
+        } else return;
+      }
       this.remaining = profile.windup;
       const cue = { Yeti: "yeti", Cactus: "cactus", Bat: "bat" }[controller.kind];
       if (cue) this.game.sound.play(cue, distance);
@@ -444,12 +466,18 @@ class EnemyAttackController extends entity.Component {
       this.ring.material.color.setHex(this.remaining < 0.3 ? 0xff4c4c : 0xffb95e);
       if (this.remaining <= 0) {
         if (profile.ranged) {
-          if (this.game.spikes.fire(this._parent._position, this.aim, health._params.strength, this._parent)) {
-            this.game.sound.play("spike", distance);
-          }
-        } else if (distance <= profile.reach && clear()) player.Broadcast({
-          topic: "health.damage", value: health._params.strength, attacker: this._parent,
-        });
+          const fired = controller.elite && this.game.spikes.fireFan
+            ? this.game.spikes.fireFan(this._parent._position, this.aim, health._params.strength, this._parent)
+            : this.game.spikes.fire(this._parent._position, this.aim, health._params.strength, this._parent);
+          if (fired) this.game.sound.play("spike", distance);
+        } else if (distance <= profile.reach && clear()) {
+          const chill = Boolean(controller.elite && this.game.map?.id === "mountains");
+          if (chill) this.game.magicEffects?.spawn("ward", this._parent._position,
+            { range: profile.reach, duration: 0.6, color: profile.color }, 1);
+          player.Broadcast({
+            topic: "health.damage", value: health._params.strength, attacker: this._parent, chill,
+          });
+        }
         if (controller.kind === "Yeti") this.game.sound.play("slam", distance);
         this.remaining = null;
         this.cooldown = profile.cooldown;
@@ -479,13 +507,29 @@ class HealthComponent extends health_component.HealthComponent {
       const attacker = message.attacker?.GetComponent("NPCController");
       const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this._parent._rotation);
       const result = game.guard.block(message.value, direction, forward,
-        !message.direction && (attacker?.kind === "Yeti" || attacker?.elite || attacker?._params.boss));
+        !message.direction && (attacker?.kind === "Yeti" || attacker?.elite || attacker?._params?.boss));
       if (result.blocked) {
+        if (result.parried) {
+          game.feedback.show(position, "PERFECT PARRY", "#ffd978");
+          game.sound.play("block");
+          if (message.direction && message.attacker?.GetComponent?.("HealthComponent")?.IsAlive?.()) {
+            message.attacker.Broadcast({
+              topic: "health.damage", value: message.value * 2, attacker: this._parent,
+            });
+          } else if (attacker) {
+            attacker.magicSlow = Math.max(attacker.magicSlow || 0, 2);
+            attacker.parried = 2.5;
+          }
+          return;
+        }
         game.feedback.show(position, result.broken ? "GUARD BROKEN" : "BLOCKED", "#a9ddff");
         game.sound.play(result.broken ? "guardBreak" : "block");
         if (!result.damage) return;
         message = { ...message, value: result.damage };
       }
+    }
+    if (!this._params.updateUI && this.GetComponent("NPCController")?.parried > 0) {
+      message = { ...message, value: Math.round(message.value * 1.25) };
     }
     if (this._params.updateUI && game.magic) {
       message = { ...message, value: game.magic.incomingDamage(
@@ -499,6 +543,10 @@ class HealthComponent extends health_component.HealthComponent {
       game.sound.play(this._params.updateUI ? "hurt" : "hit");
       game.feedback.show(position, String(Math.round(message.value)), this._params.updateUI ? "#ff9c91" : "#ffe0a0");
       game.feedback.flash(this.GetComponent(this._params.updateUI ? "BasicCharacterController" : "NPCController")._target);
+      if (this._params.updateUI && message.chill) {
+        this.GetComponent("BasicCharacterController").frostSlow = 1.8;
+        game.feedback.show(position.clone().add(new THREE.Vector3(0, 2.2, 0)), "CHILLED", "#7ddaff");
+      }
     }
     if (this._params.updateUI) {
       document.getElementById("health-value").textContent = `${this._health} / ${this._maxHealth}`;
@@ -662,6 +710,7 @@ class Game {
     this.map = MAPS.village;
     this.dodge = new DodgeMotion();
     this.guard = new ShieldGuard();
+    this.worldEvents = new WorldEvents();
     this.weapon = "Sword";
     this.infinitiveMagic = false;
     this.shield = "Shield_Round";
@@ -1053,7 +1102,8 @@ class Game {
     if (this.guard.broken > 0) return false;
     const controller = this.player.GetComponent("BasicCharacterController");
     if (controller._stateMachine._currentState?.Name === "attack") return false;
-    this.guard.held = true;
+    if (this.guard.press) this.guard.press();
+    else this.guard.held = true;
     controller._velocity.multiplyScalar(0.4);
     this.player.GetComponent("BasicCharacterControllerInput")._keys.space = false;
     return true;
@@ -1105,6 +1155,19 @@ class Game {
     this.sound.play("success");
     this.status("Crystal Warden defeated! Crystal weapon finish unlocked. Ordinary monsters still check your AWS tasks.");
     this.saveCheckpoint();
+  }
+
+  onMonsterDefeated(position) {
+    const outcome = this.worldEvents?.recordKill(position);
+    if (!outcome?.resolved || !this.player) return;
+    const health = this.player.GetComponent("HealthComponent");
+    if (health?.IsAlive()) {
+      health._health = Math.min(health._maxHealth, health._health + 20);
+      health._UpdateUI();
+      document.getElementById("health-value").textContent = `${health._health} / ${health._maxHealth}`;
+    }
+    this.feedback.show(this.player._position.clone().add(new THREE.Vector3(0, 8, 0)), "AZ RESTORED!", "#7dffd0");
+    this.sound.play("success");
   }
 
   showCombatManual() {
@@ -1537,6 +1600,7 @@ class Game {
     Object.keys(controller._input._keys).forEach(key => { controller._input._keys[key] = false; });
     controller._mixer.stopAllAction();
     controller.magicSlow = 0;
+    controller.parried = 0;
     monster.GetComponent("EnemyAttackController").reset();
     controller._stateMachine.SetState("idle");
     controller._animations.idle.action.reset().play();
@@ -1639,6 +1703,7 @@ class Game {
       [[-map.limit - 20, -map.limit - 20], [map.limit + 20, map.limit + 20]], [80, 80]);
     this.respawns.pending.clear();
     this.spikes.clear();
+    this.worldEvents?.reset();
     this.magic?.clearProjectiles();
     this.magicEffects?.clear();
     this.feedback.update(10, () => ({ x: 0, y: 0, z: 0 }));
@@ -1937,7 +2002,8 @@ class Game {
   }
 
   drawMap() {
-    drawMinimap(document.getElementById("map").getContext("2d"), this.map, this.markers, this.player._position);
+    drawMinimap(document.getElementById("map").getContext("2d"),
+      this.map, this.markers, this.player._position, this.worldEvents?.outage);
   }
 
   frame() {
@@ -2009,6 +2075,15 @@ class Game {
     this.updateCamera(dt);
     const position = this.player._position;
     if (this.updateGateTravel()) return;
+    const eventStep = this.worldEvents?.update(dt, this.map.id, position);
+    if (eventStep?.heal > 0) {
+      const health = this.player.GetComponent("HealthComponent");
+      if (health.IsAlive() && health._health < health._maxHealth) {
+        health._health = Math.min(health._maxHealth, health._health + eventStep.heal);
+        health._UpdateUI();
+        document.getElementById("health-value").textContent = `${health._health} / ${health._maxHealth}`;
+      }
+    }
     this.sun.position.set(position.x - 55, 95, position.z + 40);
     this.sun.target.position.copy(position);
     document.getElementById("region").textContent = this.map.id === "village" ? regionAt(position.x, position.z) : this.map.name;
@@ -2026,12 +2101,16 @@ class Game {
       actor.GetComponent("HealthComponent").IsAlive() && actor._position.distanceTo(position) < 30)
       .sort((a, b) => a._position.distanceToSquared(position) - b._position.distanceToSquared(position))[0];
     const enemyHealth = nearbyEnemy?.GetComponent("HealthComponent");
+    const outage = this.worldEvents?.outage;
+    const eventHint = this.worldEvents?.surge > 0 ? `AZ Restored: +20% Speed & Haste (${Math.ceil(this.worldEvents.surge)}s)` :
+      this.worldEvents?.activeZone?.label ? this.worldEvents.activeZone.label :
+      outage ? `Outage Alert: ${outage.label} (${Math.ceil(outage.remaining)}s)` : "";
     document.getElementById("explore-hint").textContent = gate ? MAPS[gate.to].name :
       nearbyEnemy ? `${nearbyEnemy.GetComponent("NPCController").profile.label}: ${Math.ceil(enemyHealth._health)} / ${enemyHealth._maxHealth} HP` :
       chest ? chest.name :
       this.boss._position.distanceTo(position) < 35 && boss.IsAlive()
         ? `Optional: ${BOSS.name} ${Math.ceil(boss._health)} / ${boss._maxHealth} HP`
-        : "";
+        : eventHint;
     document.getElementById("explore-hint").hidden = !document.getElementById("explore-hint").textContent;
     this.feedback.update(dt, point => {
       const projected = (this._projected ??= new THREE.Vector3()).copy(point).project(this.camera);

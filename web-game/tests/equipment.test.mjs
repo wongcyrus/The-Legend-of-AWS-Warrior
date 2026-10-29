@@ -287,3 +287,80 @@ test('R key release clears blocking even when focus has moved into an input', ()
   input._onKeyUp({ code: 'KeyR', target: { closest() { return true; } } });
   assert.equal(shield.active, false);
 });
+
+test('timed perfect parry negates heavy blows, reflects ranged spikes and staggers melee attackers', () => {
+  const shield = new ShieldGuard();
+  shield.equipped = true;
+  shield.press();
+  assert.equal(shield.parryWindow, 0.25);
+  assert.deepEqual(shield.block(30, forward, forward, true), {
+    damage: 0, blocked: true, broken: false, parried: true,
+  });
+  assert.equal(shield.broken, 0);
+  assert.equal(shield.active, true);
+  assert.deepEqual(shield.block(30, forward, forward, true), {
+    damage: 15, blocked: true, broken: true,
+  });
+  shield.update(2);
+  shield.press();
+  shield.update(0.3);
+  assert.equal(shield.parryWindow, 0);
+
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const Health = runInNewContext(main.match(/class HealthComponent[\s\S]*?(?=\nclass EquipWeapon)/)[0] +
+    '\nHealthComponent;', {
+    health_component: { HealthComponent: class { _OnDamage(msg) { this._health -= msg.value; } } },
+    THREE: {
+      Vector3: class {
+        constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+        clone() { return new this.constructor(this.x, this.y, this.z); }
+        add() { return this; }
+        applyQuaternion() { return this; }
+      },
+    },
+    document: { getElementById: () => ({}) },
+  });
+  const feedback = [], reflected = [];
+  const guardState = new ShieldGuard();
+  guardState.equipped = true;
+  const game = {
+    progressChanging: false,
+    dodge: { active: false },
+    guard: guardState,
+    feedback: { show: (_, text) => feedback.push(text), flash() {} },
+    sound: { play() {} },
+  };
+  const playerHealth = new Health();
+  playerHealth._health = 100; playerHealth._maxHealth = 100;
+  playerHealth._params = { updateUI: true, game };
+  playerHealth._parent = { _position: { x: 0, z: 0, clone() { return { add: () => ({}) }; } }, _rotation: {} };
+  playerHealth.IsAlive = () => playerHealth._health > 0;
+  const npc = { magicSlow: 0, parried: 0, _target: {} };
+  const attacker = {
+    _position: { x: 0, z: 4 },
+    GetComponent: name => name === 'NPCController' ? npc : { IsAlive: () => true },
+    Broadcast: msg => reflected.push(msg),
+  };
+  guardState.press();
+  playerHealth._OnDamage({ value: 12, direction: { x: 0, z: 1 }, attacker });
+  assert.equal(playerHealth._health, 100);
+  assert.equal(feedback.at(-1), 'PERFECT PARRY');
+  assert.equal(reflected.length, 1);
+  assert.equal(reflected[0].value, 24);
+
+  guardState.release();
+  guardState.press();
+  playerHealth._OnDamage({ value: 30, attacker });
+  assert.equal(playerHealth._health, 100);
+  assert.equal(npc.parried, 2.5);
+  assert.equal(npc.magicSlow, 2);
+
+  const enemyHealth = new Health();
+  enemyHealth._health = 100; enemyHealth._maxHealth = 100;
+  enemyHealth._params = { updateUI: false, game };
+  enemyHealth._parent = { _position: { x: 0, z: 4, clone() { return { add: () => ({}) }; } } };
+  enemyHealth.IsAlive = () => enemyHealth._health > 0;
+  enemyHealth.GetComponent = () => npc;
+  enemyHealth._OnDamage({ value: 40 });
+  assert.equal(enemyHealth._health, 50, 'staggered enemy takes +25% bonus damage');
+});

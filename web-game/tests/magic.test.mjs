@@ -909,3 +909,27 @@ test('setupMagic recovery rejects occupied anchors and castMagic reports empty s
   assert.equal(await Game.prototype.castMagic.call(game), false);
   assert.match(notices.at(-1), /Select at least one cloud art/);
 });
+
+test('cloud art synergies trigger Cold-Start Surge in storage domains and VPC Peered Fleet knockback', () => {
+  const domainTargets = [
+    { id: 'front1', x: 0, z: 6 },
+    { id: 'front2', x: 1, z: 8 },
+    { id: 'front3', x: -1, z: 10 },
+    { id: 'rearDomain', x: 0, z: -10 },
+    { id: 'sideDomain', x: 12, z: 0 },
+  ];
+  const surge = harness(domainTargets);
+  assert.equal(surge.magic.castCombination(['lightning', 'frost'], 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true), true);
+  assert.equal(surge.hits.length, 5, 'Cold-Start Surge arcs to all enemies inside the Storage domain');
+  assert.ok(surge.hits.some(hit => hit.id === 'rearDomain' && hit.value === 160));
+  assert.ok(surge.hits.some(hit => hit.id === 'sideDomain' && hit.value === 160));
+  assert.equal(surge.slows.length, 2);
+
+  const fleetTargets = [{ id: 'wide', x: 5.8, z: 8 }];
+  const peered = harness(fleetTargets);
+  assert.equal(peered.magic.castCombination(['fireball', 'storm'], 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true), true);
+  assert.ok(peered.magic.clones.every(clone => clone.peered === true));
+  peered.magic.update(3.2);
+  assert.ok(peered.hits.some(hit => hit.id === 'wide'), 'peered clones reach wider targets');
+  assert.ok(peered.pushes.some(push => push.id === 'wide' && push.distance === 2.5));
+});

@@ -85,6 +85,19 @@ export class SpikeShots {
     return true;
   }
 
+  fireFan(from, target, damage, attacker, angles = [-0.26, 0, 0.26]) {
+    const length = Math.hypot(target.x - from.x, target.z - from.z);
+    if (!length) return false;
+    const baseAngle = Math.atan2(target.x - from.x, target.z - from.z);
+    let fired = false;
+    for (const offset of angles) {
+      const angle = baseAngle + offset;
+      const aim = { x: from.x + Math.sin(angle) * length, z: from.z + Math.cos(angle) * length };
+      if (this.fire(from, aim, damage, attacker)) fired = true;
+    }
+    return fired;
+  }
+
   update(dt, { player, canWalk, isSafe, hit }) {
     for (const shot of [...this.active]) {
       let alive = true;

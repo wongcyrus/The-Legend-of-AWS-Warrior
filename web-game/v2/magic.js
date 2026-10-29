@@ -213,8 +213,9 @@ export class MagicCombat {
     if (!validSpellSelection(ids) || !ids.every(id => this.canCast(id, level, origin, direction)) ||
         typeof pay !== "function" || pay(ids.reduce((sum, id) => sum + SPELLS[id].cost, 0)) !== true) return false;
     const batch = {};
+    const ordered = [...ids].sort((a, b) => Number(["frost", "storm"].includes(b)) - Number(["frost", "storm"].includes(a)));
     try {
-      for (const id of ids) {
+      for (const id of ordered) {
         this.cooldown = 0;
         this.cast(id, level, origin, direction, () => true, batch);
       }
@@ -245,12 +246,13 @@ export class MagicCombat {
     if (id === "fireball") {
       this.clones.forEach(clone => { clone.done = true; });
       this.clones.length = 0;
+      const peered = this.fields.some(field => field.id === "storm" && !field.done);
       for (let index = 0; index < 5; index++) {
         const offset = (index - 2) * 2;
         const spawn = { x: origin.x + forward.z * offset, z: origin.z - forward.x * offset };
         const position = this.canWalk(spawn.x, spawn.z) && this.clear(origin, spawn) ? spawn : origin;
         const clone = { x: position.x, z: position.z, dx: forward.x, dz: forward.z,
-          age: 0, strikes: 0, damage, batch };
+          age: 0, strikes: 0, damage, batch, peered };
         this.clones.push(clone);
         this.effect("clone", clone, { duration: 3.2 }, 1);
       }
@@ -263,6 +265,16 @@ export class MagicCombat {
         this.damage(target, Math.round(damage * 0.5 ** i), batch);
         from = target;
         target = this.enemies(from, 12).find(enemy => !hit.has(enemy.id));
+      }
+      const domain = this.fields.find(field => field.id === "frost" && !field.done);
+      if (domain) {
+        for (const extra of this.enemies(domain, SPELLS.frost.range)) {
+          if (hit.has(extra.id)) continue;
+          hit.add(extra.id);
+          this.effect("lightning", domain, extra, level);
+          this.damage(extra, Math.round(damage * 0.5), batch);
+          this.slow?.(extra, extra.boss ? 0.4 : 1.5);
+        }
       }
       if (!hit.size) this.effect("lightning", origin,
         { x: origin.x + forward.x * range, z: origin.z + forward.z * range }, level);
@@ -324,12 +336,16 @@ export class MagicCombat {
         }
         if (clone.strikes < 3 && clone.age + 1e-8 >= 0.9 + clone.strikes * 0.8) {
           clone.strikes++;
-          const target = this.enemies(clone, 4).find(target => {
+          const reach = clone.peered ? 6.5 : 4;
+          const target = this.enemies(clone, reach).find(target => {
             const dx = target.x - clone.x, dz = target.z - clone.z;
             return dx * clone.dx + dz * clone.dz >= -0.5;
           });
           this.effect("seal", clone, { color: SPELLS.fireball.color, range: 3 }, 1);
-          if (target) this.damage(target, Math.round(clone.damage / 3), clone.batch);
+          if (target) {
+            this.damage(target, Math.round(clone.damage / 3), clone.batch);
+            if (clone.peered) this.push?.(target, clone, target.boss ? 0.5 : 2.5);
+          }
         }
       }
       if (clone.age < 3.2 - 1e-8) continue;

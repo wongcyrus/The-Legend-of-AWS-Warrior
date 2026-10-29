@@ -1,6 +1,6 @@
 import { BUILDINGS, LAKE } from "./layout.js";
 
-export function drawMinimap(ctx, map, markers, player) {
+export function drawMinimap(ctx, map, markers, player, outage = null) {
   ctx.fillStyle = map.id === "village" ? "#294940" : "#" + map.ground.toString(16).padStart(6, "0");
   ctx.fillRect(0, 0, 200, 200);
   const scale = 91 / map.limit;
@@ -25,6 +25,11 @@ export function drawMinimap(ctx, map, markers, player) {
     ctx.strokeStyle = "#" + gate.color.toString(16).padStart(6, "0");
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(...point(gate.x, gate.z), 4, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (outage && outage.mapId === map.id) {
+    ctx.strokeStyle = "#ff684f";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(...point(outage.x, outage.z), Math.max(5, outage.radius * scale), 0, Math.PI * 2); ctx.stroke();
   }
   ctx.fillStyle = "#ffda88";
   markers.forEach(marker => {

@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { MAPS, isMapWalkable, isSafePosition, nearbyGate, mapScenery, isMagicWaveClear } from '../v2/maps.js';
 import { sharedResources, disposeMap, cleanupExpiredEffects } from '../v2/map-lifecycle.js';
 import { drawMinimap } from '../v2/minimap.js';
+import { WorldEvents, environmentModifier, OUTAGE_COOLDOWN } from '../v2/world-events.js';
 import { findMonsterSpawn } from '../v2/spawning.js';
 import { seededRandom, isWalkable, isPath, createScenery } from '../v2/layout.js';
 
@@ -331,5 +332,27 @@ test('minimap module renders village and expedition layouts, gates, visible guid
     drawMinimap(ctx, map, markers, { x: 0, z: 20 });
     assert.ok(rects.length >= 2, map.id);
     assert.equal(arcs.length, map.gates.length + 2, map.id);
+    drawMinimap(ctx, map, markers, { x: 0, z: 20 }, { mapId: map.id, x: 10, z: 10, radius: 28 });
+    assert.equal(arcs.length, (map.gates.length + 2) * 2 + 1, map.id);
   }
+});
+
+test('region environmental modifiers and AZ outage world events grant buffs and oasis healing', () => {
+  assert.equal(environmentModifier('mountains', { x: 0, z: -50 }).id, 'tailwind');
+  assert.equal(environmentModifier('desert', { x: 45, z: -35 }).id, 'oasis');
+  assert.equal(environmentModifier('dungeon', { x: 0, z: 0 }).id, 'overclock');
+  assert.equal(environmentModifier('village', { x: 0, z: 0 }).id, null);
+
+  const events = new WorldEvents({ random: () => 0 });
+  const step1 = events.update(OUTAGE_COOLDOWN, 'desert', { x: 45, z: -35 });
+  assert.ok(step1.started);
+  assert.equal(step1.started.mapId, 'desert');
+  assert.equal(step1.heal, 48);
+  assert.equal(events.recordKill({ x: step1.started.x, z: step1.started.z }).resolved, false);
+  const resolved = events.recordKill({ x: step1.started.x + 2, z: step1.started.z });
+  assert.equal(resolved.resolved, true);
+  assert.equal(events.outage, null);
+  assert.ok(events.surge > 0);
+  assert.ok(events.speedMultiplier > 1);
+  assert.ok(events.attackSpeedMultiplier > 1);
 });
