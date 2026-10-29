@@ -223,30 +223,31 @@ dialog input { width: 100%; padding: 10px; background: #0f272c; color: #fff; bor
 }
 #cloud-art-title {
   position: fixed;
-  top: 96px;
+  top: 62px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(88vw, 760px);
+  width: fit-content;
+  max-width: min(76vw, 560px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2em;
+  gap: 2px;
   text-align: center;
-  font-size: clamp(1.15rem, 3.2vw, 2.2rem);
+  font-size: clamp(0.95rem, 1.8vw, 1.35rem);
   font-weight: 900;
   letter-spacing: 0.08em;
   color: #fff;
-  text-shadow: 0 2px 6px #111, 0 0 12px var(--art-color, #076b9d);
-  border-block: 2px solid var(--art-color, #076b9d);
-  background: linear-gradient(90deg, transparent, #101b29e6 20%, #101b29e6 80%, transparent);
-  padding: 0.4em 0.6em;
+  text-shadow: 0 2px 8px #000, 0 0 14px var(--art-color, #076b9d), 0 0 4px #000;
+  border-block: 1.5px solid var(--art-color, #076b9d);
+  background: linear-gradient(90deg, transparent, #09131c66 18%, #09131c80 50%, #09131c66 82%, transparent);
+  padding: 5px 28px;
   pointer-events: none;
   opacity: 0;
   z-index: 20;
 }
-#cloud-art-title span, #cloud-art-title small { display: block; line-height: 1.25; }
-#cloud-art-title .banner-english { font-size: 0.85em; letter-spacing: 0.08em; color: #ffe7b8; }
-#cloud-art-title .banner-chinese { font-size: 1.05em; letter-spacing: 0.14em; color: #fff; }
+#cloud-art-title span, #cloud-art-title small { display: block; line-height: 1.18; }
+#cloud-art-title .banner-english { font-size: 0.72em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; color: #ffe7b8; }
+#cloud-art-title .banner-chinese { font-size: 1.05em; letter-spacing: 0.16em; color: #fff; }
 #manual-button { display: inline-flex; align-items: center; justify-content: center; }
 #attack-voice { max-width: 160px; }
 .magic-bar button .spell-btn-en, .magic-bar button .spell-btn-zh { display: block; line-height: 1.3; }
@@ -254,4 +255,4 @@ dialog input { width: 100%; padding: 10px; background: #0f272c; color: #fff; bor
 .magic-bar button .spell-btn-zh { color: #f7eed9; font-size: 10px; margin-top: 1px; }
 .magic-bar [aria-pressed="true"] .spell-btn-en::before { content: "✓ "; color: #fff; }
 #magic-selection { font-size: 11px; margin: 6px 0; }
-#cloud-art-title.combo-banner { font-size: clamp(0.95rem, 2.4vw, 1.8rem); letter-spacing: 0.04em; }
+#cloud-art-title.combo-banner { font-size: clamp(0.92rem, 1.7vw, 1.3rem); letter-spacing: 0.06em; }

@@ -281,10 +281,10 @@ export class MagicCombat {
       this.combos.push(state);
       this.effect("blade-barrage", state, { dx: forward.x, dz: forward.z, range: 75, duration: 2.6, color: combo.color }, 1);
     } else if (combo.id === "singularity") {
-      const center = { x: origin.x + forward.x * 20, z: origin.z + forward.z * 20 };
-      const state = { id: combo.id, x: center.x, z: center.z, age: 0, step: 0, duration: 2.5, power, batch };
+      const state = { id: combo.id, x: origin.x, z: origin.z, dx: forward.x, dz: forward.z,
+        age: 0, step: 0, duration: 2.5, power, batch };
       this.combos.push(state);
-      this.effect("singularity", state, { range: 26, duration: 2.5, color: combo.color }, 1);
+      this.effect("singularity", state, { dx: forward.x, dz: forward.z, range: 115, duration: 2.5, color: combo.color }, 1);
     } else if (combo.id === "almighty-push") {
       const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 2.4, power, batch };
       this.combos.push(state);
@@ -499,18 +499,15 @@ export class MagicCombat {
           for (const target of targets) this.damage(target, Math.round(combo.power * 2.2), combo.batch);
         }
       } else if (combo.id === "singularity") {
-        while (combo.step < 2 && combo.age + 1e-8 >= 0.55 + combo.step * 0.6) {
+        while (combo.step < 4 && combo.age + 1e-8 >= 0.45 + combo.step * 0.45) {
           combo.step++;
-          for (const target of this.enemies(combo, 26)) {
-            this.push?.(target, combo, target.boss ? -1 : -3.5);
-            this.slow?.(target, target.boss ? 0.4 : 1.2);
-          }
-        }
-        if (combo.step === 2 && combo.age + 1e-8 >= 1.95) {
-          combo.step++;
-          for (const target of this.enemies(combo, 26)) {
-            this.damage(target, Math.round(combo.power * 5.5), combo.batch);
-            this.push?.(target, combo, target.boss ? 1.5 : 5);
+          for (const target of this.enemies(combo, 115)) {
+            const dx = target.x - combo.x, dz = target.z - combo.z, dist = Math.hypot(dx, dz);
+            if (!dist || (dx * combo.dx + dz * combo.dz) / dist >= 0.25) {
+              this.damage(target, Math.round(combo.power * 3.4), combo.batch);
+              this.push?.(target, combo, target.boss ? 1.5 : 5);
+              this.slow?.(target, target.boss ? 0.5 : 1.2);
+            }
           }
         }
       } else if (combo.id === "almighty-push") {

@@ -37,8 +37,8 @@ import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipmen
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
 import { bindServiceReader } from "./aws-service-reader.js?v=20261029-mandarin-door-1";
-import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-3";
-import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-3";
+import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-4";
+import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-4";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
   Update(dt) {

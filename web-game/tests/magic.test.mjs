@@ -717,6 +717,10 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const blackFlames = amaterasuEffect.object.children.filter(c => c.userData?.blackFlame !== undefined);
   assert.ok(blackFlames.length >= 20 && blackFlames.every(f => f.material.color === 0x050208 || f.material.color === 0x12061a),
     'omniscience Amaterasu flames are pitch-black fire');
+  const singularityEffect = effects.active.find(e => e.kind === 'singularity');
+  const purpleSphere = singularityEffect.object.children.find(c => c.userData?.core === true);
+  assert.ok(purpleSphere.position.z > 7,
+    'singularity giant Hollow Purple sphere shoots forward across the map');
   effects.update(2.2);
   assert.equal(playerTarget.position.y, 0, 'main character returns to ground when almighty-push ends');
   assert.equal(effects.active.length, 0);
