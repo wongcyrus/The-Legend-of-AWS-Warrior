@@ -354,22 +354,33 @@ export class MagicEffects {
       }
     } else if (kind === "planetary-devastation") {
       ring(radius);
-      const core = mesh(new THREE.SphereGeometry(3.4, 16, 12), 0, 6, 0);
+      const core = mesh(new THREE.SphereGeometry(4.8, 18, 14), 0, 6, 0);
       core.material = new THREE.MeshBasicMaterial({ color: 0x050208, transparent: true,
         opacity: 0.98, depthWrite: true, fog: false, toneMapped: false });
       core.userData = { chibakuCore: true };
-      const halo = mesh(new THREE.RingGeometry(4.2, 5.4, segments), 0, 6, 0);
+      const halo = mesh(new THREE.RingGeometry(5.8, 7.6, segments), 0, 6, 0);
       halo.material = new THREE.MeshBasicMaterial({ color: 0xe9d5ff, transparent: true,
         opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
       halo.userData = { chibakuCore: true };
-      const count = reduced ? 8 : 18;
+      const planetInner = mesh(new THREE.SphereGeometry(13.5, reduced ? 8 : 12, reduced ? 6 : 10), 0, 6, 0);
+      planetInner.material = new THREE.MeshBasicMaterial({ color: 0x4a3222, transparent: true,
+        opacity: 0.97, depthWrite: true, fog: false, toneMapped: false });
+      planetInner.userData = { chibakuPlanet: 1 };
+      const planetCrust = mesh(new THREE.SphereGeometry(14.4, reduced ? 7 : 9, reduced ? 5 : 7), 0, 6, 0);
+      planetCrust.material = new THREE.MeshBasicMaterial({ color: 0x362317, transparent: true,
+        opacity: 0.94, depthWrite: true, fog: false, toneMapped: false });
+      planetCrust.userData = { chibakuPlanet: 2 };
+      const count = reduced ? 10 : 18;
+      const rockColors = [0x3d281c, 0x543828, 0x694835];
       for (let i = 0; i < count; i++) {
         const a = i * Math.PI * 2 / count;
-        const rock = mesh(i % 2 ? new THREE.OctahedronGeometry(2.8) : new THREE.BoxGeometry(3.6, 3.6, 3.6),
-          Math.cos(a) * radius * 0.85, 1.5, Math.sin(a) * radius * 0.85);
-        rock.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0x3d281c : 0x543828,
-          transparent: true, opacity: 0.96, depthWrite: true, fog: false, toneMapped: false });
-        rock.userData = { chibakuRock: a, offset: (i % 5) * 1.4 - 2.8 };
+        const size = 6.8 + (i % 3) * 1.6;
+        const rock = mesh(i % 2 ? new THREE.OctahedronGeometry(size) : new THREE.BoxGeometry(size * 1.2, size, size * 1.1),
+          Math.cos(a) * radius * 0.95, 2.5, Math.sin(a) * radius * 0.95);
+        rock.rotation?.set?.(i * 0.7, a, i * 0.5);
+        rock.material = new THREE.MeshBasicMaterial({ color: rockColors[i % rockColors.length],
+          transparent: true, opacity: 0.97, depthWrite: true, fog: false, toneMapped: false });
+        rock.userData = { chibakuRock: a, offset: ((i % 5) - 2) * 3.8 };
       }
     } else if (kind === "time-rewind") {
       ring(radius);
@@ -630,18 +641,29 @@ export class MagicEffects {
         });
       } else if (effect.kind === "planetary-devastation") {
         const rise = Math.min(1, effect.age / 0.55);
-        const pull = Math.min(1, Math.max(0, (effect.age - 0.35) / 1.4));
-        const crush = effect.age >= 1.9 ? Math.min(1, (effect.age - 1.9) / 0.35) : 0;
-        const coreY = (6 + 18 * rise) * (1 - crush) + 5 * crush;
+        const pull = Math.min(1, Math.max(0, (effect.age - 0.3) / 1.35));
+        const crush = effect.age >= 1.85 ? Math.min(1, (effect.age - 1.85) / 0.4) : 0;
+        const coreY = (6 + 20 * rise) * (1 - crush) + 10 * crush;
         effect.object.children.forEach(item => {
           if (item.userData?.chibakuCore) {
             item.position?.set?.(0, coreY, 0);
             if (item.rotation) item.rotation.z += dt * 4;
+          } else if (item.userData?.chibakuPlanet) {
+            item.position?.set?.(0, coreY, 0);
+            item.scale?.setScalar?.(0.08 + pull * 0.95);
+            if (item.rotation) {
+              item.rotation.y = (item.rotation.y || 0) + dt * (item.userData.chibakuPlanet === 1 ? 1.8 : -1.4);
+              item.rotation.x = (item.rotation.x || 0) + dt * 0.9;
+            }
           } else if (item.userData?.chibakuRock !== undefined) {
             const a = item.userData.chibakuRock + effect.age * 3.2;
-            const r = effect.radius * 0.85 * (1 - pull * 0.82);
-            const y = 1.5 * (1 - pull) + (coreY + item.userData.offset) * pull;
+            const r = effect.radius * 0.95 * (1 - pull) + 9.5 * pull;
+            const y = 2.5 * (1 - pull) + (coreY + item.userData.offset) * pull;
             item.position?.set?.(Math.cos(a) * r, y, Math.sin(a) * r);
+            if (item.rotation) {
+              item.rotation.x = (item.rotation.x || 0) + dt * 2.5;
+              item.rotation.y = (item.rotation.y || 0) + dt * 3.1;
+            }
           }
         });
       } else if (effect.kind === "time-rewind") {

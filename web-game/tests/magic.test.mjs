@@ -662,7 +662,7 @@ test('magic game actions reject blocked states before spending and use normal da
 
 test('cloud art visuals reduce detail, expire, remain bounded and dispose shared materials once', () => {
   class Resource {
-    constructor(options) { Object.assign(this, options); this.disposed = 0; }
+    constructor(options) { Object.assign(this, options); if (typeof options === 'number') this.size = options; this.disposed = 0; }
     dispose() { this.disposed++; }
     clone() { return new Resource({ ...this, disposed: 0 }); }
     setFromPoints() { return this; }
@@ -721,6 +721,11 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const purpleSphere = singularityEffect.object.children.find(c => c.userData?.core === true);
   assert.ok(purpleSphere.position.z > 7,
     'singularity giant Hollow Purple sphere shoots forward across the map');
+  const chibakuEffect = effects.active.find(e => e.kind === 'planetary-devastation');
+  const chibakuPlanet = chibakuEffect.object.children.find(c => c.userData?.chibakuPlanet === 2);
+  const chibakuRocks = chibakuEffect.object.children.filter(c => c.userData?.chibakuRock !== undefined);
+  assert.ok(chibakuPlanet.geometry.size >= 14 && chibakuRocks.length === 18 && chibakuRocks.every(r => r.geometry.size >= 6.8),
+    'planetary-devastation forms a colossal stone planetoid and large boulders');
   effects.update(2.2);
   assert.equal(playerTarget.position.y, 0, 'main character returns to ground when almighty-push ends');
   assert.equal(effects.active.length, 0);
