@@ -27,6 +27,7 @@ export function validSpellSelection(ids) {
 }
 
 export const COMBO_ARTS = [
+  // 2-Art Awakening Combos (all 10 pairs)
   { id: "blade-barrage", requires: ["lightning", "fireball"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
   { id: "singularity", requires: ["lightning", "frost"], label: "赫式・毫秒爆裂", englishLabel: "Dynamo Singularity", service: "Amazon DynamoDB", color: 0xb537f2 },
   { id: "almighty-push", requires: ["fireball", "storm"], label: "神羅・負載天徵", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
@@ -37,11 +38,29 @@ export const COMBO_ARTS = [
   { id: "blade-barrage", requires: ["fireball", "frost"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
   { id: "edge-flash", requires: ["fireball", "shockwave"], label: "炎呼吸・邊緣瞬閃", englishLabel: "CloudFront Edge Flash", service: "Amazon CloudFront", color: 0xff5500 },
   { id: "omniscience", requires: ["storm", "shockwave"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0x050208 },
+  // 3-Art Grand Awakening Combos (all 10 trios)
+  { id: "susanoo-mecha", requires: ["lightning", "fireball", "frost"], label: "須佐能乎・容器魔神", englishLabel: "EKS Susanoo Mecha", service: "Amazon EKS", color: 0x38bdf8 },
+  { id: "susanoo-mecha", requires: ["lightning", "fireball", "storm"], label: "須佐能乎・容器魔神", englishLabel: "EKS Susanoo Mecha", service: "Amazon EKS", color: 0x38bdf8 },
+  { id: "susanoo-mecha", requires: ["lightning", "fireball", "shockwave"], label: "須佐能乎・容器魔神", englishLabel: "EKS Susanoo Mecha", service: "Amazon EKS", color: 0x38bdf8 },
+  { id: "malevolent-shrine", requires: ["lightning", "frost", "storm"], label: "伏魔御廚子・無伺服器斬界", englishLabel: "Step Functions Malevolent Shrine", service: "AWS Step Functions", color: 0xdc2626 },
+  { id: "malevolent-shrine", requires: ["fireball", "frost", "storm"], label: "伏魔御廚子・無伺服器斬界", englishLabel: "Step Functions Malevolent Shrine", service: "AWS Step Functions", color: 0xdc2626 },
+  { id: "planetary-devastation", requires: ["lightning", "frost", "shockwave"], label: "地爆天星・資料湖封印", englishLabel: "Lake Formation Planetary Devastation", service: "AWS Lake Formation", color: 0xc084fc },
+  { id: "planetary-devastation", requires: ["fireball", "frost", "shockwave"], label: "地爆天星・資料湖封印", englishLabel: "Lake Formation Planetary Devastation", service: "AWS Lake Formation", color: 0xc084fc },
+  { id: "planetary-devastation", requires: ["lightning", "storm", "shockwave"], label: "地爆天星・資料湖封印", englishLabel: "Lake Formation Planetary Devastation", service: "AWS Lake Formation", color: 0xc084fc },
+  { id: "time-rewind", requires: ["fireball", "storm", "shockwave"], label: "時空回溯・快照結界", englishLabel: "EBS Snapshot Time Rewind", service: "Amazon EBS Snapshots", color: 0xfbbf24 },
+  { id: "time-rewind", requires: ["frost", "storm", "shockwave"], label: "時空回溯・快照結界", englishLabel: "EBS Snapshot Time Rewind", service: "Amazon EBS Snapshots", color: 0xfbbf24 },
+  // 4-Art Mythic Awakening Combos (all 5 quartets)
+  { id: "aurora-excalibur", requires: ["lightning", "fireball", "frost", "storm"], label: "誓約勝利・極光聖劍", englishLabel: "Aurora Excalibur", service: "Amazon Aurora", color: 0x64ffda },
+  { id: "aurora-excalibur", requires: ["lightning", "fireball", "frost", "shockwave"], label: "誓約勝利・極光聖劍", englishLabel: "Aurora Excalibur", service: "Amazon Aurora", color: 0x64ffda },
+  { id: "aurora-excalibur", requires: ["lightning", "fireball", "storm", "shockwave"], label: "誓約勝利・極光聖劍", englishLabel: "Aurora Excalibur", service: "Amazon Aurora", color: 0x64ffda },
+  { id: "infinite-void", requires: ["lightning", "frost", "storm", "shockwave"], label: "無量空處・全知星圖", englishLabel: "SageMaker Infinite Void", service: "Amazon SageMaker", color: 0x818cf8 },
+  { id: "infinite-void", requires: ["fireball", "frost", "storm", "shockwave"], label: "無量空處・全知星圖", englishLabel: "SageMaker Infinite Void", service: "Amazon SageMaker", color: 0x818cf8 },
 ];
 
 export function comboArtFor(ids) {
   if (!Array.isArray(ids) || ids.length < 2 || Object.keys(SPELLS).every(id => ids.includes(id))) return null;
-  return COMBO_ARTS.find(combo => combo.requires.every(id => ids.includes(id))) || null;
+  return COMBO_ARTS.find(combo => combo.requires.length === ids.length &&
+    combo.requires.every(id => ids.includes(id))) || null;
 }
 
 export const FULL_RELEASE_RANGE = 128;
@@ -284,6 +303,32 @@ export class MagicCombat {
       const state = { id: combo.id, x: impact.x, z: impact.z, age: 0, step: 0, duration: 2.8, power, batch };
       this.combos.push(state);
       this.effect("titan-meteor", state, { range: 26, duration: 2.8, color: combo.color }, 1);
+    } else if (combo.id === "susanoo-mecha") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 3.6, power, batch };
+      this.combos.push(state);
+      this.effect("susanoo-mecha", state, { range: 42, duration: 3.6, color: combo.color }, 1);
+    } else if (combo.id === "malevolent-shrine") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 4.5, power, batch };
+      this.combos.push(state);
+      this.effect("malevolent-shrine", state, { range: 38, duration: 4.5, color: combo.color }, 1);
+    } else if (combo.id === "planetary-devastation") {
+      const center = { x: origin.x + forward.x * 22, z: origin.z + forward.z * 22 };
+      const state = { id: combo.id, x: center.x, z: center.z, age: 0, step: 0, duration: 3.2, power, batch };
+      this.combos.push(state);
+      this.effect("planetary-devastation", state, { range: 36, duration: 3.2, color: combo.color }, 1);
+    } else if (combo.id === "time-rewind") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 4.0, power, batch };
+      this.combos.push(state);
+      this.effect("time-rewind", state, { range: 34, duration: 4.0, color: combo.color }, 1);
+    } else if (combo.id === "aurora-excalibur") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, dx: forward.x, dz: forward.z,
+        age: 0, step: 0, duration: 3.2, power, batch };
+      this.combos.push(state);
+      this.effect("aurora-excalibur", state, { dx: forward.x, dz: forward.z, range: 110, duration: 3.2, color: combo.color }, 1);
+    } else if (combo.id === "infinite-void") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 6.0, power, batch };
+      this.combos.push(state);
+      this.effect("infinite-void", state, { range: 44, duration: 6.0, color: combo.color }, 1);
     }
   }
   cast(id, level, origin, direction, pay, batch = {}) {
@@ -499,6 +544,62 @@ export class MagicCombat {
           for (const target of this.enemies(combo, 26)) {
             this.damage(target, Math.round(combo.power * 9.0), combo.batch);
             this.push?.(target, combo, target.boss ? 2 : 5);
+          }
+        }
+      } else if (combo.id === "susanoo-mecha") {
+        while (combo.step < 4 && combo.age + 1e-8 >= 0.4 + combo.step * 0.75) {
+          combo.step++;
+          for (const target of this.enemies(combo, 42)) {
+            this.damage(target, Math.round(combo.power * 4.2), combo.batch);
+            this.push?.(target, combo, target.boss ? 1.5 : 4);
+          }
+        }
+      } else if (combo.id === "malevolent-shrine") {
+        while (combo.step < 8 && combo.age + 1e-8 >= 0.35 + combo.step * 0.5) {
+          combo.step++;
+          for (const target of this.enemies(combo, 38)) {
+            this.damage(target, Math.round(combo.power * 2.8), combo.batch);
+            this.slow?.(target, target.boss ? 0.5 : 1.5);
+          }
+        }
+      } else if (combo.id === "planetary-devastation") {
+        while (combo.step < 3 && combo.age + 1e-8 >= 0.45 + combo.step * 0.45) {
+          combo.step++;
+          for (const target of this.enemies(combo, 36)) {
+            this.push?.(target, combo, target.boss ? -1.5 : -4.5);
+            this.slow?.(target, target.boss ? 0.5 : 1.5);
+          }
+        }
+        if (combo.step === 3 && combo.age + 1e-8 >= 1.9) {
+          combo.step++;
+          for (const target of this.enemies(combo, 36)) {
+            this.damage(target, Math.round(combo.power * 8.5), combo.batch);
+            this.push?.(target, combo, target.boss ? 2 : 6);
+          }
+        }
+      } else if (combo.id === "time-rewind") {
+        while (combo.step < 4 && combo.age + 1e-8 >= 0.4 + combo.step * 0.85) {
+          combo.step++;
+          for (const target of this.enemies(combo, 34)) {
+            this.damage(target, Math.round(combo.power * 3.4), combo.batch);
+            this.slow?.(target, target.boss ? 0.8 : 2.5);
+          }
+        }
+      } else if (combo.id === "aurora-excalibur") {
+        while (combo.step < 4 && combo.age + 1e-8 >= 0.45 + combo.step * 0.65) {
+          combo.step++;
+          for (const target of this.enemies(combo, 110)) {
+            const dx = target.x - combo.x, dz = target.z - combo.z, dist = Math.hypot(dx, dz);
+            if (!dist || (dx * combo.dx + dz * combo.dz) / dist >= 0.35)
+              this.damage(target, Math.round(combo.power * 4.8), combo.batch);
+          }
+        }
+      } else if (combo.id === "infinite-void") {
+        while (combo.step < 6 && combo.age + 1e-8 >= 0.5 + combo.step * 0.85) {
+          combo.step++;
+          for (const target of this.enemies(combo, 44)) {
+            this.damage(target, Math.round(combo.power * (combo.step === 6 ? 6.0 : 3.2)), combo.batch);
+            this.slow?.(target, target.boss ? 1.0 : 3.0);
           }
         }
       }

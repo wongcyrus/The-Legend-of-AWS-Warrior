@@ -398,6 +398,14 @@ Combining 2, 3, or 4 Cloud Arts in a single cast awakens one of **six Anime × A
 - **天照・全知之眼 / `CloudWatch Omniscience` (`[5] + [6]` or `[6] + [7]`)**: Darkens the domain into an obsidian void and erupts 24 pitch-black Amaterasu flame pillars (`0x050208`) with a floating Mangekyō eye and sweeping X-Ray laser that pulse 6 times over 7s (`1.8x` Power + `1.5s` slow).
 - **炎呼吸・邊緣瞬閃 / `CloudFront Edge Flash` (`[3] + [7]` or `[4] + [7]`)**: Unleashes twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a 65-unit corridor for 3 rapid slashes (`3.2x` Power each).
 - **天礙震星・基岩星隕 / `Bedrock Titan Meteor` (`[5] + [7]`)**: Tears open a sky portal and drops twin colossal craggy rock boulders straight down from the sky 22 units ahead after `1.2s`, dealing `9.0x` Power AoE damage across a 26-unit radius.
+- **3-Art Grand Awakening Combos**:
+  - **須佐能乎・容器魔神 / `EKS Susanoo Mecha` (`[3]+[4]+[5/6/7]`)**: Manifests a 24-unit cyan Susanoo colossus and ribcage around the player, cleaving 4 times with twin energy katanas across a 42-unit radius (`4.2x` Power + knockback per cleave).
+  - **伏魔御廚子・無伺服器斬界 / `Step Functions Malevolent Shrine` (`[3/4]+[5]+[6]`)**: Summons a dark-crimson Torii Shrine and unleashes 8 rapid omnidirectional Cleave & Dismantle slash waves across a 38-unit radius over `4.5s` (`2.8x` Power + slow).
+  - **地爆天星・資料湖封印 / `Lake Formation Planetary Devastation` (`[3/4]+[5]+[7]` or `[3]+[6]+[7]`)**: Launches a black gravity core into the sky (`y = 24`) 22 units ahead that rips 18 earthen boulders upward into a floating planetoid, pulling enemies inward 3 times before an `8.5x` Power AoE crush.
+  - **時空回溯・快照結界 / `EBS Snapshot Time Rewind` (`[4/5]+[6]+[7]`)**: Projects a 34-unit golden celestial clockwork astrolabe with counter-rotating hands that heavily slows enemies (`2.5s`) and pulses 4 golden time-shockwaves (`3.4x` Power each).
+- **4-Art Mythic Awakening Combos**:
+  - **誓約勝利・極光聖劍 / `Aurora Excalibur` (`[3]+[4]+[5]+[6/7]` or `[3]+[4]+[6]+[7]`)**: Raises a 44-unit pillar of golden light into the heavens and cleaves a 110-unit blinding golden-cyan Excalibur beam forward for 4 ticks (`4.8x` Power each).
+  - **無量空處・全知星圖 / `SageMaker Infinite Void` (`[3/4]+[5]+[6]+[7]`)**: Encloses a 44-unit radius in a deep-space cosmic black dome with an event-horizon ring and 24 orbiting stars, heavily slowing enemies for `6s` across 6 neural-overload bursts.
 
 The server reserves the whole selection in one transaction: insufficient MP means
 none of the attacks fire, and retries cannot debit twice. A miss still consumes MP.

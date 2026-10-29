@@ -73,9 +73,10 @@ Earn **MP** (up to 100 MP) by passing graded **Voice Practice** activities on AW
 | **`6`** | **結界術・私有雲界** (`Private Cloud Barrier`) | Amazon VPC | `15 MP` / `25s` | Forms a 12-unit ward for 8s that halves incoming damage and knocks back intruders. |
 | **`7`** | **終式・跨區復甦** (`Cross-Region Recovery`) | Disaster Recovery | `25 MP` / `60s` | Places a 12s recovery anchor (after a 1s windup) that intercepts one lethal/low-HP hit and restores you to 35% HP at the anchor. |
 
-### Anime × AWS Awakening Combo Arts
-Combining **2, 3, or 4 Cloud Arts** in a single cast awakens one of **six Anime × AWS Combo Arts** alongside your selected spells. Each Awakening Combo displays a **2-line English + Chinese banner** at top-center, announces **only the Awakening Combo Art name** in a male Cantonese voice (without repeating the individual combination elements), and unleashes a multi-stage 3D anime visual effect:
+### Anime × AWS Awakening Combo Arts (2, 3, and 4 Selected Arts)
+Combining **2, 3, or 4 Cloud Arts** in a single cast awakens a dedicated **Anime × AWS Combo Art** scaled to your selection tier (**Tier 1** for 2 arts, **Tier 2 Grand Awakening** for 3 arts, and **Tier 3 Mythic Awakening** for 4 arts). Each Awakening Combo displays a **2-line English + Chinese banner** at top-center, announces **only the Awakening Combo Art name** in a male Cantonese voice, and unleashes a multi-stage 3D anime visual effect:
 
+#### Tier 1 — 2-Art Awakening Combos
 | Combo Keys | English / Chinese Banner | Base MP / Shared Cooldown | AWS Service Theme | Anime Reference & Combat Effect |
 |---|---|---|---|---|
 | **`3 + 4`** *(or `4 + 5`)* | **`Fargate Blade Barrage`**<br>**千刃・容器萬解** | `27 MP` / `20s` *(or `35 MP` / `45s`)* | AWS Fargate & Amazon ECS | *Bleach (Senbonzakura) / Fate (Gate of Babylon)* — Opens 5 golden container portals behind the Warrior and fires **18 glowing blades** up to **75 units** ahead across 3 staggered volleys (`2.2×` Power per volley). |
@@ -84,6 +85,20 @@ Combining **2, 3, or 4 Cloud Arts** in a single cast awakens one of **six Anime 
 | **`5 + 6`** *(or `6 + 7`)* | **`CloudWatch Omniscience`**<br>**天照・全知之眼** | `35 MP` / `45s` *(or `40 MP` / `60s`)* | Amazon CloudWatch & AWS X-Ray | *Naruto (Sharingan & Amaterasu `天照`)* — Darkens the field into an obsidian void and erupts **24 roaring pitch-black Amaterasu flame pillars** (`0x050208`) with a floating Mangekyō eye and sweeping X-Ray beam that pulse **6 times over 7s** (`1.8×` Power + `1.5s` slow). |
 | **`3 + 7`** *(or `4 + 7`)* | **`CloudFront Edge Flash`**<br>**炎呼吸・邊緣瞬閃** | `37 MP` / `60s` *(or `40 MP` / `60s`)* | Amazon CloudFront | *Demon Slayer (Thunderclap and Flash × Rengoku)* — Unleashes **twin spiraling flame-and-thunder dragon helices** and 8 sequential Edge-PoP fire pillars along a **65-unit** corridor for **3 rapid slashes** (`3.2×` Power each). |
 | **`5 + 7`** | **`Bedrock Titan Meteor`**<br>**天礙震星・基岩星隕** | `45 MP` / `60s` | Amazon Bedrock | *Naruto (Tengai Shinsei `天礙震星`)* — Tears open a sky portal and drops **twin colossal craggy rock boulders** straight down from the sky **22 units** ahead after `1.2s`, dealing **`9.0×` Power** AoE damage across a **26-unit** radius and raising tectonic spires. |
+
+#### Tier 2 — 3-Art Grand Awakening Combos
+| Combo Keys | English / Chinese Banner | AWS Service Theme | Anime Reference & Combat Effect |
+|---|---|---|---|
+| **`3 + 4 + 5`** *(or `3+4+6` / `3+4+7`)* | **`EKS Susanoo Mecha`**<br>**須佐能乎・容器魔神** | Amazon EKS | *Naruto (Complete Body Susanoo `完成体・須佐能乎`)* — Manifests a **24-unit glowing cyan Susanoo colossus & ribcage** around the Warrior, cleaving **4 times** with twin 26-unit energy katanas across a **42-unit** radius (`4.2×` Power + knockback per cleave). |
+| **`3 + 5 + 6`** *(or `4 + 5 + 6`)* | **`Step Functions Malevolent Shrine`**<br>**伏魔御廚子・無伺服器斬界** | AWS Step Functions | *Jujutsu Kaisen (Malevolent Shrine `伏魔御廚子`)* — Summons a **16-unit dark-crimson Torii Shrine** and unleashes **8 rapid omnidirectional Cleave & Dismantle (`捌` & `解`) slash waves** across a **38-unit** radius over `4.5s` (`2.8×` Power + slow per wave). |
+| **`3 + 5 + 7`** *(or `4+5+7` / `3+6+7`)* | **`Lake Formation Planetary Devastation`**<br>**地爆天星・資料湖封印** | AWS Lake Formation | *Naruto (Chibaku Tensei `地爆天星`)* — Launches a **pitch-black gravity singularity** into the sky (`y = 24`) `22` units ahead that rips **18 massive earthen boulders** up from the ground into a floating planetoid, pulling enemies inward 3 times before an **`8.5×` Power** AoE crush. |
+| **`4 + 6 + 7`** *(or `5 + 6 + 7`)* | **`EBS Snapshot Time Rewind`**<br>**時空回溯・快照結界** | Amazon EBS Snapshots | *JoJo's Bizarre Adventure / Bleach (Santen Kesshun)* — Projects a **34-unit golden celestial clockwork astrolabe** with counter-rotating hands that heavily slows enemies (`2.5s`) and pulses **4 golden time-shockwaves** (`3.4×` Power each). |
+
+#### Tier 3 — 4-Art Mythic Awakening Combos
+| Combo Keys | English / Chinese Banner | AWS Service Theme | Anime Reference & Combat Effect |
+|---|---|---|---|
+| **`3 + 4 + 5 + 6`** *(or `3+4+5+7` / `3+4+6+7`)* | **`Aurora Excalibur`**<br>**誓約勝利・極光聖劍** | Amazon Aurora Global DB | *Fate/Stay Night (Excalibur `約束された勝利の剣`)* — Raises a **44-unit pillar of golden light** into the heavens and cleaves a **110-unit blinding golden-cyan Excalibur beam** forward for **4 devastating ticks** (`4.8×` Power each). |
+| **`3 + 5 + 6 + 7`** *(or `4 + 5 + 6 + 7`)* | **`SageMaker Infinite Void`**<br>**無量空處・全知星圖** | Amazon SageMaker | *Jujutsu Kaisen (Unlimited Void `無量空處`)* — Encloses a **44-unit** radius in a **deep-space cosmic black dome** with an event-horizon accretion disk and 24 orbiting stars, heavily slowing enemies for `6s` across **6 neural-overload bursts** (`3.2×` Power + `6.0×` finale). |
 
 ### Ultimate: 全域部署 / Global Deployment
 Select **all 5 Cloud Arts (`3`–`7`)** to transform the cast button into **全域部署 (`87 MP`, `60s` cooldown)**:

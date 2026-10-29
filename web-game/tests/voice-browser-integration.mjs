@@ -1073,7 +1073,7 @@ try {
   assert.equal(await desktop.evaluate("__game.castMagic()"), true);
   assert.equal(await desktop.evaluate("attackAnnouncements.at(-1).text"), "赫式，毫秒爆裂");
   assert.equal(backend.wallet.balance, 68);
-  assert.match(await desktop.evaluate(`document.querySelector('#cloud-art-title').textContent`), /Event-Driven λ.*Infinite Storage/);
+  assert.match(await desktop.evaluate(`document.querySelector('#cloud-art-title').textContent`), /Dynamo Singularity.*赫式・毫秒爆裂/);
   assert.equal(await desktop.evaluate("__game.magic.fields.length"), 1);
   backend.wallet = { balance: 86, max: 100, earned: 100, spent: 14, revision: backend.wallet.revision + 1 };
   await desktop.evaluate(`__game.magic.cooldown=0; __game.refreshVoiceWallet()`);

@@ -296,6 +296,136 @@ export class MagicEffects {
           transparent: true, opacity: 0.95, depthWrite: true, fog: false, toneMapped: false });
         spire.userData = { impactSpire: true };
       }
+    } else if (kind === "susanoo-mecha") {
+      ring(radius);
+      const armor = mesh(new THREE.BoxGeometry(12, 22, 8), 0, 12, 0);
+      armor.material = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true,
+        transparent: true, opacity: 0.52, depthWrite: false, fog: false, toneMapped: false });
+      for (let i = 0; i < 4; i++) {
+        const rib = mesh(new THREE.RingGeometry(6.5 + i * 0.8, 7.6 + i * 0.8, 6), 0, 4 + i * 4, 0);
+        rib.rotation.x = Math.PI / 2;
+      }
+      const crest = mesh(new THREE.OctahedronGeometry(3.2), 0, 24, 2);
+      crest.material = new THREE.MeshBasicMaterial({ color: 0xbae6fd, transparent: true,
+        opacity: 0.92, depthWrite: false, fog: false, toneMapped: false });
+      for (const side of [-1, 1]) {
+        const katana = mesh(new THREE.BoxGeometry(1.1, 1.1, 26), side * 8, 11, 6);
+        katana.material = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true,
+          opacity: 0.9, depthWrite: false, fog: false, toneMapped: false });
+        katana.userData = { susanooBlade: side };
+      }
+    } else if (kind === "malevolent-shrine") {
+      for (const existing of this.active) {
+        if (existing.kind === "domain" || existing.kind === "ward") {
+          existing.object.traverse(item => item.material?.color?.setHex?.(0x1f0408));
+        }
+      }
+      ring(radius);
+      for (const side of [-6, 6]) {
+        const pillar = mesh(new THREE.BoxGeometry(1.8, 16, 1.8), side, 8, -4);
+        pillar.material = new THREE.MeshBasicMaterial({ color: 0x1a0508, transparent: true,
+          opacity: 0.96, depthWrite: true, fog: false, toneMapped: false });
+      }
+      const roof = mesh(new THREE.BoxGeometry(18, 2.2, 3.2), 0, 15.5, -4);
+      roof.material = new THREE.MeshBasicMaterial({ color: 0x7f1d1d, transparent: true,
+        opacity: 0.96, depthWrite: true, fog: false, toneMapped: false });
+      const beam = mesh(new THREE.BoxGeometry(14, 1.4, 2.2), 0, 12, -4);
+      beam.material = new THREE.MeshBasicMaterial({ color: 0x1a0508, transparent: true,
+        opacity: 0.96, depthWrite: true, fog: false, toneMapped: false });
+      const skull = mesh(new THREE.OctahedronGeometry(3.4), 0, 7.5, -3);
+      skull.material = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true,
+        opacity: 0.9, depthWrite: false, fog: false, toneMapped: false });
+      const count = reduced ? 10 : 24;
+      for (let i = 0; i < count; i++) {
+        const a = i * Math.PI * 2 / count;
+        const slash = mesh(new THREE.BoxGeometry(0.32, 0.32, 14),
+          Math.cos(a) * radius * 0.55, 2 + (i % 5) * 2.2, Math.sin(a) * radius * 0.55);
+        slash.rotation.y = a + 0.8;
+        slash.rotation.z = (i % 3 - 1) * 0.6;
+        slash.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : 0xff2a4b,
+          transparent: true, opacity: 0.9, depthWrite: false, fog: false, toneMapped: false });
+        slash.userData = { shrineSlash: i };
+      }
+    } else if (kind === "planetary-devastation") {
+      ring(radius);
+      const core = mesh(new THREE.SphereGeometry(3.4, 16, 12), 0, 6, 0);
+      core.material = new THREE.MeshBasicMaterial({ color: 0x050208, transparent: true,
+        opacity: 0.98, depthWrite: true, fog: false, toneMapped: false });
+      core.userData = { chibakuCore: true };
+      const halo = mesh(new THREE.RingGeometry(4.2, 5.4, segments), 0, 6, 0);
+      halo.material = new THREE.MeshBasicMaterial({ color: 0xe9d5ff, transparent: true,
+        opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+      halo.userData = { chibakuCore: true };
+      const count = reduced ? 8 : 18;
+      for (let i = 0; i < count; i++) {
+        const a = i * Math.PI * 2 / count;
+        const rock = mesh(i % 2 ? new THREE.OctahedronGeometry(2.8) : new THREE.BoxGeometry(3.6, 3.6, 3.6),
+          Math.cos(a) * radius * 0.85, 1.5, Math.sin(a) * radius * 0.85);
+        rock.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0x3d281c : 0x543828,
+          transparent: true, opacity: 0.96, depthWrite: true, fog: false, toneMapped: false });
+        rock.userData = { chibakuRock: a, offset: (i % 5) * 1.4 - 2.8 };
+      }
+    } else if (kind === "time-rewind") {
+      ring(radius);
+      ring(radius * 0.65);
+      const skyClock = mesh(new THREE.RingGeometry(radius * 0.72, radius * 0.8, segments), 0, 14, 0);
+      skyClock.rotation.x = -Math.PI / 2;
+      const handLong = mesh(new THREE.BoxGeometry(0.85, 0.4, radius * 0.85), 0, 0.6, 0);
+      handLong.material = new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true,
+        opacity: 0.95, depthWrite: false, fog: false, toneMapped: false });
+      handLong.userData = { clockHand: -8 };
+      const handShort = mesh(new THREE.BoxGeometry(1.2, 0.5, radius * 0.55), 0, 0.7, 0);
+      handShort.userData = { clockHand: -2.5 };
+      for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI / 6;
+        const tick = mesh(new THREE.BoxGeometry(0.9, 3.5, 2.2),
+          Math.cos(a) * radius * 0.9, 1.75, Math.sin(a) * radius * 0.9);
+        tick.rotation.y = -a;
+      }
+    } else if (kind === "aurora-excalibur") {
+      object.rotation.y = Math.atan2(to?.dx || 0, to?.dz || 1);
+      const skyPillar = mesh(new THREE.BoxGeometry(3.8, 44, 3.8), 0, 22, 0);
+      skyPillar.material = new THREE.MeshBasicMaterial({ color: 0xffe57f, transparent: true,
+        opacity: 0.92, depthWrite: false, fog: false, toneMapped: false });
+      skyPillar.userData = { excaliburPillar: true };
+      const outerBeam = mesh(new THREE.BoxGeometry(7.2, 5.2, radius), 0, 3.8, radius / 2);
+      outerBeam.material = new THREE.MeshBasicMaterial({ color: 0x64ffda, transparent: true,
+        opacity: 0.82, depthWrite: false, fog: false, toneMapped: false });
+      outerBeam.userData = { excaliburBeam: true };
+      const innerBeam = mesh(new THREE.BoxGeometry(3.4, 3.0, radius), 0, 3.8, radius / 2);
+      innerBeam.material = new THREE.MeshBasicMaterial({ color: 0xfff59d, transparent: true,
+        opacity: 0.96, depthWrite: false, fog: false, toneMapped: false });
+      innerBeam.userData = { excaliburBeam: true };
+      const count = reduced ? 5 : 10;
+      for (let i = 1; i <= count; i++) {
+        const r = mesh(new THREE.RingGeometry(4.2, 5.2, segments), 0, 3.8, i * radius / count);
+        r.material = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true,
+          opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+      }
+    } else if (kind === "infinite-void") {
+      for (const existing of this.active) {
+        if (existing.kind === "domain" || existing.kind === "ward") {
+          existing.object.traverse(item => item.material?.color?.setHex?.(0x04020a));
+        }
+      }
+      ring(radius);
+      const voidDome = mesh(new THREE.SphereGeometry(radius, segments, reduced ? 10 : 18, 0, Math.PI * 2, 0, Math.PI / 2));
+      voidDome.material = new THREE.MeshBasicMaterial({ color: 0x05020d, transparent: true,
+        opacity: 0.88, side: THREE.DoubleSide, depthWrite: true, fog: false, toneMapped: false });
+      const horizon = mesh(new THREE.RingGeometry(8, 15, segments), 0, 9, 0);
+      horizon.rotation.x = Math.PI / 2.3;
+      horizon.material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true,
+        opacity: 0.92, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+      horizon.userData = { voidStar: 0 };
+      const count = reduced ? 10 : 24;
+      for (let i = 0; i < count; i++) {
+        const a = i * Math.PI * 2 / count;
+        const r = radius * (0.28 + (i % 4) * 0.16);
+        const star = mesh(new THREE.OctahedronGeometry(1.1), Math.cos(a) * r, 3 + (i % 6) * 2.5, Math.sin(a) * r);
+        star.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : 0x7dd3fc,
+          transparent: true, opacity: 0.95, depthWrite: false, fog: false, toneMapped: false });
+        star.userData = { voidStar: a, orbitR: r, orbitY: 3 + (i % 6) * 2.5 };
+      }
     } else if (kind === "anchor") {
       ring(3).material = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true,
         opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
@@ -311,7 +441,8 @@ export class MagicEffects {
       to: to ? { x: to.x, z: to.z } : null, age: 0, duration, radius,
       reduced, level, mixer, model, attack, skins, ownedGeometries, blade, poseAge: 0, strikes: 0,
       source: ["anchor", "domain", "ward", "clone", "release-wave", "release-boundary",
-        "blade-barrage", "singularity", "almighty-push", "omniscience", "edge-flash", "titan-meteor"].includes(kind) ? from : null });
+        "blade-barrage", "singularity", "almighty-push", "omniscience", "edge-flash", "titan-meteor",
+        "susanoo-mecha", "malevolent-shrine", "planetary-devastation", "time-rewind", "aurora-excalibur", "infinite-void"].includes(kind) ? from : null });
   }
   poseSkins(skins) {
     if (!skins.length) return;
@@ -472,6 +603,59 @@ export class MagicEffects {
             item.scale?.setScalar?.(impacted ? Math.min(1.3, (effect.age - 1.2) * 2.5) : 0.01);
           } else if (item.userData?.impactSpire) {
             item.position.y = impacted ? Math.min(5.5, (effect.age - 1.2) * 18) : -6;
+          }
+        });
+      } else if (effect.kind === "susanoo-mecha") {
+        const charTarget = this.character?.()?._target;
+        if (charTarget?.position) effect.object.position?.set?.(charTarget.position.x, 0, charTarget.position.z);
+        effect.object.children.forEach(item => {
+          if (item.userData?.susanooBlade && item.rotation)
+            item.rotation.y = Math.sin(effect.age * 7) * 1.4 * item.userData.susanooBlade;
+        });
+      } else if (effect.kind === "malevolent-shrine") {
+        effect.object.children.forEach(item => {
+          if (item.userData?.shrineSlash !== undefined && item.rotation) {
+            item.rotation.y += dt * 12;
+            item.scale?.setScalar?.(0.6 + Math.abs(Math.sin(effect.age * 18 + item.userData.shrineSlash)) * 0.7);
+          }
+        });
+      } else if (effect.kind === "planetary-devastation") {
+        const rise = Math.min(1, effect.age / 0.55);
+        const pull = Math.min(1, Math.max(0, (effect.age - 0.35) / 1.4));
+        const crush = effect.age >= 1.9 ? Math.min(1, (effect.age - 1.9) / 0.35) : 0;
+        const coreY = (6 + 18 * rise) * (1 - crush) + 5 * crush;
+        effect.object.children.forEach(item => {
+          if (item.userData?.chibakuCore) {
+            item.position?.set?.(0, coreY, 0);
+            if (item.rotation) item.rotation.z += dt * 4;
+          } else if (item.userData?.chibakuRock !== undefined) {
+            const a = item.userData.chibakuRock + effect.age * 3.2;
+            const r = effect.radius * 0.85 * (1 - pull * 0.82);
+            const y = 1.5 * (1 - pull) + (coreY + item.userData.offset) * pull;
+            item.position?.set?.(Math.cos(a) * r, y, Math.sin(a) * r);
+          }
+        });
+      } else if (effect.kind === "time-rewind") {
+        effect.object.children.forEach(item => {
+          if (item.userData?.clockHand && item.rotation)
+            item.rotation.y = (item.rotation.y || 0) + dt * item.userData.clockHand;
+        });
+      } else if (effect.kind === "aurora-excalibur") {
+        const cleaved = effect.age >= 0.35;
+        effect.object.children.forEach(item => {
+          if (item.userData?.excaliburPillar)
+            item.scale?.setScalar?.(cleaved ? Math.max(0.1, 1 - (effect.age - 0.35) * 1.5) : 1);
+          else if (item.userData?.excaliburBeam)
+            item.scale?.setScalar?.(cleaved ? 1 + Math.sin(effect.age * 20) * 0.15 : 0.05);
+        });
+      } else if (effect.kind === "infinite-void") {
+        effect.material.opacity = Math.min(0.95, (1 - t) * 3.5);
+        effect.object.children.forEach(item => {
+          if (item.userData?.voidStar !== undefined) {
+            if (item.userData.orbitR) {
+              const a = item.userData.voidStar + effect.age * 1.8;
+              item.position?.set?.(Math.cos(a) * item.userData.orbitR, item.userData.orbitY, Math.sin(a) * item.userData.orbitR);
+            } else if (item.rotation) item.rotation.z += dt * 2.5;
           }
         });
       } else if (effect.kind !== "lightning") {

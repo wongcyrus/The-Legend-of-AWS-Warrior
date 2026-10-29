@@ -37,8 +37,8 @@ import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipmen
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
 import { bindServiceReader } from "./aws-service-reader.js?v=20261029-mandarin-door-1";
-import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-2";
-import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-2";
+import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-3";
+import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-3";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
   Update(dt) {
@@ -912,8 +912,8 @@ class Game {
     const spell = ids[0], level = this.magicLevel, map = this.map;
     const combined = ids.length > 1;
     const cost = ids.reduce((sum, id) => sum + SPELLS[id].cost, 0);
-    const chineseName = ultimate ? "全域部署" : combo ? `${combo.label}（${ids.map(id => SPELLS[id].label).join(" ＋ ")}）` : ids.map(id => SPELLS[id].label).join(" ＋ ");
-    const englishName = ultimate ? "Global Deployment" : combo ? `${combo.englishLabel} · ${ids.map(id => SPELLS[id].englishLabel).join(" + ")}` : ids.map(id => SPELLS[id].englishLabel).join(" + ");
+    const chineseName = ultimate ? "全域部署" : combo ? combo.label : ids.map(id => SPELLS[id].label).join(" ＋ ");
+    const englishName = ultimate ? "Global Deployment" : combo ? combo.englishLabel : ids.map(id => SPELLS[id].englishLabel).join(" + ");
     let origin, forward;
     const valid = () => {
       if (this.map !== map || !this.canCastMagic()) return false;
@@ -2065,7 +2065,9 @@ class Game {
   updateCamera(dt) {
     const target = (this._cameraTarget ??= new THREE.Vector3()).copy(this.player._position);
     const charY = this.player.GetComponent("BasicCharacterController")?._target?.position?.y || 0;
-    const skyMeteor = this.magicEffects?.active.some(effect => effect.kind === "titan-meteor" && effect.age < 1.6);
+    const skyMeteor = this.magicEffects?.active.some(effect =>
+      (effect.kind === "titan-meteor" && effect.age < 1.6) ||
+      (effect.kind === "planetary-devastation" && effect.age < 2.2));
     target.y += 5 + charY * 0.75 + (skyMeteor ? 9 : 0);
     const fullRelease = this.magicEffects?.active.some(effect => effect.kind === "avatar");
     const halfFov = this.camera.fov * Math.PI / 360;

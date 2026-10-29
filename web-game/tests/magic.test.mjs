@@ -692,7 +692,8 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const effects = new MagicEffects(scene);
   const from = { x: 0, z: 0 }, to = { x: 0, z: 5, range: 10 };
   for (const id of ['lightning', 'domain', 'ward', 'clone', 'anchor', 'recall', 'seal', 'cast',
-    'blade-barrage', 'singularity', 'almighty-push', 'omniscience', 'edge-flash', 'titan-meteor'])
+    'blade-barrage', 'singularity', 'almighty-push', 'omniscience', 'edge-flash', 'titan-meteor',
+    'susanoo-mecha', 'malevolent-shrine', 'planetary-devastation', 'time-rewind', 'aurora-excalibur', 'infinite-void'])
     effects.spawn(id, from, { ...to, duration: 2 });
   effects.character = () => ({ _target: playerTarget });
   const objects = [], resources = new Set();
@@ -952,9 +953,10 @@ test('cloud art synergies trigger Cold-Start Surge in storage domains and VPC Pe
   assert.ok(peered.hits.some(hit => hit.id === 'wide'), 'peered clones reach wider targets');
   assert.ok(peered.pushes.some(push => push.id === 'wide' && push.distance === 2.5));
 
-  for (const combo of COMBO_ARTS.slice(0, 6)) {
+  for (const combo of COMBO_ARTS) {
     const matched = comboArtFor(combo.requires);
-    assert.equal(matched?.id, combo.id);
+    assert.equal(matched?.id, combo.id, `${combo.requires.join('+')} matches ${combo.id}`);
+    assert.equal(matched?.requires.length, combo.requires.length);
     const h = harness([{ id: 'target', x: 0, z: 18 }]);
     assert.equal(h.magic.castCombination(combo.requires, 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true), true);
     assert.ok(h.effects.some(([kind]) => kind === combo.id), `${combo.id} spawns anime visual effect`);
