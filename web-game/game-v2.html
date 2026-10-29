@@ -38,7 +38,6 @@
       <button id="sound-button" type="button" aria-pressed="false">Mute sound</button>
       <label class="sound-volume">Volume <input id="sound-volume" type="range" min="0" max="100" step="5" aria-label="Sound effects volume"></label>
       <label>聲線 / Voice <select id="attack-voice" title="Available Cantonese system voices; male voices depend on your device"></select></label>
-      <button id="attack-voice-preview" type="button" title="試聽所選廣東話聲線 / Preview selected Cantonese voice">試聽 / Preview</button>
       <label>Quality <select id="quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
     </nav>
   </div>
@@ -179,6 +178,16 @@
       <p>Damage scales with Power. Storage's listed damage is the total of six pulses plus its final burst. Army summons five shadows of your character, advancing forward and attacking three times each; listed damage is each shadow's total across three hits. Walls stop shadows and each strike checks nearby enemies. Event lightning chains to three targets at 100%, 50%, then 25% damage. The ward deals damage once per intruder and halves incoming damage while you remain inside. Recovery has no attack damage; its anchor must finish a one-second windup and have a clear landing spot.</p>
       <p>Cooldown is shared across arts, so switching cannot bypass it. Obstacles block attacks. Fields stay where cast; moving away does not move them. Travel, account changes and death remove fields, clones and recovery anchors. These are fictional AWS-inspired combat metaphors, not actual AWS service capabilities.</p>
       <div class="manual-table"><table><caption>Cloud arts, situations and tradeoffs</caption><thead><tr><th scope="col">Art</th><th scope="col">Damage</th><th scope="col">Range</th><th scope="col">MP / shared cooldown</th><th scope="col">Effect</th><th scope="col">Best situation</th></tr></thead><tbody id="manual-spells"></tbody></table></div>
+      <h3>Anime &times; AWS Awakening Combo Arts</h3>
+      <p>Combining 2, 3, or 4 Cloud Arts in a single cast awakens one of six Anime &times; AWS Combo Arts alongside your selected arts, displaying a 2-line English and Chinese banner at top-center and announcing only the Awakening Combo Art name in Cantonese:</p>
+      <div class="manual-table"><table><caption>Awakening Combo Arts (2&ndash;4 selected arts)</caption><thead><tr><th scope="col">Combo Art</th><th scope="col">Combination Keys</th><th scope="col">AWS Theme</th><th scope="col">Effect</th></tr></thead><tbody id="manual-combos">
+        <tr><th scope="row">Fargate Blade Barrage / 千刃・容器萬解</th><td>[3] + [4] (or [4] + [5])</td><td>AWS Fargate / ECS</td><td>Opens 5 golden container portals behind you and fires 18 glowing blades up to 75 units ahead across 3 volleys (2.2x Power per volley).</td></tr>
+        <tr><th scope="row">Dynamo Singularity / 赫式・毫秒爆裂</th><td>[3] + [5]</td><td>Amazon DynamoDB</td><td>Spirals Blue (蒼) and Red (赫) orbs into a Hollow Purple (茈) core 20 units ahead, pulling enemies inward twice before a 5.5x Power supernova burst (plus Cold-Start Surge lightning across the domain).</td></tr>
+        <tr><th scope="row">ALB Almighty Push / 神羅・負載天徵</th><td>[4] + [6] (or [3] + [6])</td><td>Elastic Load Balancing</td><td>Unleashes two 360&deg; gravity domes and 16 radial spikes across 32 units (3.0x Power + knockback per wave) while summoning VPC Peered Fleet shadow clones.</td></tr>
+        <tr><th scope="row">CloudWatch Omniscience / 天照・全知之眼</th><td>[5] + [6] (or [6] + [7])</td><td>Amazon CloudWatch &amp; X-Ray</td><td>Projects a 28-unit Sharingan mandala, sweeping X-Ray laser, and 12 black-crimson Amaterasu flame pillars that pulse 6 times over 7s (1.8x Power + slow).</td></tr>
+        <tr><th scope="row">CloudFront Edge Flash / 炎呼吸・邊緣瞬閃</th><td>[3] + [7] (or [4] + [7])</td><td>Amazon CloudFront</td><td>Unleashes twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a 65-unit corridor for 3 rapid slashes (3.2x Power each).</td></tr>
+        <tr><th scope="row">Bedrock Titan Meteor / 創成・基岩星隕</th><td>[5] + [7]</td><td>Amazon Bedrock</td><td>Summons a giant octahedral asteroid from the sky into a targeting sigil 22 units ahead after 1.2s, dealing 9.0x Power AoE damage across a 26-unit radius.</td></tr>
+      </tbody></table></div>
       <p>MP comes only from passed voice activities: 60-74 earns 5 MP, 75-89 earns 10 MP, and 90-100 earns 15 MP, credited up to the 100 MP capacity. Each activity rewards once. Reading, repeated passes, kills, waiting and missions never replenish MP. Dialogs, loading, travel and death block casting.</p>
       <h3>Shields &amp; Perfect Parry</h3>
       <p id="manual-shields"></p>

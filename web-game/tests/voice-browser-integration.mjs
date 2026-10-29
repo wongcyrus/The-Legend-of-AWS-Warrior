@@ -1045,17 +1045,16 @@ try {
     select.value = 'test-male';
     select.dispatchEvent(new Event('change'));
     const selected = spoken.at(-1);
-    document.querySelector('#attack-voice-preview').click();
     return {count:select.options.length,name:select.selectedOptions[0].textContent,
       voice:selected.voice.voiceURI,lang:selected.lang,volume:selected.volume,
-      preview:spoken.at(-1).voice.voiceURI,
+      previewButton:document.querySelector('#attack-voice-preview'),
       storage:localStorage.getItem('aws-warrior:v2:sound-voice'),
       bannerColor:document.querySelector('#cloud-art-title').style.getPropertyValue('--art-color')};
   })()`);
   assert.equal(voiceChoice.count, 2);
   assert.equal(voiceChoice.voice, 'test-male');
   assert.equal(voiceChoice.lang, 'yue-HK');
-  assert.equal(voiceChoice.preview, 'test-male');
+  assert.equal(voiceChoice.previewButton, null);
   assert.equal(voiceChoice.storage, 'test-male');
   assert.equal(voiceChoice.volume, 0.5);
   assert.ok(voiceChoice.bannerColor.startsWith('#'));

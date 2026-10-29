@@ -62,6 +62,8 @@ test('combat manual lists live weapon stats, all spell powers and shields, and p
   assert.match(main, /if \(this.readingService \|\| document.getElementById\("combat-manual"\).open\)/);
   assert.match(html, /id="manual-button"[^>]+aria-haspopup="dialog"/);
   assert.match(html, /id="combat-manual"[^>]+aria-labelledby="manual-title"/);
+  assert.match(html, /id="manual-combos"[\s\S]*?Fargate Blade Barrage[\s\S]*?Bedrock Titan Meteor/);
+  assert.doesNotMatch(html, /id="attack-voice-preview"/);
 });
 
 test('all existing melee models and five shields are selectable, without adding bows or arrows', () => {

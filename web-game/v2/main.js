@@ -1355,7 +1355,6 @@ class Game {
     const soundButton = document.getElementById("sound-button");
     const soundVolume = document.getElementById("sound-volume");
     const voiceSelect = document.getElementById("attack-voice");
-    const voicePreview = document.getElementById("attack-voice-preview");
     const updateVoices = () => {
       const automatic = document.createElement("option");
       automatic.value = "";
@@ -1368,14 +1367,10 @@ class Game {
         return option;
       }));
       voiceSelect.value = voices.some(voice => voice.voiceURI === this.sound.voiceURI) ? this.sound.voiceURI : "";
-      voiceSelect.disabled = voicePreview.disabled = !this.sound.synthesis || !this.sound.Utterance;
+      voiceSelect.disabled = !this.sound.synthesis || !this.sound.Utterance;
     };
     voiceSelect.onchange = () => {
       this.sound.selectVoice(voiceSelect.value);
-      this.sound.unlockSpeech();
-      this.sound.speakAttack(SPELLS[this.spell].label);
-    };
-    voicePreview.onclick = () => {
       this.sound.unlockSpeech();
       this.sound.speakAttack(SPELLS[this.spell].label);
     };

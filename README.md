@@ -391,9 +391,13 @@ The book icon in the top navigation opens the **Combat manual** with live weapon
 shield and cloud-art values; the manual pauses gameplay.
 
 Combined casts add the selected MP costs and use the longest selected cooldown.
-Pairing specific Cloud Arts in a combined cast triggers **Elemental Synergies**:
-- **Cold-Start Surge (`Event-Driven λ` + `Domain: Infinite Storage`)**: Arcs 50% overload lightning and a 1.5s chill to every enemy inside the 16-unit Storage domain.
-- **VPC Peered Fleet (`Auto Scaling Army` + `Private Cloud Barrier`)**: Grants peered shadow clones with a wider 5.8-unit strike radius and knockback on every hit.
+Combining 2, 3, or 4 Cloud Arts in a single cast awakens one of **six Anime × AWS Awakening Combo Arts** alongside the selected base spells:
+- **千刃・容器萬解 / `Fargate Blade Barrage` (`[3] + [4]` or `[4] + [5]`)**: Opens 5 golden container portals behind the player and fires 18 glowing blades up to 75 units ahead across 3 volleys (`2.2x` Power per volley).
+- **赫式・毫秒爆裂 / `Dynamo Singularity` (`[3] + [5]`)**: Spirals Blue (`蒼`) and Red (`赫`) orbs into a Hollow Purple (`茈`) singularity 20 units ahead, pulling enemies within 26 units inward twice before a `5.5x` Power supernova burst, plus **Cold-Start Surge** lightning across the 16-unit Storage domain.
+- **神羅・負載天徵 / `ALB Almighty Push` (`[4] + [6]` or `[3] + [6]`)**: Expands two 360° gravity domes and 16 radial spikes across 32 units (`3.0x` Power + knockback per wave) while granting **VPC Peered Fleet** shadow clones (`5.8`-unit strike radius and knockback).
+- **天照・全知之眼 / `CloudWatch Omniscience` (`[5] + [6]` or `[6] + [7]`)**: Summons a 28-unit crimson Sharingan mandala, sweeping X-Ray laser, and 12 black-crimson Amaterasu flame pillars that pulse 6 times over 7s (`1.8x` Power + `1.5s` slow).
+- **炎呼吸・邊緣瞬閃 / `CloudFront Edge Flash` (`[3] + [7]` or `[4] + [7]`)**: Unleashes twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a 65-unit corridor for 3 rapid slashes (`3.2x` Power each).
+- **創成・基岩星隕 / `Bedrock Titan Meteor` (`[5] + [7]`)**: Summons a rotating octahedral asteroid from the sky (`y = 52`) into a targeting sigil 22 units ahead after `1.2s`, dealing `9.0x` Power AoE damage across a 26-unit radius.
 
 The server reserves the whole selection in one transaction: insufficient MP means
 none of the attacks fire, and retries cannot debit twice. A miss still consumes MP.
@@ -441,15 +445,16 @@ kills and missions do not replenish MP. An API key and a working connection are
 required for cast reservations. Combat runs locally; the server controls MP
 accounting and reservation cooldowns.
 
-Browser text-to-speech announces ordinary combinations' selected attack names
-in Cantonese, one after another. The ultimate instead reads **全域部署**, then
-**Global Deployment**. A new cast replaces the previous announcement instead of
-building a speech queue. Speech follows mute, volume and page-visibility settings.
+Browser text-to-speech announces single casts and Awakening Combo Arts in
+Cantonese (for Awakening Combo Arts, only the combo art's Cantonese name is
+spoken without repeating the individual combined elements). The ultimate instead
+reads **全域部署**, then **Global Deployment**. A new cast replaces the previous
+announcement instead of building a speech queue. Speech follows mute, volume and
+page-visibility settings.
 
-Use **Voice** to choose an available Cantonese system voice and **Preview** to
-hear it; the choice is saved in this browser. A male voice can be selected only
-if the device exposes one. The game does not create a male voice or assume a
-voice's gender from browser metadata. Voice availability, mixed-language
+Use **Voice** to choose an available Cantonese system voice (auto mode prefers a
+male Cantonese voice when available on the device); changing the selection plays
+a sample and saves the choice in this browser. Voice availability, mixed-language
 pronunciation and iOS playback depend on the device/browser; interact with the
 page before casting. If speech is unavailable, combat still works.
 
