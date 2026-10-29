@@ -929,7 +929,7 @@ class Game {
       this.sound.play({ lightning: "magicLightning", fireball: "magicFire", frost: "magicFrost",
         storm: "magicStorm", shockwave: "magicShock" }[spell]);
       this.sound.speakAttack(ultimate ? "全域部署。Global Deployment" :
-        combo ? `${combo.label}。${ids.map(id => SPELLS[id].label).join("。")}` :
+        combo ? combo.label :
         ids.map(id => SPELLS[id].label).join("。"));
       if (ultimate) this.magicEffects.spawnAvatarFormation(origin, forward);
       this.magicStatus(`${chineseName} cast! ${free ? "Infinitive Magic Mode - no MP spent." : `Spent ${cost} MP.`}`);
