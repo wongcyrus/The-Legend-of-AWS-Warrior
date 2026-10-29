@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { randomUUID } from 'node:crypto';
-import { MagicWallet, MagicCombat, SPELLS, spellDamage } from '../v2/magic.js';
+import { MagicWallet, MagicCombat, SPELLS, COMBO_ARTS, comboArtFor, spellDamage } from '../v2/magic.js';
 import { MONSTERS, SUPER_MONSTERS, superMonsterProfile, monsterFor } from '../v2/monsters.js';
 import { MAPS } from '../v2/maps.js';
 
@@ -688,7 +688,8 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const MagicEffects = runInNewContext(source + '\nMagicEffects;', { THREE, SPELLS });
   const effects = new MagicEffects(scene);
   const from = { x: 0, z: 0 }, to = { x: 0, z: 5, range: 10 };
-  for (const id of ['lightning', 'domain', 'ward', 'clone', 'anchor', 'recall', 'seal', 'cast'])
+  for (const id of ['lightning', 'domain', 'ward', 'clone', 'anchor', 'recall', 'seal', 'cast',
+    'blade-barrage', 'singularity', 'almighty-push', 'omniscience', 'edge-flash', 'titan-meteor'])
     effects.spawn(id, from, { ...to, duration: 2 });
   const objects = [], resources = new Set();
   for (const effect of effects.active) {
@@ -932,4 +933,16 @@ test('cloud art synergies trigger Cold-Start Surge in storage domains and VPC Pe
   peered.magic.update(3.2);
   assert.ok(peered.hits.some(hit => hit.id === 'wide'), 'peered clones reach wider targets');
   assert.ok(peered.pushes.some(push => push.id === 'wide' && push.distance === 2.5));
+
+  for (const combo of COMBO_ARTS.slice(0, 6)) {
+    const matched = comboArtFor(combo.requires);
+    assert.equal(matched?.id, combo.id);
+    const h = harness([{ id: 'target', x: 0, z: 18 }]);
+    assert.equal(h.magic.castCombination(combo.requires, 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true), true);
+    assert.ok(h.effects.some(([kind]) => kind === combo.id), `${combo.id} spawns anime visual effect`);
+    h.magic.update(1.5);
+    h.magic.update(1.5);
+    assert.ok(h.hits.length > 0, `${combo.id} deals combo damage`);
+  }
+  assert.equal(comboArtFor(Object.keys(SPELLS)), null, '5-spell ultimate remains Global Deployment');
 });

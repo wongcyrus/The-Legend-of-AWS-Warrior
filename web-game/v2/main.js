@@ -37,8 +37,8 @@ import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipmen
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
 import { bindServiceReader } from "./aws-service-reader.js?v=20261029-mandarin-door-1";
-import { SPELLS, FULL_RELEASE_RANGE, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-lightning-120-1";
-import { MagicEffects } from "./magic-effects.js?v=20261030-lightning-120-1";
+import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-1";
+import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-1";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
   Update(dt) {
@@ -820,18 +820,19 @@ class Game {
     const selected = this.selectedSpells ?? [this.spell];
     const cost = selected.reduce((sum, id) => sum + SPELLS[id].cost, 0);
     const ultimate = Object.keys(SPELLS).every(id => selected.includes(id));
+    const combo = typeof comboArtFor === "function" ? comboArtFor(selected) : null;
     const matches = ids => !pending || (pending.spells
       ? JSON.stringify([...ids].sort()) === JSON.stringify(pending.spells)
       : ids.length === 1 && ids[0] === pending.spell && this.magicLevel === pending.level);
     const summary = document.getElementById("magic-selection");
-    if (summary) summary.textContent = `${ultimate ? "全域部署 · " : ""}${selected.length} selected · ${cost} MP · ${
+    if (summary) summary.textContent = `${ultimate ? "全域部署 · " : combo ? `${combo.label} (${combo.englishLabel}) · ` : ""}${selected.length} selected · ${cost} MP · ${
       selected.length ? Math.max(...selected.map(id => SPELLS[id].cooldown)) : 0}s cooldown`;
     if (this.infinitiveMagic) {
       document.getElementById("magic-badges").textContent = "Infinitive Magic Mode";
       const cast = document.getElementById("magic-cast");
       cast.disabled = !this.ready || busy || Boolean(pending) || !selected.length;
-      cast.classList?.toggle("ultimate-ready", ultimate);
-      cast.textContent = ultimate ? "全域部署 · Free (X)" : "Cast: free (X)";
+      cast.classList?.toggle("ultimate-ready", ultimate || Boolean(combo));
+      cast.textContent = ultimate ? "全域部署 · Free (X)" : combo ? `${combo.label} · Free (X)` : "Cast: free (X)";
       cast.title = "Infinitive Magic Mode - no MP cost or cooldown";
       document.querySelectorAll("[data-spell]").forEach(button => {
         button.disabled = !this.ready || busy || Boolean(pending);
@@ -843,10 +844,10 @@ class Game {
     const matchesPending = matches(selected);
     const cast = document.getElementById("magic-cast");
     cast.disabled = unavailable || !selected.length || !matchesPending || (!pending && balance < cost);
-    cast.classList?.toggle("ultimate-ready", ultimate);
+    cast.classList?.toggle("ultimate-ready", ultimate || Boolean(combo));
     cast.textContent = busy ? "Reserving MP..." : checking ? "Checking MP..." :
       cooldown > 0 ? `Cooldown ${cooldown.toFixed(1)}s` : pending ? "Retry reserved cast (X)" :
-        `${ultimate ? "全域部署 ·" : "Cast:"} ${cost} MP (X)`;
+        `${ultimate ? "全域部署 ·" : combo ? `${combo.label} ·` : "Cast:"} ${cost} MP (X)`;
     cast.title = error || (ultimate ? `${FULL_RELEASE_RANGE}-unit radius. Three outward waves defeat enemies, including bosses, when reached; walls block hits.` : state);
     document.querySelectorAll("[data-spell]").forEach(button => {
       button.disabled = busy || checking > 0 || Boolean(pending);
@@ -906,11 +907,12 @@ class Game {
       return false;
     }
     const ultimate = Object.keys(SPELLS).every(id => ids.includes(id));
+    const combo = typeof comboArtFor === "function" ? comboArtFor(ids) : null;
     const spell = ids[0], level = this.magicLevel, map = this.map;
     const combined = ids.length > 1;
     const cost = ids.reduce((sum, id) => sum + SPELLS[id].cost, 0);
-    const chineseName = ultimate ? "全域部署" : ids.map(id => SPELLS[id].label).join(" ＋ ");
-    const englishName = ultimate ? "Global Deployment" : ids.map(id => SPELLS[id].englishLabel).join(" + ");
+    const chineseName = ultimate ? "全域部署" : combo ? `${combo.label}（${ids.map(id => SPELLS[id].label).join(" ＋ ")}）` : ids.map(id => SPELLS[id].label).join(" ＋ ");
+    const englishName = ultimate ? "Global Deployment" : combo ? `${combo.englishLabel} · ${ids.map(id => SPELLS[id].englishLabel).join(" + ")}` : ids.map(id => SPELLS[id].englishLabel).join(" + ");
     let origin, forward;
     const valid = () => {
       if (this.map !== map || !this.canCastMagic()) return false;
@@ -926,7 +928,9 @@ class Game {
       this.guard.release();
       this.sound.play({ lightning: "magicLightning", fireball: "magicFire", frost: "magicFrost",
         storm: "magicStorm", shockwave: "magicShock" }[spell]);
-      this.sound.speakAttack(ultimate ? "全域部署。Global Deployment" : ids.map(id => SPELLS[id].label).join("。"));
+      this.sound.speakAttack(ultimate ? "全域部署。Global Deployment" :
+        combo ? `${combo.label}。${ids.map(id => SPELLS[id].label).join("。")}` :
+        ids.map(id => SPELLS[id].label).join("。"));
       if (ultimate) this.magicEffects.spawnAvatarFormation(origin, forward);
       this.magicStatus(`${chineseName} cast! ${free ? "Infinitive Magic Mode - no MP spent." : `Spent ${cost} MP.`}`);
       const title = document.getElementById("cloud-art-title");
@@ -938,7 +942,8 @@ class Game {
         chinese.textContent = chineseName;
         title.classList.toggle("combo-banner", combined);
         title.replaceChildren(english, chinese);
-        title.style.setProperty("--art-color", `#${SPELLS[spell].color.toString(16).padStart(6, "0")}`);
+        const bannerColor = combo ? combo.color : SPELLS[spell].color;
+        title.style.setProperty("--art-color", `#${bannerColor.toString(16).padStart(6, "0")}`);
         const bannerDuration = ultimate ? 6000 : Math.max(3800, 2600 + ids.length * 1400, (englishName.length + chineseName.length) * 65);
         title.getAnimations().forEach(animation => animation.cancel());
         title.animate([{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }],

@@ -26,6 +26,24 @@ export function validSpellSelection(ids) {
     new Set(ids).size === ids.length && ids.every(id => Object.hasOwn(SPELLS, id));
 }
 
+export const COMBO_ARTS = [
+  { id: "blade-barrage", requires: ["lightning", "fireball"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
+  { id: "singularity", requires: ["lightning", "frost"], label: "赫式・毫秒爆裂", englishLabel: "Dynamo Singularity", service: "Amazon DynamoDB", color: 0xb537f2 },
+  { id: "almighty-push", requires: ["fireball", "storm"], label: "神羅・負載天徵", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
+  { id: "omniscience", requires: ["frost", "storm"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0xff2a6d },
+  { id: "edge-flash", requires: ["lightning", "shockwave"], label: "炎呼吸・邊緣瞬閃", englishLabel: "CloudFront Edge Flash", service: "Amazon CloudFront", color: 0xff5500 },
+  { id: "titan-meteor", requires: ["frost", "shockwave"], label: "創成・基岩星隕", englishLabel: "Bedrock Titan Meteor", service: "Amazon Bedrock", color: 0xff6b2b },
+  { id: "almighty-push", requires: ["lightning", "storm"], label: "神羅・負載天徵", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
+  { id: "blade-barrage", requires: ["fireball", "frost"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
+  { id: "edge-flash", requires: ["fireball", "shockwave"], label: "炎呼吸・邊緣瞬閃", englishLabel: "CloudFront Edge Flash", service: "Amazon CloudFront", color: 0xff5500 },
+  { id: "omniscience", requires: ["storm", "shockwave"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0xff2a6d },
+];
+
+export function comboArtFor(ids) {
+  if (!Array.isArray(ids) || ids.length < 2 || Object.keys(SPELLS).every(id => ids.includes(id))) return null;
+  return COMBO_ARTS.find(combo => combo.requires.every(id => ids.includes(id))) || null;
+}
+
 export const FULL_RELEASE_RANGE = 128;
 
 export function validWallet(wallet) {
@@ -194,6 +212,7 @@ export class MagicCombat {
     this.cooldown = 0;
     this.fields = [];
     this.clones = [];
+    this.combos = [];
     this.anchor = null;
     this.release = null;
   }
@@ -219,6 +238,8 @@ export class MagicCombat {
         this.cooldown = 0;
         this.cast(id, level, origin, direction, () => true, batch);
       }
+      const combo = comboArtFor(ids);
+      if (combo) this.spawnCombo(combo, origin, direction, batch);
       if (Object.keys(SPELLS).every(id => ids.includes(id))) {
         if (this.release) {
           this.release.done = true;
@@ -230,6 +251,40 @@ export class MagicCombat {
       }
     } finally { this.cooldown = Math.max(...ids.map(id => SPELLS[id].cooldown)); }
     return true;
+  }
+  spawnCombo(combo, origin, direction, batch) {
+    const length = Math.hypot(direction.x, direction.z) || 1;
+    const forward = { x: direction.x / length, z: direction.z / length };
+    const power = this.power();
+    if (combo.id === "blade-barrage") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, dx: forward.x, dz: forward.z,
+        age: 0, step: 0, duration: 2.6, power, batch };
+      this.combos.push(state);
+      this.effect("blade-barrage", state, { dx: forward.x, dz: forward.z, range: 75, duration: 2.6, color: combo.color }, 1);
+    } else if (combo.id === "singularity") {
+      const center = { x: origin.x + forward.x * 20, z: origin.z + forward.z * 20 };
+      const state = { id: combo.id, x: center.x, z: center.z, age: 0, step: 0, duration: 2.5, power, batch };
+      this.combos.push(state);
+      this.effect("singularity", state, { range: 26, duration: 2.5, color: combo.color }, 1);
+    } else if (combo.id === "almighty-push") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 2.0, power, batch };
+      this.combos.push(state);
+      this.effect("almighty-push", state, { range: 32, duration: 2.0, color: combo.color }, 1);
+    } else if (combo.id === "omniscience") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, age: 0, step: 0, duration: 7.0, power, batch };
+      this.combos.push(state);
+      this.effect("omniscience", state, { range: 28, duration: 7.0, color: combo.color }, 1);
+    } else if (combo.id === "edge-flash") {
+      const state = { id: combo.id, x: origin.x, z: origin.z, dx: forward.x, dz: forward.z,
+        age: 0, step: 0, duration: 3.0, power, batch };
+      this.combos.push(state);
+      this.effect("edge-flash", state, { dx: forward.x, dz: forward.z, range: 65, duration: 3.0, color: combo.color }, 1);
+    } else if (combo.id === "titan-meteor") {
+      const impact = { x: origin.x + forward.x * 22, z: origin.z + forward.z * 22 };
+      const state = { id: combo.id, x: impact.x, z: impact.z, age: 0, step: 0, duration: 2.6, power, batch };
+      this.combos.push(state);
+      this.effect("titan-meteor", state, { range: 26, duration: 2.6, color: combo.color }, 1);
+    }
   }
   cast(id, level, origin, direction, pay, batch = {}) {
     if (!this.canCast(id, level, origin, direction) || typeof pay !== "function" || pay(SPELLS[id].cost) !== true) return false;
@@ -387,6 +442,71 @@ export class MagicCombat {
       this.anchor.done = true;
       this.anchor = null;
     }
+    for (const combo of [...this.combos]) {
+      combo.age += dt;
+      if (combo.id === "blade-barrage") {
+        while (combo.step < 3 && combo.age + 1e-8 >= 0.45 + combo.step * 0.6) {
+          combo.step++;
+          const targets = this.enemies(combo, 75).filter(target => {
+            const dx = target.x - combo.x, dz = target.z - combo.z, dist = Math.hypot(dx, dz);
+            return !dist || (dx * combo.dx + dz * combo.dz) / dist >= 0.25;
+          }).slice(0, 4);
+          for (const target of targets) this.damage(target, Math.round(combo.power * 2.2), combo.batch);
+        }
+      } else if (combo.id === "singularity") {
+        while (combo.step < 2 && combo.age + 1e-8 >= 0.55 + combo.step * 0.6) {
+          combo.step++;
+          for (const target of this.enemies(combo, 26)) {
+            this.push?.(target, combo, target.boss ? -1 : -3.5);
+            this.slow?.(target, target.boss ? 0.4 : 1.2);
+          }
+        }
+        if (combo.step === 2 && combo.age + 1e-8 >= 1.95) {
+          combo.step++;
+          for (const target of this.enemies(combo, 26)) {
+            this.damage(target, Math.round(combo.power * 5.5), combo.batch);
+            this.push?.(target, combo, target.boss ? 1.5 : 5);
+          }
+        }
+      } else if (combo.id === "almighty-push") {
+        while (combo.step < 2 && combo.age + 1e-8 >= 0.35 + combo.step * 0.85) {
+          combo.step++;
+          for (const target of this.enemies(combo, 32)) {
+            this.damage(target, Math.round(combo.power * 3.0), combo.batch);
+            this.push?.(target, combo, target.boss ? 1.5 : 6);
+          }
+        }
+      } else if (combo.id === "omniscience") {
+        while (combo.step < 6 && combo.age + 1e-8 >= 0.8 + combo.step * 1.0) {
+          combo.step++;
+          for (const target of this.enemies(combo, 28)) {
+            this.damage(target, Math.round(combo.power * 1.8), combo.batch);
+            this.slow?.(target, target.boss ? 0.5 : 1.5);
+          }
+        }
+      } else if (combo.id === "edge-flash") {
+        while (combo.step < 3 && combo.age + 1e-8 >= 0.3 + combo.step * 0.75) {
+          combo.step++;
+          for (const target of this.enemies(combo, 65)) {
+            const dx = target.x - combo.x, dz = target.z - combo.z, dist = Math.hypot(dx, dz);
+            if (!dist || (dx * combo.dx + dz * combo.dz) / dist >= 0.35)
+              this.damage(target, Math.round(combo.power * 3.2), combo.batch);
+          }
+        }
+      } else if (combo.id === "titan-meteor") {
+        if (combo.step === 0 && combo.age + 1e-8 >= 1.2) {
+          combo.step++;
+          for (const target of this.enemies(combo, 26)) {
+            this.damage(target, Math.round(combo.power * 9.0), combo.batch);
+            this.push?.(target, combo, target.boss ? 2 : 5);
+          }
+        }
+      }
+      if (combo.age >= combo.duration) {
+        combo.done = true;
+        this.combos.splice(this.combos.indexOf(combo), 1);
+      }
+    }
   }
   incomingDamage(value, position, health, maxHealth) {
     if (this.fields.some(field => field.id === "storm" && field.age < 8 &&
@@ -411,8 +531,10 @@ export class MagicCombat {
     if (this.anchor) this.anchor.done = true;
     this.fields.forEach(field => { field.done = true; });
     this.clones.forEach(clone => { clone.done = true; });
+    this.combos.forEach(combo => { combo.done = true; });
     this.fields.length = 0;
     this.clones.length = 0;
+    this.combos.length = 0;
     this.anchor = null;
   }
 }

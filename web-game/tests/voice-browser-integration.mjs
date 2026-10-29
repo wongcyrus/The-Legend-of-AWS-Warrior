@@ -1072,7 +1072,7 @@ try {
   })()`);
   assert.match(await desktop.evaluate(`document.querySelector('#magic-selection').textContent`), /2 selected.*32 MP.*45s/);
   assert.equal(await desktop.evaluate("__game.castMagic()"), true);
-  assert.equal(await desktop.evaluate("attackAnnouncements.at(-1).text"), "瞬式，事件雷切。領域展開，無量儲存");
+  assert.equal(await desktop.evaluate("attackAnnouncements.at(-1).text"), "赫式，毫秒爆裂。瞬式，事件雷切。領域展開，無量儲存");
   assert.equal(backend.wallet.balance, 68);
   assert.match(await desktop.evaluate(`document.querySelector('#cloud-art-title').textContent`), /Event-Driven λ.*Infinite Storage/);
   assert.equal(await desktop.evaluate("__game.magic.fields.length"), 1);

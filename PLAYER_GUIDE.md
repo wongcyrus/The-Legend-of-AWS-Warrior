@@ -73,10 +73,14 @@ Earn **MP** (up to 100 MP) by passing graded **Voice Practice** activities on AW
 | **`6`** | **結界術・私有雲界** (`Private Cloud Barrier`) | Amazon VPC | `15 MP` / `25s` | Forms a 12-unit ward for 8s that halves incoming damage and knocks back intruders. |
 | **`7`** | **終式・跨區復甦** (`Cross-Region Recovery`) | Disaster Recovery | `25 MP` / `60s` | Places a 12s recovery anchor (after a 1s windup) that intercepts one lethal/low-HP hit and restores you to 35% HP at the anchor. |
 
-### Elemental Combo Synergies
-Combining specific Cloud Arts in a single cast triggers bonus architectural synergies:
-- **Cold-Start Surge (`Event-Driven λ` + `Domain: Infinite Storage`)**: Casting Lightning together with Storage Domain arcs `50%` overload lightning + a `1.5s` chill to **every enemy inside the 16-unit Storage Domain**, even beyond the normal 3-target chain limit.
-- **VPC Peered Fleet (`Auto Scaling Army` + `Private Cloud Barrier`)**: Summoning your Auto Scaling clones alongside a VPC Barrier grants **peered shadow clones** with a wider strike radius (`5.8` units) and knockback on every clone strike.
+### Anime × AWS Awakening Combo Arts
+Combining 2, 3, or 4 Cloud Arts in a single cast awakens an **Anime × AWS Combo Art** with its own 2-line banner, Cantonese TTS battle cry, and 3D anime visual effect:
+- **千刃・容器萬解 / `Fargate Blade Barrage` (`[3] Event-Driven λ` + `[4] Auto Scaling Army`)**: Opens a golden *Gate of Babylon / Senbonzakura* portal arch behind the Warrior and launches 18 spinning energy blades up to `75` units ahead across 3 volleys.
+- **赫式・毫秒爆裂 / `Dynamo Singularity` (`[3] Event-Driven λ` + `[5] Domain: Infinite Storage`)**: Spirals *Blue (`蒼`)* and *Red (`赫`)* orbs into a *Hollow Purple (`茈`)* DynamoDB Singularity `20` units ahead that pulls monsters inward and detonates in a supernova burst (plus **Cold-Start Surge** lightning across the domain).
+- **神羅・負載天徵 / `ALB Almighty Push` (`[4] Auto Scaling Army` + `[6] Private Cloud Barrier`)**: Unleashes *Shinra Tensei* gravity domes and 16 radial shock-spikes across a `32`-unit radius that blast surrounding enemies backward while summoning **VPC Peered Fleet** shadow clones.
+- **天照・全知之眼 / `CloudWatch Omniscience` (`[5] Domain: Infinite Storage` + `[6] Private Cloud Barrier`)**: Projects an All-Seeing *Sharingan / Astrolabe* mandala (`28`-unit radius) with a sweeping 360° X-Ray trace beam and black-crimson *Amaterasu* flame pillars that burn and slow enemies for `7s`.
+- **炎呼吸・邊緣瞬閃 / `CloudFront Edge Flash` (`[3] Event-Driven λ` + `[7] Cross-Region Recovery`)**: Unleashes a `65`-unit coiling *Rengoku Flame & Thunder Dragon* with 8 erupting Edge-PoP fire pillars along the forward path.
+- **創成・基岩星隕 / `Bedrock Titan Meteor` (`[5] Domain: Infinite Storage` + `[7] Cross-Region Recovery`)**: Summons a colossal *Tengai Shinsei* polyhedral asteroid from the sky (`y = 52`) that crashes down `22` units ahead after `1.2s`, dealing `9×` Power AoE impact damage and raising tectonic spires.
 
 ### Ultimate: 全域部署 / Global Deployment
 Select **all 5 Cloud Arts (`3`–`7`)** to transform the cast button into **全域部署 (`87 MP`, `60s` cooldown)**:
