@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { MONSTERS, monsterFor, monsterAnimations, clearShot, SpikeShots } from '../v2/monsters.js';
+import { GUIDE_ARCHETYPES, guideArchetype } from '../v2/guides.js';
 
 function modelClass(context) {
   const source = readFileSync(new URL('../v2/monster-models.js', import.meta.url), 'utf8');
@@ -309,4 +310,35 @@ test('model swaps release unique materials and skeleton textures but preserve ca
   assert.equal(releasedBones, 1);
   assert.equal(detached, 1);
   assert.equal(models.ready(['Yeti']), true);
+});
+
+test('all 16 monster species and 4 guide character archetypes have valid local 3D models, textures and licenses', () => {
+  assert.equal(Object.keys(MONSTERS).length, 16);
+  for (const [name, profile] of Object.entries(MONSTERS)) {
+    assert.ok(profile.health > 0 && profile.damage > 0 && profile.scale > 0, name);
+    assert.ok(existsSync(new URL(`../resources/monsters/FBX/${name}.fbx`, import.meta.url)), `${name}.fbx`);
+    assert.ok(existsSync(new URL(`../resources/monsters/Textures/${name}_Texture.png`, import.meta.url)), `${name}_Texture.png`);
+  }
+  const spawnedAcrossWorld = new Set(
+    ['village', 'mountains', 'desert', 'dungeon'].flatMap(map =>
+      Array.from({ length: map === 'village' ? 24 : 15 }, (_, index) => monsterFor(map, index)))
+  );
+  assert.equal(spawnedAcrossWorld.size, 16, 'all 16 monster models appear across the four map rosters');
+
+  assert.equal(GUIDE_ARCHETYPES.length, 4);
+  for (let i = 0; i < 4; i++) {
+    const archetype = guideArchetype(i);
+    assert.ok(existsSync(new URL(`../${archetype.model.slice(2)}`, import.meta.url)), archetype.model);
+    if (archetype.format === 'glb') {
+      const bytes = readFileSync(new URL(`../${archetype.model.slice(2)}`, import.meta.url));
+      assert.equal(bytes.toString('ascii', 0, 4), 'glTF');
+      assert.equal(bytes.readUInt32LE(4), 2);
+    }
+  }
+  assert.match(readFileSync(new URL('../v2/assets/quaternius/LICENSE.txt', import.meta.url), 'utf8'),
+    /Creative Commons Zero/);
+  const playerGuide = readFileSync(new URL('../../PLAYER_GUIDE.md', import.meta.url), 'utf8');
+  assert.match(playerGuide, /Timed Perfect Parry/);
+  assert.match(playerGuide, /Cold-Start Surge/);
+  assert.match(playerGuide, /16-Monster Bestiary/);
 });

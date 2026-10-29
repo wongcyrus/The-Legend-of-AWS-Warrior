@@ -1,5 +1,6 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js";
 import { FBXLoader } from "https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/FBXLoader.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/GLTFLoader.js";
 import { entity } from "../src/entity.js";
 import { entity_manager } from "../src/entity-manager.js";
 import { player_entity } from "../src/player-entity.js";
@@ -23,13 +24,13 @@ import { drawMinimap } from "./minimap.js?v=20261029-v2-features-1";
 import { WorldEvents } from "./world-events.js?v=20261029-v2-features-1";
 import { createRenderer, WebGLUnavailableError } from "./renderer.js";
 import { findMeleeTargets, findMovementBlockers } from "./combat.js?v=20261027-equipment-1";
-import { GuidePatrol } from "./guides.js";
+import { GuidePatrol, guideArchetype } from "./guides.js?v=20261029-guides-1";
 import { SoundEffects } from "./audio.js?v=20261029-cloud-avatar-1";
 import { WEAPONS, FINISHES, AdventureProgress, DodgeMotion } from "./adventure.js?v=20261027-equipment-1";
 import { CombatFeedback } from "./feedback.js";
 import { findMonsterSpawn, MonsterRespawns } from "./spawning.js?v=20261027-maps-1";
 import { BUILDINGS, GUIDES, LAKE, PLAYER_SPAWN, CHESTS, BOSS, regionAt, seededRandom } from "./layout.js";
-import { MONSTERS, monsterFor, superMonsterProfile, clearShot, SpikeShots } from "./monsters.js?v=20261029-v2-features-1";
+import { MONSTERS, monsterFor, superMonsterProfile, clearShot, SpikeShots } from "./monsters.js?v=20261029-monsters-1";
 import { MonsterModels } from "./monster-models.js?v=20261028-magic-1";
 import { SHIELDS, ShieldGuard } from "./shields.js?v=20261029-v2-features-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
@@ -165,9 +166,10 @@ class QuestComponent extends entity.Component {
 }
 
 class GuideController extends entity.Component {
-  constructor(game, home) {
+  constructor(game, home, index = 0) {
     super();
     this.game = game;
+    this.archetype = guideArchetype(index);
     this.patrol = new GuidePatrol({
       home, random: seededRandom(Math.round((home.x + 200) * 1000 + home.z + 200)),
       canStep: (x, z) => game.world.canWalk(x, z) &&
@@ -182,15 +184,30 @@ class GuideController extends entity.Component {
   }
 
   async load() {
-    const loader = new FBXLoader();
-    const load = url => new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
-    const [model, idle, walk] = await Promise.all([
-      load("./resources/girl/peasant_girl.fbx"),
-      load("./resources/girl/Standing Idle.fbx"),
-      load("./resources/guard/Sword And Shield Walk.fbx"),
-    ]);
+    let model, idleClip, walkClip;
+    if (this.archetype.format === "glb") {
+      const loader = new GLTFLoader();
+      const gltf = await new Promise((resolve, reject) => loader.load(this.archetype.model, resolve, undefined, reject));
+      model = gltf.scene || gltf;
+      const clips = gltf.animations || [];
+      idleClip = clips.find(c => this.archetype.idleClip.test(c.name)) || clips[0];
+      const rawWalk = clips.find(c => this.archetype.walkClip.test(c.name)) || idleClip;
+      walkClip = rawWalk.clone();
+    } else {
+      const loader = new FBXLoader();
+      const load = url => new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
+      const [fbxModel, idle, walk] = await Promise.all([
+        load(this.archetype.model),
+        load(this.archetype.idle),
+        load(this.archetype.walk),
+      ]);
+      model = fbxModel;
+      idleClip = idle.animations[0];
+      walkClip = walk.animations[0].clone();
+      walkClip.tracks = walkClip.tracks.filter(track => model.getObjectByName(track.name.split(".")[0]));
+    }
     this.model = model;
-    model.scale.setScalar(0.035);
+    model.scale.setScalar(this.archetype.scale);
     model.traverse(object => {
       object.castShadow = true;
       object.receiveShadow = true;
@@ -201,15 +218,13 @@ class GuideController extends entity.Component {
     this._parent._mesh = model;
     this.game.scene.add(model);
     this.mixer = new THREE.AnimationMixer(model);
-    const walkClip = walk.animations[0].clone();
-    walkClip.tracks = walkClip.tracks.filter(track => model.getObjectByName(track.name.split(".")[0]));
-    for (const track of walkClip.tracks.filter(track => track.name.endsWith("Hips.position"))) {
+    for (const track of walkClip.tracks.filter(track => /(?:Hips|Bone)\.position$/.test(track.name))) {
       for (let i = 3; i < track.values.length; i += 3) {
         track.values[i] = track.values[0];
         track.values[i + 2] = track.values[2];
       }
     }
-    this.actions = { idle: this.mixer.clipAction(idle.animations[0]), walk: this.mixer.clipAction(walkClip) };
+    this.actions = { idle: this.mixer.clipAction(idleClip), walk: this.mixer.clipAction(walkClip) };
     this.action = this.actions.idle;
     this.action.play();
     this.syncModel();
@@ -217,7 +232,7 @@ class GuideController extends entity.Component {
 
   syncModel() {
     this.model.position.copy(this._parent._position);
-    this.model.position.y = 0.35;
+    this.model.position.y = this.archetype.yOffset ?? 0.35;
     this.model.quaternion.copy(this._parent._rotation);
   }
 
@@ -1267,7 +1282,7 @@ class Game {
       spell.range, `${spell.cost} MP / ${spell.cooldown}s`, spell.tradeoff, spell.bestFor,
     ]));
     document.getElementById("manual-shields").textContent =
-      `${Object.values(SHIELDS).join(", ")}. All five have the same protection; appearance differs. Hold R to block frontal hits within 60 degrees of facing. Sides and rear remain exposed. Heavy hits deal half damage (rounded up), break guard for 1.5 seconds, and require a fresh R press.`;
+      `${Object.values(SHIELDS).join(", ")}. All five have the same protection; appearance differs. Hold R to block frontal hits within 60 degrees of facing. Sides and rear remain exposed. Heavy hits deal half damage (rounded up), break guard for 1.5 seconds, and require a fresh R press. Timed Perfect Parry: pressing R within 0.25 seconds of a frontal hit negates all damage without breaking guard, reflects ranged spikes for 2x damage, and staggers melee attackers (+25% bonus damage taken for 2.5 seconds).`;
     this.guard.release();
     if (this.player) {
       const keys = this.player.GetComponent("BasicCharacterControllerInput")._keys;
@@ -1601,9 +1616,9 @@ class Game {
   }
 
   spawnGuides() {
-    for (const guide of GUIDES) {
+    GUIDES.forEach((guide, index) => {
       const npc = new entity.Entity();
-      npc.AddComponent(new GuideController(this, guide));
+      npc.AddComponent(new GuideController(this, guide, index));
       npc.AddComponent(new SpatialGridController({ grid: this.grid }));
       npc.AddComponent(new QuestComponent(this));
       npc.SetPosition(new THREE.Vector3(guide.x, 0, guide.z));
@@ -1622,7 +1637,7 @@ class Game {
       circle.position.set(guide.x, 0.09, guide.z);
       this.scene.add(circle);
       marker.userData.ring = circle;
-    }
+    });
   }
 
   spawnEnemies() {
@@ -1796,8 +1811,11 @@ class Game {
     Object.keys(keys).forEach(key => { keys[key] = false; });
     this.dodge.remaining = 0;
     this.guard.release();
+    const expeditionGuideSlot = { mountains: 1, desert: 2, dungeon: 3 }[id];
     this.guideActors.forEach((actor, index) => {
-      const guide = map.guides[index], active = Boolean(guide);
+      const guide = id === "village" ? map.guides[index] :
+        (index === expeditionGuideSlot ? map.guides[0] : null);
+      const active = Boolean(guide);
       register(actor, active, guide ? [guide.x, guide.z] : null);
       const patrol = actor.GetComponent("GuideController");
       patrol.model.visible = active;

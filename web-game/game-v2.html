@@ -164,8 +164,10 @@
     <h2 id="manual-title">Weapons, shields and magic</h2>
     <div id="manual-content" class="combat-manual-content" tabindex="0" role="region" aria-label="Combat instructions and power tables">
       <p>The game pauses while this manual is open. Complete AWS tasks in your account, then defeat a monster to grade your work. Magic kills use the same grading rules as melee kills.</p>
+      <h3>How to play &amp; quest loop</h3>
+      <p>1. Set your API key using Set Key in the top bar (or explore freely without a key). 2. Approach any guide with a golden marker (Cloudhaven Keeper, Highland Knight, Sunspire Guardian, or Vault Construct) and press E to receive an AWS task. 3. Build the requested AWS resources in your AWS account, then defeat any monster to trigger automated grading. Each passed mission restores a village building and unlocks cosmetic weapon finishes.</p>
       <h3>Controls</h3>
-      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: unleash your selected cloud art. 3-7: toggle cloud arts. Each art has a fixed MP cost; there are no power levels. R: hold to block (press just before impact for a Perfect Parry). Q: dodge. Scroll: zoom. Shift + scroll or C / V: cycle weapons and shields. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. Walk into a glowing gate at a road end to travel automatically. F near a chest: open it.</p>
+      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: unleash your selected cloud art. 3-7: toggle cloud arts. Each art has a fixed MP cost; there are no power levels. R: hold to block (press just before impact for a Perfect Parry). Q: dodge. Scroll: zoom. Shift + scroll or C / V: cycle weapons and shields. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. Walk into a glowing gate at a road end to travel automatically. F near a chest: open it. You can also click the interactive action chips in the bottom control bar.</p>
       <h3>All weapons</h3>
       <p id="manual-strength"></p>
       <p>Unarmed uses your full Power because no weapon is equipped; weapon multipliers apply only to equipped items.</p>
@@ -178,13 +180,15 @@
       <p>Cooldown is shared across arts, so switching cannot bypass it. Obstacles block attacks. Fields stay where cast; moving away does not move them. Travel, account changes and death remove fields, clones and recovery anchors. These are fictional AWS-inspired combat metaphors, not actual AWS service capabilities.</p>
       <div class="manual-table"><table><caption>Cloud arts, situations and tradeoffs</caption><thead><tr><th scope="col">Art</th><th scope="col">Damage</th><th scope="col">Range</th><th scope="col">MP / shared cooldown</th><th scope="col">Effect</th><th scope="col">Best situation</th></tr></thead><tbody id="manual-spells"></tbody></table></div>
       <p>MP comes only from passed voice activities: 60-74 earns 5 MP, 75-89 earns 10 MP, and 90-100 earns 15 MP, credited up to the 100 MP capacity. Each activity rewards once. Reading, repeated passes, kills, waiting and missions never replenish MP. Dialogs, loading, travel and death block casting.</p>
-      <h3>Shields</h3>
+      <h3>Shields &amp; Perfect Parry</h3>
       <p id="manual-shields"></p>
+      <h3>World regions, dynamic events &amp; bestiary</h3>
+      <p>Explore four interconnected regions: Cloudlands Village, Frostpeak Highlands (Tailwind: +12% movement speed in northern highlands), Sunspire Desert (Sunspire Oasis: +2 HP/s regeneration), and the nine-room Forgotten Vault (Compute Overclock: +15% melee attack speed in the central chamber). Periodic AZ Outage Alerts mark an amber zone on your minimap—defeat 2 monsters near the outage within 45 seconds to trigger a High Availability Surge (+20% movement and attack speed for 20s and +20 HP). Across the four maps you will encounter 16 distinct creature types including Whispering Treants, Mirrorwater Crabs, Cloud Hornets, Crimson Demons, Sunspire Wyverns, Void Stalkers, Vault Sentinels, Highland Stags, and Bamboo Guardians.</p>
       <h3>Super monsters</h3>
-      <p>Look for the orange SUPER MONSTER nameplate: Frostpeak Titan, Sunspire Overlord or Vault Nightlord. They are larger, tougher and hit harder. They respawn normally and give no extra reading badges or mission marks.</p>
+      <p>Look for the orange SUPER MONSTER nameplate: Frostpeak Titan (Glacial Shockwave &amp; chill), Sunspire Overlord (3-way Spike Volley), or Vault Nightlord (Shadow Step ambush). They are larger, tougher and hit harder. They respawn normally and give no extra reading badges or mission marks.</p>
     </div>
     <div class="dialog-actions"><button id="manual-close" type="button">Back to game</button></div>
   </dialog>
-  <script src="./v2/main.js?v=20261029-ui-controls-1" type="module"></script>
+  <script src="./v2/main.js?v=20261029-player-guide-1" type="module"></script>
 </body>
 </html>

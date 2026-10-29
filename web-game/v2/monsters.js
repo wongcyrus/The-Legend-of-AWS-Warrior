@@ -12,6 +12,24 @@ export const MONSTERS = {
     acceleration: 0, range: 38, reach: 38, windup: 1, cooldown: 2.4, ranged: true },
   Bat: { ...ordinary, label: "Vault bat", health: 45, damage: 5,
     acceleration: 65, scale: 0.022, windup: 0.5, cooldown: 0.9, hover: 2.2 },
+  Tree: { ...ordinary, label: "Whispering treant", health: 145, damage: 13,
+    acceleration: 26, scale: 0.03, range: 6.5, reach: 6.2, windup: 1, cooldown: 1.7 },
+  Crab: { ...ordinary, label: "Mirrorwater crab", health: 110, damage: 9,
+    acceleration: 35, scale: 0.025, windup: 0.75, cooldown: 1.3 },
+  Bee: { ...ordinary, label: "Cloud hornet", health: 55, damage: 7,
+    acceleration: 60, scale: 0.022, windup: 0.55, cooldown: 1, hover: 2 },
+  Demon: { ...ordinary, label: "Crimson demon", health: 130, damage: 15,
+    acceleration: 42, scale: 0.028, range: 6.5, reach: 6, windup: 0.85, cooldown: 1.5 },
+  YellowDragon: { ...ordinary, label: "Sunspire wyvern", health: 160, damage: 17,
+    acceleration: 46, scale: 0.028, range: 6.5, reach: 6.2, windup: 0.9, cooldown: 1.6, hover: 1.8 },
+  Alien: { ...ordinary, label: "Void stalker", health: 95, damage: 11,
+    acceleration: 52, scale: 0.025, windup: 0.65, cooldown: 1.2 },
+  Alien_Tall: { ...ordinary, label: "Vault sentinel", health: 125, damage: 14,
+    acceleration: 36, scale: 0.028, range: 6.5, reach: 6.2, windup: 0.85, cooldown: 1.5 },
+  Deer: { ...ordinary, label: "Highland stag", health: 90, damage: 10,
+    acceleration: 54, scale: 0.026, windup: 0.7, cooldown: 1.3 },
+  Panda: { ...ordinary, label: "Bamboo guardian", health: 140, damage: 14,
+    acceleration: 30, scale: 0.029, range: 6.2, reach: 6, windup: 0.95, cooldown: 1.6 },
 };
 
 export const SUPER_MONSTERS = {
@@ -31,13 +49,16 @@ export function superMonsterProfile(name, map) {
 }
 
 const rosters = {
-  village: ["Ghost", "GreenDemon", "Cyclops", "Skull"],
-  mountains: ["Yeti", "Yeti", "Ghost", "Yeti", "Cyclops", "Yeti", "Ghost",
-    "Yeti", "Yeti", "Ghost", "Yeti", "Cyclops", "Yeti", "Ghost", "Yeti"],
-  desert: ["Cactus", "Skull", "Cactus", "Cactus", "GreenDemon", "Cactus", "Skull",
-    "Cactus", "Skull", "Cactus", "Cactus", "GreenDemon", "Cactus", "Skull", "Cactus"],
-  dungeon: ["Bat", "Bat", "Ghost", "Bat", "Skull", "Bat", "Ghost",
-    "Bat", "Bat", "Ghost", "Bat", "Skull", "Bat", "Ghost", "Bat"],
+  village: ["Ghost", "GreenDemon", "Cyclops", "Skull",
+    "Tree", "Crab", "Bee", "Demon", "Panda", "Deer", "YellowDragon", "Alien",
+    "Tree", "Crab", "Bee", "Demon", "Panda", "Deer", "Alien_Tall", "Ghost",
+    "GreenDemon", "Cyclops", "Skull", "Tree"],
+  mountains: ["Yeti", "Yeti", "Deer", "Yeti", "Panda", "Yeti", "YellowDragon",
+    "Yeti", "Deer", "Panda", "Cyclops", "YellowDragon", "Ghost", "Tree", "Yeti"],
+  desert: ["Cactus", "YellowDragon", "Cactus", "Cactus", "Bee", "Cactus", "Crab",
+    "Cactus", "Demon", "Skull", "YellowDragon", "GreenDemon", "Bee", "Crab", "Cactus"],
+  dungeon: ["Bat", "Bat", "Alien", "Bat", "Alien_Tall", "Bat", "Demon",
+    "Bat", "Alien", "Alien_Tall", "Demon", "Ghost", "Skull", "GreenDemon", "Bat"],
 };
 
 export function monsterFor(map, index) {

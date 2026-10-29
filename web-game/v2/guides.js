@@ -1,6 +1,53 @@
 export const GUIDE_ROAM_RADIUS = 6;
 export const GUIDE_WALK_SPEED = 1.5;
 
+export const GUIDE_ARCHETYPES = [
+  {
+    id: "keeper",
+    label: "Cloudhaven Keeper",
+    format: "fbx",
+    model: "./resources/girl/peasant_girl.fbx",
+    idle: "./resources/girl/Standing Idle.fbx",
+    walk: "./resources/guard/Sword And Shield Walk.fbx",
+    scale: 0.035,
+    yOffset: 0.35,
+  },
+  {
+    id: "knight",
+    label: "Highland Knight",
+    format: "glb",
+    model: "./v2/assets/quaternius/KnightCharacter.glb",
+    idleClip: /Idle$/i,
+    walkClip: /Walking/i,
+    scale: 1.4,
+    yOffset: 0,
+  },
+  {
+    id: "guardian",
+    label: "Sunspire Guardian",
+    format: "fbx",
+    model: "./resources/guard/castle_guard_01.fbx",
+    idle: "./resources/guard/Sword And Shield Idle.fbx",
+    walk: "./resources/guard/Sword And Shield Walk.fbx",
+    scale: 0.035,
+    yOffset: 0.35,
+  },
+  {
+    id: "construct",
+    label: "Vault Construct",
+    format: "glb",
+    model: "./v2/assets/quaternius/RobotExpressive.glb",
+    idleClip: /^Idle$/i,
+    walkClip: /^Walking$/i,
+    scale: 1.25,
+    yOffset: 0,
+  },
+];
+
+export function guideArchetype(index = 0) {
+  return GUIDE_ARCHETYPES[((index % GUIDE_ARCHETYPES.length) + GUIDE_ARCHETYPES.length) % GUIDE_ARCHETYPES.length];
+}
+
 export class GuidePatrol {
   constructor({ home, canStep, random = Math.random }) {
     this.home = { x: home.x, z: home.z };

@@ -219,6 +219,8 @@ npm run deploy
 
 ## Web Game
 
+For a complete player-facing handbook covering controls, combat mechanics, Cloud Art synergies, world regions, and the 16-monster bestiary, see [**`PLAYER_GUIDE.md`**](PLAYER_GUIDE.md) or click the **Combat manual** book icon in the top navigation bar while playing.
+
 Classic remains at `/game.html`; V2 is at `/game-v2.html`.
 The Marks page offers both versions. V2 adds a village, market, forest, lake,
 bridge, ruins, minimap, quest markers and adjustable graphics quality.
@@ -245,8 +247,8 @@ monster deaths, and task/result sounds. Enemy cues fade with distance and are
 rate-limited to avoid overlapping noise. Audio starts after the first key press or click. Mute and
 volume controls are in the top navigation; their settings persist in this browser.
 The **Voice marks** link opens a separate tab so the current game stays open.
-Click the weapon and shield icons to equip items, or Shift + scroll over the game to
-cycle weapons. Scroll zooms the camera; keys 1/2/0 select Sword/Axe/Unarmed.
+Click the weapon and shield icons to equip items, press `C` / `V` (or `Shift + scroll` over the game) to
+cycle weapons and shields, or press keys `1` / `2` / `0` to select Sword / Axe / Unarmed and keys `3`–`7` to toggle the five Cloud Arts.
 The equipped icons have an orange border. Hover an icon for its name; the weapon
 summary shows damage, attack style and reach. The weapon bar scrolls horizontally
 on small screens. Scrolling UI panels or an open dialog does not switch weapons.
@@ -256,11 +258,12 @@ spears and other long weapons have greater reach. Hold R to
 stop frontal melee hits and cactus spikes; guarding slows movement and prevents
 attacks. Your back remains exposed. Heavy Yeti and Warden blows deal half damage
 through a block and break the guard for 1.5 seconds; release R before blocking again.
+Pressing R within **0.25 seconds** before a frontal hit triggers a **Timed Perfect Parry**, which negates all damage (even from heavy boss blows) without breaking your guard, reflects ranged spikes back at the attacker for 2x damage, and staggers melee attackers for 2.5 seconds (+25% bonus damage taken).
 Blocking lasts only while R is held; it is not a toggle.
 Selecting No shield removes protection. Bows are not included; cloud arts provide
 ranged and area attacks.
-The bottom control bar holds the keyboard hints; the equipment panel only shows
-blocking, guard-break and dodge status while active, plus nearby targets.
+The bottom control bar holds interactive keyboard hints (which can also be clicked directly); the equipment panel only shows
+blocking, guard-break and dodge status while active, plus nearby targets and world event alerts.
 Sword attacks are fast; the axe hits harder but swings more slowly. Q dodges
 backward, or toward a held movement key, with a short invulnerable window and a
 cooldown. Dodges respect walls, water and actors. Enemy ground rings warn of
@@ -287,8 +290,9 @@ Desert, and the nine-room Forgotten Vault. Walk into a gate to enter. Gate trave
 arrives at the matching doorway facing into the destination, without immediately
 bouncing back. Each map has a return gate; **Return to village** uses the village's
 safe spawn and also works after death.
-Highlands mix slow, heavy-hitting Yetis with existing monsters; the desert adds
-stationary Cacti with aimed, dodgeable spikes; the vault adds fast, fragile Bats.
+Highlands mix slow, heavy-hitting Yetis with Highland Stags, Bamboo Guardians, Sunspire Wyverns, Whispering Treants, Cyclopes, and Ghosts; the desert adds
+stationary Cacti (with aimed, dodgeable spikes) alongside Sunspire Wyverns, Cloud Hornets, Mirrorwater Crabs, Crimson Demons, Green Demons, and Skulls; the vault adds fast, fragile Bats alongside Void Stalkers, Vault Sentinels, Crimson Demons, Ghosts, Skulls, and Green Demons. Across all four maps, 16 animated CC0 Quaternius creature models and 4 distinct NPC Guide character models (`peasant_girl.fbx`, `KnightCharacter.glb`, `castle_guard_01.fbx`, and `RobotExpressive.glb`) bring the regions to life.
+Each region also features environmental modifiers (**Highland Tailwind** +12% movement speed in northern Frostpeak Highlands, **Sunspire Oasis** +2 HP/s regeneration in the desert oasis, and **Compute Overclock** +15% melee attack speed in the central Vault chamber) and periodic **AZ Outage Alert** world events (marked on the minimap; defeating 2 monsters near the outage within 45s restores the AZ for +20 HP and a 20s **High Availability Surge** granting +20% speed and attack haste).
 New monster models load on the first visit and are cached for later trips.
 Each destination has a guide and ordinary monsters that keep the same E-to-task,
 kill-to-grade loop. Travel does not change the active task, key, marks, equipment,
@@ -387,6 +391,10 @@ The book icon in the top navigation opens the **Combat manual** with live weapon
 shield and cloud-art values; the manual pauses gameplay.
 
 Combined casts add the selected MP costs and use the longest selected cooldown.
+Pairing specific Cloud Arts in a combined cast triggers **Elemental Synergies**:
+- **Cold-Start Surge (`Event-Driven λ` + `Domain: Infinite Storage`)**: Arcs 50% overload lightning and a 1.5s chill to every enemy inside the 16-unit Storage domain.
+- **VPC Peered Fleet (`Auto Scaling Army` + `Private Cloud Barrier`)**: Grants peered shadow clones with a wider 5.8-unit strike radius and knockback on every hit.
+
 The server reserves the whole selection in one transaction: insufficient MP means
 none of the attacks fire, and retries cannot debit twice. A miss still consumes MP.
 Switching selections does not bypass the shared cooldown. Reloading restores the
