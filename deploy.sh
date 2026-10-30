@@ -50,7 +50,21 @@ PARAMETER_OVERRIDES="SecretHash=$SecretHash"
 if [ "$ENABLE_VOICE_PRACTICE" = "false" ]; then
     PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES EnableVoicePractice=false"
 elif [ "$ENABLE_VOICE_PRACTICE" = "true" ]; then
-    PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES EnableVoicePractice=true"
+    VoiceAgentCodeBucket=$(aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" \
+        --region "$AWS_REGION" \
+        --no-cli-pager \
+        --query "Stacks[0].Parameters[?ParameterKey=='VoiceAgentCodeBucket'].ParameterValue" \
+        --output text 2>/dev/null || echo "")
+    if [ -z "$VoiceAgentCodeBucket" ] || [ "$VoiceAgentCodeBucket" = "None" ] || [ "$VoiceAgentCodeBucket" = "voice-agent-not-configured" ]; then
+        VoiceAgentCodeBucket=$(aws s3api list-buckets --query "Buckets[?starts_with(Name, 'aws-sam-cli-managed-default-samclisourcebucket-')].Name | [0]" --output text)
+    fi
+    echo "Packaging VoiceAgent into s3://$VoiceAgentCodeBucket..."
+    VOICE_PKG_OUT=$(bash "$SCRIPT_DIR/admin/package_voice_agent.sh" "$VoiceAgentCodeBucket")
+    echo "$VOICE_PKG_OUT"
+    VoiceAgentCodeKey=$(echo "$VOICE_PKG_OUT" | grep '^VoiceAgentCodeKey=' | cut -d'=' -f2)
+    VoiceModelId="${VOICE_MODEL_ID:-us.amazon.nova-2-lite-v1:0}"
+    PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES EnableVoicePractice=true VoiceAgentCodeBucket=$VoiceAgentCodeBucket VoiceAgentCodeKey=$VoiceAgentCodeKey VoiceModelId=$VoiceModelId"
 fi
 
 sam build && sam deploy \

@@ -211,6 +211,22 @@ export function createAgent({ send = command => client.send(command), modelId = 
 }
 ```
 
+### 3.3 How One AgentCore Runtime Handles Two Completely Different Tasks (`grade_reading` vs. `grade_answer`)
+
+A natural question is: *"Read-Aloud (comparing spoken text against a passage) and Architectural Q&A (grading open-ended reasoning against a concept rubric) are completely different tasks. How can a single AgentCore runtime handle both?"*
+
+The secret is that while we deploy **one `AWS::BedrockAgentCore::Runtime` service** to keep cloud infrastructure simple and cost-efficient, it is **not** a single generic prompt. Instead, [`src/VoiceAgent/agent.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoiceAgent/agent.mjs#L137-L288) acts as an **Operation-Dispatched Multi-Persona Agent**: on every `POST /invocations` call, it inspects `payload.operation` and instantiates a **fresh, stateless Strands `Agent`** with a dedicated system prompt, input schema, token budget, and output validator:
+
+| Architectural Dimension | Case 1: Graded Read-Aloud (`operation: "grade_reading"`) | Case 2: Architectural Q&A (`operation: "grade_answer"`) |
+| :--- | :--- | :--- |
+| **Core AI Task** | **STT-Aware Passage Alignment**: Checks how much of the passage was spoken (`coverage: 0–70`) and whether its meaning was preserved (`content: 0–30`). | **Rubric Concept & Evidence Extraction**: Evaluates whether the student's open-ended explanation demonstrates each weighted concept (`met`, `missing`, `contradicted`). |
+| **Why Use an LLM Instead of String Diff (`===`)?** | Browser Web Speech API frequently transcribes `"S3"` as `"S three"`, `"EC2"` as `"easy two"`, `"CIDR"` as `"cider"`, or code-switches Cantonese and English. A string-similarity algorithm unfairly penalizes STT homophones; **Nova 2 Lite** recognizes they mean the same thing. | Students can explain an architecture in infinite valid ways across English, Hong Kong Cantonese, and Mandarin. |
+| **Input Payload (`input`)** | `{ readingTexts: { "en-US": "...", "zh-HK": "...", "zh-CN": "..." }, transcript }` | `{ question: { id, prompt, concepts: [{id, description, weight}], misconceptions, acceptableAnswers, referenceAnswer }, transcript }` |
+| **Dedicated System Prompt (`system`)** | [`agent.mjs#L171-L192`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoiceAgent/agent.mjs#L171-L192): *"This is NOT a comprehension quiz: do not demand an explanation, new examples, or answers to questions... Assess transcript coverage (0..70) and faithful passage content (0..30)."* | [`agent.mjs#L197-L225`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoiceAgent/agent.mjs#L197-L225): *"You grade the student's CURRENT answer against the approved question rubric... For met and contradicted, evidence MUST be a short verbatim excerpt copied from the current transcript."* |
+| **Token Budget (`maxTokens`)** | `1000` tokens | `1800` tokens |
+| **Output JSON Contract** | `{"score": 85, "breakdown": {"coverage": 60, "content": 25}, "feedback": "..."}` | `{"concepts": [{"id": "storage", "verdict": "met", "evidence": "..."}], "feedback": "..."}` *(Model is forbidden from outputting a numeric score!)* |
+| **Deterministic Validator** | [`validateReadingGrade`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoiceAgent/agent.mjs#L98-L106): Enforces integer bounds (`0..70`, `0..30`, `score = coverage + content`) and blocks voice/pronunciation claims. | [`validateAnswerGrade`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoiceAgent/agent.mjs#L37-L65) + [`gradeAnswer`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/questions.mjs#L50-L65): Enforces verbatim `NFKC` substring evidence in `transcript` and sums concept weights server-side. |
+
 ---
 
 ## 4. Anti-Hallucination & Two-Phase Algorithmic Verification
