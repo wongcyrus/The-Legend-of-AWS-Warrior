@@ -2073,11 +2073,17 @@ class Game {
       (effect.kind === "titan-meteor" && effect.age < 1.6) ||
       (effect.kind === "planetary-devastation" && effect.age < 2.2));
     target.y += 5 + charY * 0.75 + (skyMeteor ? 9 : 0);
-    const fullRelease = this.magicEffects?.active.some(effect => effect.kind === "avatar");
+    const fullRelease = this.magicEffects?.active.some(effect =>
+      effect.kind === "avatar" || effect.kind === "titan" || effect.kind === "release-boundary");
+    const comboFraming = this.magicEffects?.active.reduce((max, effect) => Math.max(max, {
+      "singularity": 82, "aurora-excalibur": 82, "planetary-devastation": 62, "titan-meteor": 56,
+      "blade-barrage": 62, "edge-flash": 58, "susanoo-mecha": 56, "malevolent-shrine": 54,
+      "infinite-void": 60, "almighty-push": 52, "time-rewind": 50,
+    }[effect.kind] || 0), 0) || 0;
     const halfFov = this.camera.fov * Math.PI / 360;
     const fitFov = Math.min(halfFov, Math.atan(Math.tan(halfFov) * this.camera.aspect));
     const framing = fullRelease ? FULL_RELEASE_RANGE / Math.sin(fitFov) / Math.hypot(1, 0.65) :
-      (charY > 0 || skyMeteor ? 42 : 0);
+      Math.max(comboFraming, charY > 0 || skyMeteor ? 48 : 0);
     const cameraDistance = Math.max(this.cameraDistance, framing);
     const viewDistance = cameraDistance * Math.hypot(1, 0.65);
     const far = Math.max(850, viewDistance + FULL_RELEASE_RANGE * 2);
@@ -2091,15 +2097,17 @@ class Game {
       .set(0, cameraDistance * 0.65 + charY * 0.4, -cameraDistance)
       .applyQuaternion(this.player._rotation).add(this.player._position);
     this.camera.position.lerp(desired, 1 - Math.pow(0.002, dt));
-    const direction = (this._cameraDir ??= new THREE.Vector3()).copy(this.camera.position).sub(target);
-    let distance = direction.length();
-    const ray = (this._cameraRay ??= new THREE.Ray()).set(target, direction.normalize());
-    const hit = (this._cameraHit ??= new THREE.Vector3());
-    for (const box of this.cameraBoxes) {
-      const intersection = ray.intersectBox(box, hit);
-      if (intersection && intersection.distanceTo(target) < distance) {
-        distance = Math.max(0.5, intersection.distanceTo(target) - 0.8);
-        this.camera.position.copy(target).addScaledVector(direction, distance);
+    if (!fullRelease && !comboFraming && charY <= 0) {
+      const direction = (this._cameraDir ??= new THREE.Vector3()).copy(this.camera.position).sub(target);
+      let distance = direction.length();
+      const ray = (this._cameraRay ??= new THREE.Ray()).set(target, direction.normalize());
+      const hit = (this._cameraHit ??= new THREE.Vector3());
+      for (const box of this.cameraBoxes) {
+        const intersection = ray.intersectBox(box, hit);
+        if (intersection && intersection.distanceTo(target) < distance) {
+          distance = Math.max(0.5, intersection.distanceTo(target) - 0.8);
+          this.camera.position.copy(target).addScaledVector(direction, distance);
+        }
       }
     }
     this.camera.lookAt(target);

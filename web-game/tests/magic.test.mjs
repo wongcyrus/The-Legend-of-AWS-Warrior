@@ -985,4 +985,8 @@ test('cloud art synergies trigger Cold-Start Surge in storage domains and VPC Pe
   assert.equal(comboArtFor(Object.keys(SPELLS)), null, '5-spell ultimate remains Global Deployment');
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   assert.match(main, /combo \? combo\.label :/, 'combo arts speak only the combo art name without repeating combination elements');
+  assert.match(main, /effect\.kind === "avatar" \|\| effect\.kind === "titan" \|\| effect\.kind === "release-boundary"/,
+    'updateCamera zooms out for both Global Deployment avatars and The Rumbling titans');
+  assert.match(main, /if \(!fullRelease && !comboFraming && charY <= 0\)/,
+    'updateCamera skips obstacle box clamping when zooming out for ultimates and combos');
 });
