@@ -54,7 +54,7 @@ The `web-app/scripts/deploy.js` script reads the `.env` file directly and uses t
 All scripts have been updated to use the centralized configuration:
 
 ### Root Scripts
-- `deploy.sh` - Main deployment script
+- `deploy.sh` - Unified deployment script (builds SAM backend, injects API endpoints, builds React frontend, deploys to S3/CloudFront)
 - `teardown.sh` - Clean stack teardown script (empties S3, removes API keys, deletes stack)
 - `switch-env.sh` - Environment switcher (prod vs exam)
 - `describe_stack.sh` - Stack information viewer
