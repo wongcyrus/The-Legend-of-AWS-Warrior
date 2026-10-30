@@ -57,8 +57,23 @@ nav select { padding: 4px 6px; border-radius: 4px; font-size: 11px; }
 .player-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 7px 0; font-size: 10.5px; color: #d8d3be; }
 .player-stats span { background: #0f2126cc; border: 1px solid #b89d672e; border-radius: 6px; padding: 4px 5px; text-align: center; white-space: nowrap; }
 .player-stats b { display: block; font-size: 12px; color: #fff5cc; margin-top: 1px; }
-#home-button { width: 100%; margin: 5px 0 3px; font-size: 10.5px; font-weight: 600; padding: 6px 10px; background: #1d383de6; border-color: #d0b27755; }
+#home-button { width: 100%; margin: 5px 0 3px; font-size: 10.5px; font-weight: 600; padding: 6px 10px; background: #1d383de6; border-color: #d0b27755; transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease; }
 #home-button:hover { background: #2d5056; }
+#home-button.revive-needed {
+  background: linear-gradient(135deg, #a82424ee, #e04434ee);
+  border-color: #ffc29b;
+  color: #fff9ea;
+  font-weight: 700;
+  box-shadow: 0 0 14px #ff484899;
+  animation: revive-pulse 1.4s ease-in-out infinite;
+}
+#home-button.revive-needed:hover {
+  background: linear-gradient(135deg, #c43030, #ff5745);
+}
+@keyframes revive-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.02); filter: brightness(1.2); box-shadow: 0 0 18px #ff7070cc; }
+}
 .controls { bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; width: max-content; max-width: calc(100vw - 24px); gap: 6px 8px; background: #12262be6; padding: 7px 14px; border: 1px solid #e5d7ad38; border-radius: 28px; box-shadow: 0 10px 28px #07131799; backdrop-filter: blur(10px); font-size: 10px; }
 .controls span { display: inline-flex; align-items: center; white-space: nowrap; padding: 3px 6px; border-radius: 14px; color: #e8e0cc; }
 .controls [data-control-action] { cursor: pointer; border: 1px solid #e6cd9c29; background: #1a343acc; transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease; user-select: none; }

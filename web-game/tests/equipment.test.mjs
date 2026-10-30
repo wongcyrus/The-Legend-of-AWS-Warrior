@@ -449,3 +449,88 @@ test('keyboard shortcuts 3-7 toggle cloud arts, C/V cycle gear, and control bar 
   assert.equal(game.triggerControlAction('weapon'), true);
   assert.equal(game.weapon, 'Axe');
 });
+
+test('HP HUD is labeled HP and returning to village recovers HP and revives player', () => {
+  const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
+  assert.match(html, /<div class="health-heading"><strong>HP<\/strong><span id="health-value">100 \/ 100<\/span><\/div>/);
+  assert.doesNotMatch(html, /<div class="health-heading"><strong>Warrior<\/strong>/);
+
+  let healthText = '', barWidth = '', homeBtnText = '', reviveClass = true, stopped = false, played = false;
+  const doc = {
+    getElementById(id) {
+      if (id === 'health-value') return { set textContent(v) { healthText = v; } };
+      if (id === 'health-bar') return { style: { set width(v) { barWidth = v; } } };
+      if (id === 'home-button') return {
+        set textContent(v) { homeBtnText = v; },
+        classList: { remove() { reviveClass = false; } },
+      };
+      return null;
+    },
+  };
+
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const Game = runInNewContext(main.match(/class Game[\s\S]*?(?=\nconst game =)/)[0] + '\nGame;', {
+    PLAYER_SPAWN: [0, 0],
+    MAPS: { village: { spawn: [0, 0] } },
+    document: doc,
+  });
+
+  const healthComponent = {
+    _health: 0,
+    _maxHealth: 100,
+    IsAlive() { return this._health > 0; },
+    _UpdateUI() {
+      healthText = `${this._health} / ${this._maxHealth}`;
+      barWidth = '100%';
+    },
+  };
+  const controller = {
+    frostSlow: 1.5,
+    _target: { position: { set() {} }, rotation: { y: 0 } },
+    _velocity: { set() {} },
+    _mixer: { stopAllAction() { stopped = true; } },
+    _stateMachine: {
+      _currentState: { Name: 'death' },
+      SetState(name) { this._currentState = { Name: name }; },
+    },
+    _animations: {
+      death: { action: { stop() {}, reset() {} } },
+      idle: { action: { reset() {}, play() { played = true; } } },
+    },
+  };
+  const game = {
+    player: {
+      GetComponent(name) {
+        if (name === 'HealthComponent') return healthComponent;
+        if (name === 'BasicCharacterController') return controller;
+        return null;
+      },
+      SetPosition() {},
+      SetQuaternion() {},
+    },
+    map: { id: 'village' },
+    ready: true,
+    dodge: { remaining: 1 },
+    guard: { release() {} },
+    sound: { play() {} },
+    status() {},
+    renderer: { domElement: { focus() {} } },
+  };
+
+  // Run recoverHealth in game context
+  const recovered = runInNewContext('recoverHealth.call(game, false)', {
+    recoverHealth: Game.prototype.recoverHealth,
+    game,
+    document: doc,
+  });
+
+  assert.equal(recovered, true);
+  assert.equal(healthComponent._health, 100);
+  assert.equal(healthComponent.IsAlive(), true);
+  assert.equal(controller.frostSlow, 0);
+  assert.equal(controller._stateMachine._currentState.Name, 'idle');
+  assert.equal(stopped, true);
+  assert.equal(played, true);
+  assert.equal(homeBtnText, 'Return to village');
+  assert.equal(reviveClass, false);
+});

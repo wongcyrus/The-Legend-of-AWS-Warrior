@@ -84,6 +84,14 @@ class BasicCharacterController extends player_entity.BasicCharacterController {
 class BasicCharacterControllerInput extends player_input.BasicCharacterControllerInput {
   _onKeyDown(event) {
     if (event.target?.closest?.("input, select, dialog")) return;
+    const game = this._params.game;
+    if (game?.player && !game.player.GetComponent("HealthComponent")?.IsAlive?.()) {
+      if (!event.repeat && ["Space", "Enter", "KeyR", "KeyH"].includes(event.code)) {
+        event.preventDefault();
+        game.returnHome();
+        return;
+      }
+    }
     if (event.code === "KeyX") {
       event.preventDefault();
       if (!event.repeat) this._params.game.castMagic();
@@ -525,6 +533,20 @@ class EnemyAttackController extends entity.Component {
 }
 
 class HealthComponent extends health_component.HealthComponent {
+  _UpdateUI() {
+    super._UpdateUI();
+    const doc = typeof document !== "undefined" ? document : null;
+    const bar = doc?.getElementById("health-bar");
+    if (bar && this._maxHealth > 0) {
+      const pct = Math.max(0, Math.min(100, Math.round((this._health / this._maxHealth) * 100)));
+      bar.style.width = `${pct}%`;
+    }
+    const val = doc?.getElementById("health-value");
+    if (val) {
+      val.textContent = `${Math.ceil(this._health)} / ${this._maxHealth}`;
+    }
+  }
+
   _OnDamage(message) {
     if (!this.IsAlive() || !Number.isFinite(message.value) || message.value <= 0) return;
     const game = this._params.game;
@@ -585,10 +607,16 @@ class HealthComponent extends health_component.HealthComponent {
       }
     }
     if (this._params.updateUI) {
-      document.getElementById("health-value").textContent = `${this._health} / ${this._maxHealth}`;
+      this._UpdateUI();
       if (!this.IsAlive()) {
         game.guard.release();
-        this._params.game.status("You fell in battle. Return to the village to recover.");
+        const doc = typeof document !== "undefined" ? document : null;
+        const homeBtn = doc?.getElementById("home-button");
+        if (homeBtn) {
+          homeBtn.textContent = "Revive in village (Full HP)";
+          homeBtn.classList.add("revive-needed");
+        }
+        this._params.game.status("You fell in battle! Click 'Revive in village' or press Space to recover.");
       }
     }
   }
@@ -1853,6 +1881,9 @@ class Game {
     Object.keys(keys).forEach(key => { keys[key] = false; });
     this.dodge.remaining = 0;
     this.guard.release();
+    if (id === "village" || returning) {
+      this.recoverHealth(false);
+    }
     const expeditionGuideSlot = { mountains: 1, desert: 2, dungeon: 3 }[id];
     this.guideActors.forEach((actor, index) => {
       const guide = id === "village" ? map.guides[index] :
@@ -1901,7 +1932,11 @@ class Game {
     this.traveling = false;
     this.sound.play("portal");
     this.saveCheckpoint();
-    this.travelStatus(`Entered ${map.name}. Your AWS task is unchanged. Walk into the glowing return gate to travel back.`);
+    this.travelStatus(id === "village"
+      ? (returning
+          ? "Returned to Cloudhaven with full HP. Your active AWS task is saved."
+          : "Welcome back to Cloudhaven with full HP. Walk into glowing gates to explore.")
+      : `Entered ${map.name}. Your AWS task is unchanged. Walk into the glowing return gate to travel back.`);
     this.renderer.domElement.focus();
     return true;
   }
@@ -2072,25 +2107,68 @@ class Game {
 
   returnHome() {
     if (!this.player || !this.ready) return;
-    const injured = this.player.GetComponent("HealthComponent")._health <
-      this.player.GetComponent("HealthComponent")._maxHealth;
-    if (this.map.id !== "village" && !this.switchMap("village", true)) return;
     this.dodge.remaining = 0;
     this.guard.release();
+    if (this.map.id !== "village") {
+      this.switchMap("village", true);
+      this.recoverHealth(true);
+      return;
+    }
     const controller = this.player.GetComponent("BasicCharacterController");
     controller._target.position.set(PLAYER_SPAWN[0], 0, PLAYER_SPAWN[1]);
     controller._velocity.set(0, 0, 0);
     controller._target.rotation.y = Math.PI;
-    controller._stateMachine.SetState("idle");
     this.player.SetPosition(controller._target.position);
     this.player.SetQuaternion(controller._target.quaternion);
+    const recovered = this.recoverHealth(true);
+    this.status(recovered
+      ? "Revived in Cloudhaven with full HP! Your active quest is still saved."
+      : "Welcome back to Cloudhaven. Your active quest is still saved.");
+    this.renderer?.domElement?.focus();
+  }
+
+  recoverHealth(announce = true) {
+    if (!this.player) return false;
     const health = this.player.GetComponent("HealthComponent");
+    if (!health) return false;
+    const wasDead = !health.IsAlive();
+    const wasInjured = health._health < health._maxHealth;
     health._health = health._maxHealth;
-    if (injured) this.sound.play("revive");
-    health._UpdateUI();
-    document.getElementById("health-value").textContent = "100 / 100";
-    this.status("Welcome back to Cloudhaven. Your active quest is still saved.");
-    this.renderer.domElement.focus();
+    health._UpdateUI?.();
+    const doc = typeof document !== "undefined" ? document : null;
+    const valEl = doc?.getElementById?.("health-value");
+    if (valEl) valEl.textContent = `${health._maxHealth} / ${health._maxHealth}`;
+    const barEl = doc?.getElementById?.("health-bar");
+    if (barEl) barEl.style.width = "100%";
+    const homeBtn = doc?.getElementById?.("home-button");
+    if (homeBtn) {
+      homeBtn.textContent = "Return to village";
+      homeBtn.classList.remove("revive-needed");
+    }
+    const controller = this.player.GetComponent("BasicCharacterController");
+    if (controller) {
+      controller.frostSlow = 0;
+      if (wasDead || controller._stateMachine?._currentState?.Name === "death") {
+        const deathAction = controller._animations?.["death"]?.action;
+        if (deathAction) {
+          deathAction.stop?.();
+          deathAction.reset?.();
+        }
+        controller._mixer?.stopAllAction?.();
+        controller._stateMachine?.SetState?.("idle");
+        const idleAction = controller._animations?.["idle"]?.action;
+        if (idleAction) {
+          idleAction.reset?.();
+          idleAction.enabled = true;
+          idleAction.setEffectiveWeight?.(1.0);
+          idleAction.play?.();
+        }
+      }
+    }
+    if ((wasDead || wasInjured) && announce) {
+      this.sound?.play?.("revive");
+    }
+    return wasDead || wasInjured;
   }
 
   updateCamera(dt) {
