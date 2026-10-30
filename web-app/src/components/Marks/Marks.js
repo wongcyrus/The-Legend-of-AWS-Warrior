@@ -141,7 +141,7 @@ class Marks extends Component {
           Play Classic
         </Button>
         <a className="btn btn-primary ms-2" href="game-v2.html" target="_blank" rel="noopener noreferrer">
-          Try Enhanced Beta
+          Play AWS Warrior V2
         </a>
         <Button variant="outline-secondary" className="ms-2" onClick={this.loadMarks}
           disabled={this.state.loading || this.state.resetting}>

@@ -776,6 +776,8 @@ class Game {
       remove: shot => this.scene.remove(shot.mesh),
     });
     this.cameraDistance = 29;
+    this.cameraYaw = 0;
+    this.cameraPitch = 0.65;
     this.clock = new THREE.Clock();
     this.voiceWallet = new MagicWallet({
       baseUrl, readKey: () => localStorage.getItem("api_key"),
@@ -1494,6 +1496,31 @@ class Game {
       }
     });
     window.addEventListener("wheel", event => this.scrollEquipment(event), { passive: false });
+    const viewport = document.getElementById("container");
+    viewport?.addEventListener("pointerdown", event => {
+      if (event.button !== 0 && event.button !== 2) return;
+      if (document.querySelector("dialog[open]")) return;
+      this.cameraDrag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      viewport.setPointerCapture?.(event.pointerId);
+    });
+    viewport?.addEventListener("pointermove", event => {
+      if (!this.cameraDrag || this.cameraDrag.id !== event.pointerId) return;
+      const dx = event.clientX - this.cameraDrag.x, dy = event.clientY - this.cameraDrag.y;
+      this.cameraDrag.x = event.clientX;
+      this.cameraDrag.y = event.clientY;
+      this.cameraYaw = (this.cameraYaw || 0) - dx * 0.007;
+      this.cameraPitch = THREE.MathUtils.clamp((this.cameraPitch ?? 0.65) + dy * 0.005, 0.12, 1.35);
+    });
+    const endDrag = event => {
+      if (this.cameraDrag && (!event?.pointerId || this.cameraDrag.id === event.pointerId)) this.cameraDrag = null;
+    };
+    viewport?.addEventListener("pointerup", endDrag);
+    viewport?.addEventListener("pointercancel", endDrag);
+    viewport?.addEventListener("dblclick", () => {
+      this.cameraYaw = 0;
+      this.cameraPitch = 0.65;
+    });
+    viewport?.addEventListener("contextmenu", event => event.preventDefault());
     this.showQuest();
   }
 
@@ -2093,8 +2120,10 @@ class Game {
     }
     this.scene.fog.near = fullRelease ? Math.max(this.map.fogNear, viewDistance - FULL_RELEASE_RANGE) : this.map.fogNear;
     this.scene.fog.far = fullRelease ? Math.max(this.map.fogFar, viewDistance + FULL_RELEASE_RANGE * 2) : this.map.fogFar;
+    const pitch = this.cameraPitch ?? 0.65;
+    const yaw = this.cameraYaw || 0;
     const desired = (this._cameraDesired ??= new THREE.Vector3())
-      .set(0, cameraDistance * 0.65 + charY * 0.4, -cameraDistance)
+      .set(Math.sin(yaw) * cameraDistance, cameraDistance * pitch + charY * 0.4, -Math.cos(yaw) * cameraDistance)
       .applyQuaternion(this.player._rotation).add(this.player._position);
     this.camera.position.lerp(desired, 1 - Math.pow(0.002, dt));
     if (!fullRelease && !comboFraming && charY <= 0) {

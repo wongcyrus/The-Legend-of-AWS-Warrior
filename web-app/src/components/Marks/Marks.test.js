@@ -61,7 +61,7 @@ test('keeps Classic as the default and offers a separate enhanced beta', async (
   await screen.findByText('PassingTest');
   fireEvent.click(screen.getByRole('button', { name: 'Play Classic' }));
   expect(open).toHaveBeenCalledWith('game.html', '_blank');
-  const beta = screen.getByRole('link', { name: 'Try Enhanced Beta' });
+  const beta = screen.getByRole('link', { name: 'Play AWS Warrior V2' });
   expect(beta).toHaveAttribute('href', 'game-v2.html');
   expect(beta).toHaveAttribute('target', '_blank');
   expect(beta).toHaveAttribute('rel', 'noopener noreferrer');
