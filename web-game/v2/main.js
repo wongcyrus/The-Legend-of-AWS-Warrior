@@ -943,8 +943,8 @@ class Game {
     const spell = ids[0], level = this.magicLevel, map = this.map;
     const combined = ids.length > 1;
     const cost = ids.reduce((sum, id) => sum + SPELLS[id].cost, 0);
-    const chineseName = ultimate ? (rumbling ? "地鳴・全域踐踏" : "全域部署") : combo ? combo.label : ids.map(id => SPELLS[id].label).join(" ＋ ");
-    const englishName = ultimate ? (rumbling ? "The Rumbling · Titan Stampede" : "Global Deployment") : combo ? combo.englishLabel : ids.map(id => SPELLS[id].englishLabel).join(" + ");
+    const chineseName = ultimate ? (rumbling ? "地鳴・超大規模踏境" : "全域部署") : combo ? combo.label : ids.map(id => SPELLS[id].label).join(" ＋ ");
+    const englishName = ultimate ? (rumbling ? "Hyperscale Rumbling" : "Global Deployment") : combo ? combo.englishLabel : ids.map(id => SPELLS[id].englishLabel).join(" + ");
     let origin, forward;
     const valid = () => {
       if (this.map !== map || !this.canCastMagic()) return false;
@@ -960,7 +960,7 @@ class Game {
       this.guard.release();
       this.sound.play({ lightning: "magicLightning", fireball: "magicFire", frost: "magicFrost",
         storm: "magicStorm", shockwave: "magicShock" }[spell]);
-      this.sound.speakAttack(ultimate ? (rumbling ? "地鳴・全域踐踏。The Rumbling" : "全域部署。Global Deployment") :
+      this.sound.speakAttack(ultimate ? (rumbling ? "地鳴・超大規模踏境。Hyperscale Rumbling" : "全域部署。Global Deployment") :
         combo ? combo.label :
         ids.map(id => SPELLS[id].label).join("。"));
       if (ultimate) {
