@@ -4,7 +4,6 @@
 *AWS Community Hero | Programme Leader of IT114115 (Higher Diploma in Cloud and Data Centre Administration), Hong Kong Institute of Information Technology (HKIIT)*  
 **Previous Article**: [The Legend of AWS Warrior: A Free Opensource 3D RPG Adventure Game with Generative AI for learning AWS](https://builder.aws.com/content/2ftYEIAT0IlnPwAhvKhlD4PL52h/the-legend-of-aws-warrior-a-free-opensource-3d-rpg-adventure-game-with-generative-ai-for-learning-aws)  
 **Open Source Repository**: [github.com/wongcyrus/The-Legend-of-AWS-Warrior](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior)  
-**Live Game**: [https://d13jdzao0nxn1n.cloudfront.net/game-v2.html](https://d13jdzao0nxn1n.cloudfront.net/game-v2.html)  
 
 ---
 
@@ -629,10 +628,8 @@ Deploying **The Legend of AWS Warrior V2** to our IT114115 cohorts yielded trans
 
 ## 8. Open Source & Getting Started
 
-The entire codebase is open-source and ready for educators and builders to deploy.
+The entire codebase is open-source and ready for educators, students, and builders to deploy to their own AWS accounts.
 
-- **Live Production Game**: [https://d13jdzao0nxn1n.cloudfront.net/game-v2.html](https://d13jdzao0nxn1n.cloudfront.net/game-v2.html)
-- **Exam Portal**: [https://d2pvxxx1kpyhth.cloudfront.net](https://d2pvxxx1kpyhth.cloudfront.net)
 - **GitHub Repository**: [wongcyrus/The-Legend-of-AWS-Warrior](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior)
 
 ### Deploy to Your AWS Account
