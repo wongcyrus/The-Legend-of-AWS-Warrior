@@ -97,7 +97,33 @@ async function main(args) {
     console.log(`Question ${action === "approve" ? "approved" : "retired"}. Existing grades and rewards were not changed.`);
     return;
   }
-  throw new Error("Usage: node question-bank.mjs validate|publish|import FILE\n       node question-bank.mjs export FILE [SERVICE]\n       node question-bank.mjs approve|retire SERVICE QUESTION EXPECTED_REVISION");
+  if (["generate", "refresh"].includes(action) && target && id) {
+    const flags = args.slice(3);
+    const serviceList = id.split(",").map(s => s.trim()).filter(Boolean);
+    const countFlag = flags.find(f => f.startsWith("--count="));
+    const countPerService = countFlag ? Number(countFlag.split("=")[1]) : 2;
+    const force = flags.includes("--force");
+    const shouldPublish = flags.includes("--publish") || (Boolean(process.env.VOICE_TABLE) && !flags.includes("--no-publish"));
+    if (shouldPublish && !process.env.VOICE_TABLE) throw new Error("VOICE_TABLE is required when publishing");
+    const store = process.env.VOICE_TABLE ? (await import("./aws.mjs")).awsDependencies().store : null;
+    const { runQuestionBatchJob } = await import("./question-generator.mjs");
+    const summary = await runQuestionBatchJob({
+      mode: action,
+      services: serviceList,
+      countPerService,
+      status: "approved",
+      checkpointFile: target,
+      force,
+      publish: shouldPublish,
+      store,
+      onServiceComplete: ({ serviceId, questions }) => {
+        console.log(`[${action}] Completed ${serviceId}: ${questions.length} calibrated approved question(s) saved to ${target}${shouldPublish ? " & published to DynamoDB" : ""}.`);
+      },
+    });
+    console.log(`Finished ${action}: ${summary.completedServices.length} service(s) processed, ${summary.skippedServices.length} skipped from checkpoint, ${summary.publishedCount} question(s) published.`);
+    return;
+  }
+  throw new Error("Usage: node question-bank.mjs validate|publish|import FILE\n       node question-bank.mjs export FILE [SERVICE]\n       node question-bank.mjs approve|retire SERVICE QUESTION EXPECTED_REVISION\n       node question-bank.mjs generate|refresh FILE SERVICE[,SERVICE...] [--count=2] [--publish|--no-publish] [--force]");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

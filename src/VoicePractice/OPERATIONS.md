@@ -130,6 +130,14 @@ node src/VoicePractice/question-bank.mjs publish s3-export.json
 
 # Retirement takes the CURRENT revision (a new publication starts at 0):
 node src/VoicePractice/question-bank.mjs retire s3 private-screenshots 0
+
+# Strands Multi-Agent Question Generator & AWS Docs Auditor (resumable per service):
+# Mines common interview questions via Amazon Nova Web Grounding (nova_grounding),
+# verifies both question and answer against official AWS docs via https://knowledge-mcp.global.api.aws,
+# localizes into en-US, zh-HK and zh-CN, calibrates against synthetic student transcripts,
+# and checkpoints/publishes approved questions per service:
+node src/VoicePractice/question-bank.mjs generate generated-questions.json rds,cloudfront,ecs --count=2
+node src/VoicePractice/question-bank.mjs refresh refreshed-questions.json s3,ec2
 ```
 
 Exports include private concepts, acceptable answers and reference answers, **not

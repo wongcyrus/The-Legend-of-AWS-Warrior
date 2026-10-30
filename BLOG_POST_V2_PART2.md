@@ -355,6 +355,53 @@ VOICE_TABLE=CloudProjectMarker-VoicePracticeTable-xxxx \
   node src/VoicePractice/question-bank.mjs export questions-catalog.json
 ```
 
+### 5.3 Keeping Q&A Up to Date as AWS Evolves: A 4-Agent Strands `Graph` (`nova_grounding` + AWS Knowledge MCP)
+Because AWS services evolve rapidly—with new security defaults (such as S3 Block Public Access and SSE-S3 encryption enabled by default, or EC2 IMDSv2) and changing service capabilities—popular cloud interview questions and their traditional community answers frequently become outdated.
+
+To expand Q&A across our 302 AWS service landmarks and periodically audit existing questions without risking runtime hallucinations, we built a **resumable local batch pipeline** ([`src/VoiceAgent/question-generator.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoiceAgent/question-generator.mjs) & [`src/VoicePractice/question-generator.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/question-generator.mjs)) using the **Strands Agents SDK `Graph` orchestrator** (`@strands-agents/sdk`):
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│        STRANDS MULTI-AGENT QUESTION BANK PIPELINE (Graph Orchestrator)       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ [Agent 1: interview_miner]                                                   │
+│  • Uses Amazon Nova 2 Lite built-in web search (systemTool: nova_grounding)  │
+│  • Mines the most common real-world interview questions for the AWS service  │
+│                                      │                                       │
+│                                      ▼                                       │
+│ [Agent 2: aws_docs_fact_checker]                                             │
+│  • Connects via Strands McpClient to https://knowledge-mcp.global.api.aws    │
+│  • Calls aws___search_documentation & aws___read_documentation               │
+│  • Audits BOTH question premise & answer against live docs.aws.amazon.com    │
+│  • Rewrites outdated claims into misconceptions[] & builds 100-pt concepts[] │
+│                                      │                                       │
+│                                      ▼                                       │
+│ [Agent 3: trilingual_localizer]                                              │
+│  • Localizes prompts into en-US, zh-HK (HK Cantonese + AWS code-switching),  │
+│    and zh-CN (Simplified Chinese Mandarin with zero Cantonese characters)    │
+│                                      │                                       │
+│                                      ▼                                       │
+│ [Agent 4: calibration_critic + Live Grader Gate]                             │
+│  • Validates schema via validateQuestion()                                   │
+│  • Synthesizes 3 test student transcripts (goodEn, goodZhHk, wrongOutdated)  │
+│  • Runs real grade_answer + gradeAnswer() verifier:                          │
+│    Requires goodEn >= 80, goodZhHk >= 80, and wrongOutdated < 60             │
+│  • Saves per-service checkpoint & publishes approved items to DynamoDB       │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+Because generating, fact-checking against live MCP documentation, and calibrating across multiple services can take several minutes to hours depending on batch size, [`runQuestionBatchJob`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/question-generator.mjs#L42-L137) runs as a **resumable per-service local CLI batch job** that checkpoints after every service and publishes calibrated `status: "approved"` items directly to DynamoDB `VoicePracticeTable`:
+
+```bash
+# Generate & calibrate common interview Q&A for new services (resumable per service)
+AWS_REGION=us-east-1 VOICE_TABLE=CloudProjectMarker-VoicePracticeTable-xxxx \
+  node src/VoicePractice/question-bank.mjs generate generated-questions.json rds,cloudfront,ecs
+
+# Periodically audit & refresh existing DynamoDB questions against latest AWS Docs
+AWS_REGION=us-east-1 VOICE_TABLE=CloudProjectMarker-VoicePracticeTable-xxxx \
+  node src/VoicePractice/question-bank.mjs refresh refreshed-questions.json s3,ec2,iam,vpc,lambda,dynamodb
+```
+
 ---
 
 ## 6. CloudFormation, SAM & Dual-Stack DevOps (`Game Mode` vs. `Exam Mode`)
