@@ -40,7 +40,9 @@ In our original release of **The Legend of AWS Warrior (V1)**, we solved automat
 
 That proved students could build. But to make them **job-ready**, we had to bridge the communication gap. We had to move from **“Click-to-Learn”** to **“Speak-to-Learn.”**
 
-That vision is **The Legend of AWS Warrior V2**.
+Yet introducing voice training in educational institutions immediately exposes a physical hardware wall: **standard academic computer lab PCs do not have microphones**, and schools cannot supply or sanitize hundreds of headsets. To make voice practice viable in real-world classrooms without requiring a single dollar of hardware upgrades, we designed the system so students play the 3D game on their lab desktop, but use their personal smartphone as a wireless microphone via an ephemeral QR-code handoff.
+
+That complete vision is **The Legend of AWS Warrior V2**.
 
 ---
 
@@ -205,11 +207,29 @@ Submissions failing this gate return `HTTP 400 Bad Request` without reserving da
 
 ---
 
-### 3.4 The Mobile QR-Code Handoff Protocol
+### 3.4 The Classroom Reality: Why Mobile QR Handoff? ("Lab PCs Have No Mic")
 
-In educational institutions, desktop computers in computer labs rarely have headsets or working microphones. Forcing students to bring USB headsets is an adoption blocker.
+Every cloud instructor who has attempted to run voice or multimedia exercises in an educational institution hits the exact same brick wall: **institutional computer lab desktop PCs do not have microphones.**
 
-To solve this, we engineered the **Mobile QR-Code Handoff**:
+In our HKIIT / IVE computer labs:
+- **Standardized Enterprise Desktops**: Academic labs are populated by corporate desktop towers (Dell, HP) connected to standalone monitors. Unlike laptops, desktop towers have **no built-in microphone**.
+- **Disabled or Broken Audio Jacks**: Front 3.5mm audio jacks are frequently disabled by institutional desktop images for security, lack proper sound card drivers, or are physically damaged through years of student use.
+- **The Headset Procurement & Hygiene Nightmare**: Educational institutions cannot practically buy or maintain 40–60 headsets per room. Headsets suffer from high failure rates (broken wires, snapped headbands), and sharing headsets between hundreds of students daily creates obvious sanitary concerns.
+- **The "BYOD Headset" Failure**: Asking 50 students to "remember to bring your own USB headset tomorrow" is an operational failure in real life. Over 70% forget, stalling the lesson before it even begins.
+
+If a voice training platform requires a desktop microphone, **over 90% of students in a physical university or polytechnic lab are completely blocked from participating.**
+
+#### The Pocket Supercomputer: The Smartphone in Every Student's Pocket
+While lab PCs lack microphones, they feature large displays, keyboards, and mice—ideal for rendering our Three.js 3D game and writing AWS infrastructure code.
+
+Meanwhile, **100% of our students walk into the lab with a smartphone in their pocket.** Modern smartphones come equipped with studio-grade noise-cancelling microphone arrays, mobile browsers (iOS Safari, Android Chrome) with native Web Speech API support, and built-in cameras. 
+
+Instead of fighting the lab desktop's missing audio hardware, we architected the **Mobile QR-Code Handoff Protocol** to seamlessly turn the student's personal smartphone into a **wireless, plug-and-play microphone** for their lab desktop.
+
+#### Three Strict Architectural Mandates for Classroom Adoption
+1. **Zero App Store Downloads**: Students cannot be forced to download an iOS or Android app over campus Wi-Fi or cellular data. The entire mobile interface is a lightweight static web app served instantly via Amazon CloudFront.
+2. **Zero Login Friction**: Requiring students to type long academic email addresses and complex passwords on a mobile touchscreen creates massive friction and wastes class time. The desktop game generates a dynamic QR code embedding a single-use `sessionToken` backed by DynamoDB with a strict **5-minute TTL**. Scanning the QR code instantly authenticates the mobile session to that specific desktop workstation.
+3. **Sub-4-Second Real-Time Cross-Device Game Sync**: As soon as the student speaks into their phone, the transcript streams to API Gateway, evaluates via Amazon Bedrock AgentCore, and updates the session in DynamoDB. The desktop game polls API Gateway, instantly plays a celebratory victory chime, and unlocks Magic Power (MP) on the player's 3D HUD.
 
 ![AWS Warrior V2 Mobile QR-Code Voice Handoff Protocol Diagram](docs/aws_warrior_v2_qr_handoff_diagram.png)
 
