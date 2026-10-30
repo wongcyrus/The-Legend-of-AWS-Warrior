@@ -166,5 +166,24 @@ test('icon clicks check current voice availability without marking completion fr
     game.traveling = true;
     missionClick('iam');
     assert.equal(game.readingService, false);
+    game.traveling = false;
+    target = plaque;
+    const container = get('container');
+    const containerEvent = { target: container, button: 0, pointerId: 2, clientX: 40, clientY: 40 };
+    listeners.get('pointerdown')(containerEvent);
+    listeners.get('pointerup')(containerEvent);
+    frames.splice(0).forEach(fn => fn());
+    assert.equal(get('service-dialog').open, true);
+    assert.equal(get('service-title').textContent, 'Amazon ECS');
+    get('service-close').onclick();
+    assert.equal(get('service-dialog').open, false);
+
+    listeners.get('click')({
+      target: { closest: selector => selector === '[data-aws-service]' ? { dataset: { awsService: 'dynamodb' } } : null },
+    });
+    frames.splice(0).forEach(fn => fn());
+    assert.equal(get('service-dialog').open, true);
+    assert.equal(get('service-title').textContent, 'Amazon DynamoDB');
+    get('service-close').onclick();
   } finally { Object.assign(globalThis, previous); }
 });

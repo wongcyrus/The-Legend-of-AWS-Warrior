@@ -34,9 +34,9 @@ import { MONSTERS, monsterFor, superMonsterProfile, clearShot, SpikeShots } from
 import { MonsterModels } from "./monster-models.js?v=20261028-magic-1";
 import { SHIELDS, ShieldGuard } from "./shields.js?v=20261029-v2-features-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
-import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
+import { AWS_SERVICES, AWS_LANDMARKS, BUILDING_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
-import { bindServiceReader } from "./aws-service-reader.js?v=20261029-mandarin-door-1";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261030-click-fix-1";
 import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-6";
 import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-6";
 
@@ -2017,11 +2017,35 @@ class Game {
     return guide && guide._position.distanceTo(this.player._position) < 24 ? guide : null;
   }
 
+  nearbyAwsLandmark(range = 14) {
+    if (!this.player || !this.map) return null;
+    const pos = this.player._position;
+    const landmarks = AWS_LANDMARKS[this.map.id] || [];
+    for (const lm of landmarks) {
+      if (Math.hypot(pos.x - lm.x, pos.z - lm.z) <= range) return lm;
+    }
+    if (this.map.id === "village") {
+      for (let i = 0; i < BUILDINGS.length; i++) {
+        const b = BUILDINGS[i];
+        if (Math.hypot(pos.x - b.x, pos.z - b.z) <= range + 4) {
+          const service = BUILDING_SERVICES[i];
+          return { service, x: b.x, z: b.z, label: AWS_SERVICES[service]?.label };
+        }
+      }
+    }
+    return null;
+  }
+
   talkToGuide() {
     const quest = this.api.quest;
     const guide = this.nearbyGuide();
+    const landmark = !guide && !quest ? this.nearbyAwsLandmark?.(14) : null;
+    if (landmark) {
+      this.showService?.(landmark.service);
+      return;
+    }
     if (!quest && !guide) {
-      this.status("Move closer to a character with a golden marker, then press E.");
+      this.status("Move closer to a character with a golden marker or an AWS sign, then press E.");
       return;
     }
     if (!localStorage.getItem("api_key")?.trim()) {
@@ -2034,8 +2058,8 @@ class Game {
       this.showInstructions();
       return;
     }
-    this.renderer.domElement.focus();
-    guide.Broadcast({ topic: "input.picked" });
+    this.renderer?.domElement?.focus?.();
+    guide?.Broadcast?.({ topic: "input.picked" });
   }
 
   async talk(guide = null) {
@@ -2324,9 +2348,12 @@ class Game {
     const eventHint = this.worldEvents?.surge > 0 ? `AZ Restored: +20% Speed & Haste (${Math.ceil(this.worldEvents.surge)}s)` :
       this.worldEvents?.activeZone?.label ? this.worldEvents.activeZone.label :
       outage ? `Outage Alert: ${outage.label} (${Math.ceil(outage.remaining)}s)` : "";
+    const landmark = this.nearbyAwsLandmark?.(14);
+    const landmarkHint = landmark ? `${AWS_SERVICES[landmark.service]?.label || landmark.service.toUpperCase()}: Press E or click sign to learn` : "";
     document.getElementById("explore-hint").textContent = gate ? MAPS[gate.to].name :
       nearbyEnemy ? `${nearbyEnemy.GetComponent("NPCController").profile.label}: ${Math.ceil(enemyHealth._health)} / ${enemyHealth._maxHealth} HP` :
       chest ? chest.name :
+      landmarkHint ? landmarkHint :
       this.boss._position.distanceTo(position) < 35 && boss.IsAlive()
         ? `Optional: ${BOSS.name} ${Math.ceil(boss._health)} / ${boss._maxHealth} HP`
         : eventHint;

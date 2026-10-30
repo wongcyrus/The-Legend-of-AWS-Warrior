@@ -42,12 +42,22 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     get("service-read-state").textContent = game.readServices.has(selected) ? "Read" : "New discovery";
     checkAvailability(selected);
   };
-  const showService = id => {
-    const service = Object.hasOwn(AWS_SERVICES, id) ? AWS_SERVICES[id] : null;
+  const serviceAliases = {
+    bedrock: "amazon-bedrock",
+    stepfunctions: "aws-step-functions",
+    "step-functions": "aws-step-functions",
+    lakeformation: "aws-lake-formation",
+    "lake-formation": "aws-lake-formation",
+    ebs: "amazon-elastic-block-store",
+    sagemaker: "amazon-sagemaker",
+  };
+  const showService = rawId => {
+    const id = (rawId && serviceAliases[rawId]) || rawId;
+    const service = id && Object.hasOwn(AWS_SERVICES, id) ? AWS_SERVICES[id] : null;
     if (!service || !game.ready || game.traveling) return;
-    game.guard.release();
-    const keys = game.player.GetComponent("BasicCharacterControllerInput")._keys;
-    Object.keys(keys).forEach(key => { keys[key] = false; });
+    game.guard?.release?.();
+    const keys = game.player?.GetComponent?.("BasicCharacterControllerInput")?._keys;
+    if (keys) Object.keys(keys).forEach(key => { keys[key] = false; });
     get("service-icon").src = service.icon;
     get("service-title").textContent = service.label;
     get("service-category").textContent = service.category;
@@ -65,44 +75,85 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     if (!dialog.open) dialog.showModal();
     content.scrollTop = 0;
   };
-  get("mission-services").addEventListener("click", event => {
-    showService(event.target.closest("[data-aws-service]")?.dataset.awsService);
+  game.showService = showService;
+  get("mission-services")?.addEventListener("click", event => {
+    const service = event.target.closest("[data-aws-service]")?.dataset.awsService;
+    if (service) showService(service);
   });
+  document.addEventListener("click", event => {
+    const badge = event.target.closest?.("[data-aws-service]");
+    if (badge?.dataset?.awsService) {
+      showService(badge.dataset.awsService);
+      return;
+    }
+    if (event.target.closest?.(".aws-title-logo")) {
+      showService(selected || "s3");
+    }
+  });
+  const logo = document.querySelector(".aws-title-logo");
+  if (logo) {
+    logo.style.cursor = "pointer";
+    logo.title = "Explore AWS Cloud services in AWS Warrior";
+  }
   get("service-close").onclick = () => dialog.close();
   get("service-explain").onclick = () => voice.open(selected);
   dialog.addEventListener("close", () => {
     game.readingService = Boolean(get("voice-desktop-dialog").open);
     game.refreshServiceReader();
-    game.renderer?.domElement.focus();
+    game.renderer?.domElement?.focus?.();
   });
+  const isGameTarget = target => {
+    if (!target) return false;
+    const canvas = game.renderer?.domElement;
+    if (target === canvas) return true;
+    const container = document.getElementById("container");
+    return target === container || Boolean(container?.contains?.(target));
+  };
   const ray = new THREE.Raycaster(), point = new THREE.Vector2();
   const pick = event => {
+    if (!event || !game.renderer?.domElement || !game.world?.servicePlaques) return null;
     const bounds = game.renderer.domElement.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return null;
     point.set((event.clientX - bounds.left) / bounds.width * 2 - 1,
       -(event.clientY - bounds.top) / bounds.height * 2 + 1);
-    ray.setFromCamera(point, game.camera);
-    return ray.intersectObjects(game.world.servicePlaques.filter(object => object.visible), false)[0]?.object;
+    if (game.camera) {
+      game.camera.updateMatrixWorld?.();
+      ray.setFromCamera(point, game.camera);
+    }
+    const plaques = game.world.servicePlaques.filter(object => object.visible);
+    for (const p of plaques) p.updateMatrixWorld?.();
+    const hits = ray.intersectObjects(plaques, false);
+    for (const hit of hits) {
+      if (hit.object?.userData?.awsService) return hit.object;
+    }
+    return null;
   };
   document.addEventListener("pointermove", event => {
     const canvas = game.renderer?.domElement;
-    if (!canvas || event.target !== canvas || !game.ready || game.traveling) return;
+    if (!canvas || !isGameTarget(event.target) || !game.ready || game.traveling) return;
     const object = document.querySelector("dialog[open]") ? null : pick(event);
-    canvas.style.cursor = object ? "pointer" : "";
-    canvas.title = object ? `${AWS_SERVICES[object.userData.awsService].label}: Click to learn` : "";
+    const cursor = object ? "pointer" : "";
+    canvas.style.cursor = cursor;
+    const container = document.getElementById("container");
+    if (container) container.style.cursor = cursor;
+    const title = object?.userData?.awsService && AWS_SERVICES[object.userData.awsService]
+      ? `${AWS_SERVICES[object.userData.awsService].label}: Click to learn` : "";
+    canvas.title = title;
+    if (container) container.title = title;
   });
   let pressed;
   document.addEventListener("pointerdown", event => {
-    pressed = event.target === game.renderer?.domElement && event.button === 0 ?
+    pressed = isGameTarget(event.target) && event.button === 0 ?
       { x: event.clientX, y: event.clientY, id: event.pointerId } : null;
   });
   document.addEventListener("pointercancel", () => { pressed = null; });
   document.addEventListener("pointerup", event => {
     const start = pressed; pressed = null;
     if (!start || start.id !== event.pointerId || event.button !== 0 ||
-        Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6 ||
-        event.target !== game.renderer?.domElement || !game.ready || game.traveling ||
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) > 16 ||
+        !isGameTarget(event.target) || !game.ready || game.traveling ||
         document.querySelector("dialog[open]")) return;
-    const object = pick(event);
-    if (object) showService(object.userData.awsService);
+    const object = pick(event) || pick(start);
+    if (object?.userData?.awsService) showService(object.userData.awsService);
   });
 }
