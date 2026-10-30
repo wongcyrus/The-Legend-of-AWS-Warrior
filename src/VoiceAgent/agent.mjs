@@ -1,4 +1,5 @@
-import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
+import { Agent, BedrockModel } from "@strands-agents/sdk";
 
 const client = new BedrockRuntimeClient({ maxAttempts: 3, retryMode: "adaptive" });
 const text = (value, limit) => typeof value === "string" && value.trim().length > 0 && value.length <= limit;
@@ -106,14 +107,27 @@ export function validateReadingGrade(value) {
 
 export function createAgent({ send = command => client.send(command), modelId = process.env.VOICE_MODEL_ID } = {}) {
   const invoke = async (system, input, maxTokens) => {
-    const response = await send(new ConverseCommand({
-      modelId, system: [{ text: system }],
-      messages: [{ role: "user", content: [{ text: JSON.stringify(input) }] }],
-      inferenceConfig: { maxTokens, temperature: 0 },
-    }));
-    if (response.stopReason !== "end_turn") throw new Error("Incomplete model response");
-    const raw = response.output?.message?.content?.filter(block => typeof block.text === "string")
-      .map(block => block.text).join("") || "";
+    const model = new BedrockModel({ modelId, maxTokens, temperature: 0, stream: false });
+    model._client.send = async command => {
+      const response = await send(command);
+      if (response?.stopReason !== "end_turn") throw new Error("Incomplete model response");
+      return {
+        ...response,
+        output: {
+          ...response.output,
+          message: { role: "assistant", ...response.output?.message },
+        },
+        usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      };
+    };
+    const strandsAgent = new Agent({
+      model,
+      systemPrompt: system,
+      printer: false,
+      retryStrategy: null,
+    });
+    const result = await strandsAgent.invoke(JSON.stringify(input));
+    const raw = result.toString();
     if (raw.length > 30000) throw new Error("Model response too large");
     const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(raw.trim());
     return JSON.parse(fenced ? fenced[1] : raw);
