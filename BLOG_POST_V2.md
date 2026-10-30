@@ -211,6 +211,8 @@ In educational institutions, desktop computers in computer labs rarely have head
 
 To solve this, we engineered the **Mobile QR-Code Handoff**:
 
+![AWS Warrior V2 Mobile QR-Code Voice Handoff Protocol Diagram](docs/aws_warrior_v2_qr_handoff_diagram.png)
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -277,6 +279,8 @@ node src/VoicePractice/question-bank.mjs publish questions-catalog.json
 The most critical architectural achievement in AWS Warrior V2 is how we deployed **Amazon Bedrock AgentCore** as a deterministic, non-hallucinating oral evaluation engine. In many AI applications, LLMs are used as conversational chatbots that can wander, be jailbroken, or flatter the user into passing. 
 
 For an academic grading and interview training system, **the AI must be an incorruptible, mathematically grounded evaluator.**
+
+![Amazon Bedrock AgentCore Runtime & Anti-Hallucination Engine Diagram](docs/aws_warrior_v2_agentcore_runtime_diagram.png)
 
 ```mermaid
 flowchart TD
