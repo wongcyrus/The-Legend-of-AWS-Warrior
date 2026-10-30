@@ -612,6 +612,22 @@ test('recovery requires windup, catches one low-HP or lethal hit, expires and fa
   assert.equal(h.magic.incomingDamage(200, { x: 5, z: 5 }, 100, 100), 200);
 });
 
+test('Cross-Region recovery restores HP immediately upon cast and during combination casts', () => {
+  const h = harness();
+  let healedLevel = null;
+  h.magic.heal = level => { healedLevel = level; return true; };
+  h.cast('shockwave', 2);
+  assert.equal(healedLevel, 2, 'shockwave cast invokes heal with magic level');
+  assert.ok(h.magic.anchor, 'anchor is placed');
+  assert.equal(h.magic.cooldown, 60);
+
+  let comboHeals = 0;
+  const combo = harness();
+  combo.magic.heal = () => { comboHeals++; return true; };
+  combo.magic.castCombination(['lightning', 'shockwave'], 1, { x: 0, z: 0 }, { x: 0, z: 1 }, () => true);
+  assert.equal(comboHeals, 1, 'combo containing shockwave triggers recovery healing');
+});
+
 test('domain applies shorter boss control and ward expires without leaving protection', () => {
   const h = harness([{ id: 'boss', x: 0, z: 8, boss: true }]);
   h.cast('frost');
@@ -946,6 +962,9 @@ test('setupMagic recovery rejects occupied anchors and castMagic reports empty s
   blocker._position = { x: 25, z: 25 };
   assert.equal(game.magic.recover({ x: 10, z: 12 }, 35), true);
   assert.equal(health._health, 35);
+  assert.equal(game.magic.heal(1), true, 'game.magic.heal restores HP');
+  assert.equal(health._health, 70, 'restores 35% of max health on level 1');
+  assert.equal(healthText.textContent, '70 / 100', 'updates health-value element');
   assert.equal(controller._target.position.x, 10);
   assert.equal(controller._target.position.z, 12);
   assert.equal(await Game.prototype.castMagic.call(game), false);

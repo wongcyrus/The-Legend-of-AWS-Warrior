@@ -14,7 +14,8 @@ export const SPELLS = {
     bestFor: "Defending a position", tradeoff: "Eight-second ward halves incoming damage inside it and repels each intruder once." },
   shockwave: { label: "終式・跨區復甦", englishLabel: "Cross-Region Recovery", service: "Cross-Region recovery", color: 0x7dffd0, cost: 25,
     damage: 0, range: 0, cooldown: 60,
-    bestFor: "Preparing for a dangerous fight", tradeoff: "After a one-second windup, a 12-second anchor catches one hit taking HP to 25% or below, returns you and restores 35% HP." },
+    bestFor: "Recovering HP and surviving dangerous fights",
+    tradeoff: "Restores 35% HP instantly on cast. Also drops a 12-second anchor: if hit to 25% HP or below, returns you and restores 35% HP." },
 };
 
 export function spellDamage(id, level, power) {
@@ -226,8 +227,8 @@ export class MagicWallet {
 export class MagicCombat {
   constructor({ targets, canWalk, clear, damage, slow, push, effect, power = () => 50,
     recover = () => false, defeat = (target, batch) => damage(target, Number.MAX_SAFE_INTEGER, batch),
-    waveClear = clear }) {
-    Object.assign(this, { targets, canWalk, clear, damage, slow, push, effect, power, recover, defeat, waveClear });
+    waveClear = clear, heal = () => false }) {
+    Object.assign(this, { targets, canWalk, clear, damage, slow, push, effect, power, recover, defeat, waveClear, heal });
     this.cooldown = 0;
     this.fields = [];
     this.clones = [];
@@ -384,6 +385,7 @@ export class MagicCombat {
       if (this.anchor) this.anchor.done = true;
       this.anchor = { x: origin.x, z: origin.z, age: 0 };
       this.effect("anchor", this.anchor, { range: 3, duration: 13 }, 1);
+      this.heal?.(level);
     } else {
       for (const previous of this.fields.filter(field => field.id === id)) previous.done = true;
       this.fields = this.fields.filter(field => field.id !== id);

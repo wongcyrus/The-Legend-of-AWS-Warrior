@@ -37,7 +37,7 @@ import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipmen
 import { AWS_SERVICES, AWS_LANDMARKS, BUILDING_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
 import { bindServiceReader } from "./aws-service-reader.js?v=20261030-click-fix-1";
-import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-6";
+import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-recovery-hp-1";
 import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-6";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
@@ -967,7 +967,8 @@ class Game {
         if (rumbling && this.magicEffects.spawnRumblingFormation) this.magicEffects.spawnRumblingFormation(origin, forward);
         else this.magicEffects.spawnAvatarFormation(origin, forward);
       }
-      this.magicStatus(`${chineseName} cast! ${free ? "Infinitive Magic Mode - no MP spent." : `Spent ${cost} MP.`}`);
+      const healNotice = ids.includes("shockwave") ? "HP recovered. " : "";
+      this.magicStatus(`${chineseName} cast! ${healNotice}${free ? "Infinitive Magic Mode - no MP spent." : `Spent ${cost} MP.`}`);
       const title = document.getElementById("cloud-art-title");
       if (title) {
         const english = document.createElement("span"), chinese = document.createElement("span");
@@ -1045,6 +1046,7 @@ class Game {
         this.sound.play("portal");
         return true;
       },
+      heal: (level = 1) => (this.healPlayer || Game.prototype.healPlayer)?.call(this, level),
     });
   }
 
@@ -2193,6 +2195,31 @@ class Game {
       this.sound?.play?.("revive");
     }
     return wasDead || wasInjured;
+  }
+
+  healPlayer(level = 1) {
+    if (!this.player) return false;
+    const health = this.player.GetComponent?.("HealthComponent");
+    if (!health || (typeof health.IsAlive === "function" && !health.IsAlive())) return false;
+    const healPct = 0.35 + (level - 1) * 0.10;
+    const healAmount = Math.max(1, Math.round(health._maxHealth * healPct));
+    const prev = health._health;
+    health._health = Math.min(health._maxHealth, health._health + healAmount);
+    const actual = health._health - prev;
+    health._UpdateUI?.();
+    const doc = typeof document !== "undefined" ? document : null;
+    const val = doc?.getElementById?.("health-value");
+    if (val) val.textContent = `${health._health} / ${health._maxHealth}`;
+    const charController = this.player.GetComponent?.("BasicCharacterController");
+    const pos = charController?._target?.position || this.player._position;
+    if (pos && this.feedback?.show) {
+      const feedbackPos = typeof THREE !== "undefined" && THREE.Vector3 && pos.clone
+        ? pos.clone().add(new THREE.Vector3(0, 7, 0))
+        : { x: pos.x, y: (pos.y || 0) + 7, z: pos.z };
+      this.feedback.show(feedbackPos, actual > 0 ? `+${actual} HP` : "MAX HP", "#7dffd0");
+    }
+    this.sound?.play?.("portal");
+    return true;
   }
 
   updateCamera(dt) {
