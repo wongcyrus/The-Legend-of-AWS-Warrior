@@ -691,7 +691,7 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const playerTarget = { position: { x: 4, y: 0, z: 6 } };
   const effects = new MagicEffects(scene);
   const from = { x: 0, z: 0 }, to = { x: 0, z: 5, range: 10 };
-  for (const id of ['lightning', 'domain', 'ward', 'clone', 'anchor', 'recall', 'seal', 'cast',
+  for (const id of ['lightning', 'domain', 'ward', 'clone', 'anchor', 'recall', 'seal', 'cast', 'release-boundary',
     'blade-barrage', 'singularity', 'almighty-push', 'omniscience', 'edge-flash', 'titan-meteor',
     'susanoo-mecha', 'malevolent-shrine', 'planetary-devastation', 'time-rewind', 'aurora-excalibur', 'infinite-void'])
     effects.spawn(id, from, { ...to, duration: 2 });
@@ -726,6 +726,11 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const chibakuRocks = chibakuEffect.object.children.filter(c => c.userData?.chibakuRock !== undefined);
   assert.ok(chibakuPlanet.geometry.size >= 14 && chibakuRocks.length === 18 && chibakuRocks.every(r => r.geometry.size >= 6.8),
     'planetary-devastation forms a colossal stone planetoid and large boulders');
+  const releaseBoundary = effects.active.find(e => e.kind === 'release-boundary');
+  const destroyPillars = releaseBoundary.object.children.filter(c => c.userData?.destroyPillar !== undefined);
+  const destroyDebris = releaseBoundary.object.children.filter(c => c.userData?.destroyDebris !== undefined);
+  assert.ok(destroyPillars.length === 24 && destroyDebris.length === 24,
+    'global deployment release-boundary renders destruction pillars and erupting debris across the coverage area');
   effects.update(2.2);
   assert.equal(playerTarget.position.y, 0, 'main character returns to ground when almighty-push ends');
   assert.equal(effects.active.length, 0);

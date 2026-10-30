@@ -45,11 +45,54 @@ export class MagicEffects {
     const skins = [];
     if (kind === "release-boundary") {
       ring(radius);
-      material.opacity = 0.3;
+      ring(radius * 0.68);
+      ring(radius * 0.36);
+      material.opacity = 0.72;
+      const dome = mesh(new THREE.SphereGeometry(radius, segments, reduced ? 8 : 14, 0, Math.PI * 2, 0, Math.PI / 2));
+      dome.material = new THREE.MeshBasicMaterial({ color: 0xffb454, wireframe: true,
+        transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+      const fissureCount = reduced ? 4 : 8;
+      for (let i = 0; i < fissureCount; i++) {
+        const fissure = mesh(new THREE.BoxGeometry(1.8, 0.45, radius * 1.94), 0, 0.35, 0);
+        fissure.rotation.y = i * Math.PI / fissureCount;
+        fissure.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffb454 : 0xff5436,
+          transparent: true, opacity: 0.82, depthWrite: false, fog: false, toneMapped: false });
+      }
+      const pillarCount = reduced ? 12 : 24;
+      const pillarColors = [0xffd166, 0x38bdf8, 0xff477e];
+      for (let i = 0; i < pillarCount; i++) {
+        const a = i * Math.PI * 2 / pillarCount;
+        const rRatio = [0.26, 0.56, 0.86][i % 3];
+        const px = Math.cos(a) * radius * rRatio, pz = Math.sin(a) * radius * rRatio;
+        const pillar = mesh(new THREE.BoxGeometry(3.4, 52, 3.4), px, 26, pz);
+        pillar.material = new THREE.MeshBasicMaterial({ color: pillarColors[i % 3],
+          transparent: true, opacity: 0.88, depthWrite: false, fog: false, toneMapped: false });
+        pillar.userData = { destroyPillar: i, rRatio };
+        const spire = mesh(i % 2 ? new THREE.OctahedronGeometry(4.4) : new THREE.BoxGeometry(4.2, 14, 4.2),
+          Math.cos(a + 0.14) * radius * (rRatio + 0.06), 1.5, Math.sin(a + 0.14) * radius * (rRatio + 0.06));
+        spire.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0x3d281c : 0xea580c,
+          transparent: true, opacity: 0.95, depthWrite: true, fog: false, toneMapped: false });
+        spire.userData = { destroyDebris: i, rRatio };
+      }
     } else if (kind === "release-wave") {
-      const slash = mesh(new THREE.RingGeometry(0.88, 1, segments, 1, -Math.PI / 4, Math.PI / 2 - 0.04), 0, 2, 0);
+      const slash = mesh(new THREE.RingGeometry(0.88, 1, segments, 1, -Math.PI / 4, Math.PI / 2 - 0.04), 0, 0.02, 0);
       slash.rotation.x = -Math.PI / 2;
       slash.rotation.z = Math.PI / 2 - to.heading;
+      const upperSlash = mesh(new THREE.RingGeometry(0.91, 0.99, segments, 1, -Math.PI / 4, Math.PI / 2 - 0.04), 0, 0.08, 0);
+      upperSlash.rotation.x = -Math.PI / 2;
+      upperSlash.rotation.z = Math.PI / 2 - to.heading;
+      upperSlash.material = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true,
+        opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+      const spikeCount = reduced ? 4 : 8;
+      for (let i = 0; i < spikeCount; i++) {
+        const arc = (to.heading || 0) - Math.PI / 4 + (i + 0.5) * (Math.PI / 2) / spikeCount;
+        const r = 0.94;
+        const spike = mesh(i % 2 ? new THREE.OctahedronGeometry(0.045) : new THREE.BoxGeometry(0.038, 0.14, 0.038),
+          Math.sin(arc) * r, 0.06, Math.cos(arc) * r);
+        spike.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0xff5436 : 0x3d281c,
+          transparent: true, opacity: 0.92, depthWrite: true, fog: false, toneMapped: false });
+        spike.userData = { waveSpike: i };
+      }
     } else if (kind === "lightning") {
       const points = [];
       for (let i = 0; i <= 20; i++) {
@@ -508,7 +551,22 @@ export class MagicEffects {
         effect.object.scale.setScalar(effect.source.radius);
         effect.material.opacity = 0.85 * Math.min(1, (effect.duration - effect.age) / 0.2);
       } else if (effect.kind === "release-boundary") {
-        effect.material.opacity = 0.3 * Math.min(1, (effect.duration - effect.age) / 0.5);
+        effect.material.opacity = 0.72 * Math.min(1, (effect.duration - effect.age) / 0.5);
+        const waveAge = Math.max(0, effect.age - 0.7) % 1.6;
+        const waveFront = Math.min(1, waveAge / 1.2);
+        effect.object.children.forEach(item => {
+          if (item.userData?.destroyPillar !== undefined) {
+            const active = effect.age >= 0.7 && waveFront + 0.15 >= item.userData.rRatio;
+            item.scale?.setScalar?.(active ? 0.65 + Math.abs(Math.sin(effect.age * 12 + item.userData.destroyPillar)) * 0.55 : 0.15);
+          } else if (item.userData?.destroyDebris !== undefined) {
+            const active = effect.age >= 0.7 && waveFront + 0.1 >= item.userData.rRatio;
+            item.position.y = active ? 4.5 + Math.abs(Math.sin(effect.age * 7 + item.userData.destroyDebris)) * 7.5 : -6;
+            if (item.rotation) {
+              item.rotation.x = (item.rotation.x || 0) + dt * 2.4;
+              item.rotation.y = (item.rotation.y || 0) + dt * 3.1;
+            }
+          }
+        });
       } else if (effect.kind === "clone" || effect.kind === "avatar") {
         if (effect.source) effect.object.position.set(effect.source.x, 0, effect.source.z);
         const strikes = effect.kind === "avatar" ? Math.max(0, Math.min(3, Math.floor((effect.age - 0.7) / 1.6) + 1)) :
