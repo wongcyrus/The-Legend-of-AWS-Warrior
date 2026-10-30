@@ -48,6 +48,8 @@ That vision is **The Legend of AWS Warrior V2**.
 
 The entire platform is serverless, deployable via AWS SAM in `us-east-1`. It couples a rich browser-based 3D RPG engine with two decoupled backend systems: an **NUnit grading pipeline** (.NET 8) and an **oral AI practice & game-state engine** (Node.js 22 + Amazon Bedrock AgentCore).
 
+![AWS Warrior V2 Architecture Diagram](docs/aws_warrior_v2_architecture_diagram.png)
+
 ```mermaid
 flowchart TB
     subgraph Clients["1. Client Layer"]
