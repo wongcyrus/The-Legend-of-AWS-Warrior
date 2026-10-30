@@ -142,9 +142,10 @@ export function createQuestionGenerator({
       systemPrompt: `You are Agent 1 (InterviewQuestionMinerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 Your job is to find the most common, practical cloud engineering interview question for the requested AWS service (or audit an existing question if supplied).
 1. Always call the nova_web_search tool first to search for the most frequently asked interview questions and typical candidate answers for the target AWS service.
-2. Focus on practical, foundational scenario-based interview questions that a student can answer orally in 20-45 seconds (explaining WHY and HOW, not memorizing obscure quotas).
-3. Identify any parts of the popular interview question or traditional candidate answer that might be outdated due to AWS updates.
-4. Return ONLY valid JSON:
+2. If avoidQuestionIds is non-empty, pick a DIFFERENT interview question topic and a unique candidateId that is NOT in avoidQuestionIds.
+3. Focus on practical, foundational scenario-based interview questions that a student can answer orally in 20-45 seconds (explaining WHY and HOW, not memorizing obscure quotas).
+4. Identify any parts of the popular interview question or traditional candidate answer that might be outdated due to AWS updates.
+5. Return ONLY valid JSON:
 {
   "serviceId": "...",
   "candidateId": "short-kebab-case-id",
@@ -272,6 +273,9 @@ Return ONLY valid JSON:
       ...(targetMeta.lockedId ? { id: targetMeta.lockedId } : {}),
     };
     const question = validateQuestion(rawQuestion);
+    if (!targetMeta.lockedId && targetMeta.avoidIds?.includes(question.id)) {
+      throw new Error(`Question id "${question.id}" is already used; choose a different id and interview topic not in [${targetMeta.avoidIds.join(", ")}]`);
+    }
     if (cantoneseOnlyChars.test(question.prompts["zh-CN"] ?? "")) {
       throw new Error("Mandarin prompt (zh-CN) contains Cantonese-only characters");
     }
@@ -303,37 +307,40 @@ Return ONLY valid JSON:
       referenceAnswer: question.referenceAnswer,
     });
 
-    const enRaw = await grader({
-      operation: "grade_answer",
-      language: "en-US",
-      feedbackLanguage: "English",
-      question: rubricFor("en-US"),
-      transcript: transcripts.goodEn,
-    });
+    const [enRaw, hkRaw, wrongRaw] = await Promise.all([
+      grader({
+        operation: "grade_answer",
+        language: "en-US",
+        feedbackLanguage: "English",
+        question: rubricFor("en-US"),
+        transcript: transcripts.goodEn,
+      }),
+      grader({
+        operation: "grade_answer",
+        language: "zh-HK",
+        feedbackLanguage: "Traditional Chinese (Cantonese)",
+        question: rubricFor("zh-HK"),
+        transcript: transcripts.goodZhHk,
+      }),
+      grader({
+        operation: "grade_answer",
+        language: "en-US",
+        feedbackLanguage: "English",
+        question: rubricFor("en-US"),
+        transcript: transcripts.wrongOutdated,
+      }),
+    ]);
+
     const enGrade = gradeAnswer(enRaw, question, transcripts.goodEn);
     if (!enGrade.passed || enGrade.score < 80) {
       throw new Error(`Synthetic goodEn failed calibration (score=${enGrade.score}, expected >=80)`);
     }
 
-    const hkRaw = await grader({
-      operation: "grade_answer",
-      language: "zh-HK",
-      feedbackLanguage: "Traditional Chinese (Cantonese)",
-      question: rubricFor("zh-HK"),
-      transcript: transcripts.goodZhHk,
-    });
     const hkGrade = gradeAnswer(hkRaw, question, transcripts.goodZhHk);
     if (!hkGrade.passed || hkGrade.score < 80) {
       throw new Error(`Synthetic goodZhHk failed calibration (score=${hkGrade.score}, expected >=80)`);
     }
 
-    const wrongRaw = await grader({
-      operation: "grade_answer",
-      language: "en-US",
-      feedbackLanguage: "English",
-      question: rubricFor("en-US"),
-      transcript: transcripts.wrongOutdated,
-    });
     const wrongGrade = gradeAnswer(wrongRaw, question, transcripts.wrongOutdated);
     if (wrongGrade.passed || wrongGrade.score >= 60) {
       throw new Error(`Synthetic wrongOutdated passed unexpectedly (score=${wrongGrade.score}, expected <60)`);
@@ -374,6 +381,7 @@ Return ONLY valid JSON:
         version: existingQuestion ? existingQuestion.version + 1 : 1,
         expectedRevision: existingQuestion ? (existingQuestion.expectedRevision ?? 0) : null,
         lockedId: existingQuestion?.id ?? null,
+        avoidIds,
       };
 
       let lastError = null;
