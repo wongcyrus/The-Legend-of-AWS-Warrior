@@ -11,7 +11,19 @@ fi
 
 print_config
 
-sam build && sam deploy --parameter-overrides "SecretHash=$SecretHash"
+PARAMETER_OVERRIDES="SecretHash=$SecretHash"
+if [ "$ENABLE_VOICE_PRACTICE" = "false" ]; then
+    PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES EnableVoicePractice=false"
+elif [ "$ENABLE_VOICE_PRACTICE" = "true" ]; then
+    PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES EnableVoicePractice=true"
+fi
+
+sam build && sam deploy \
+    --stack-name "$STACK_NAME" \
+    --region "$AWS_REGION" \
+    --capabilities CAPABILITY_IAM \
+    --resolve-s3 \
+    --parameter-overrides $PARAMETER_OVERRIDES
 
 WebApiEndpoint=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
@@ -46,7 +58,7 @@ sed -i 's|//Prod/|/Prod/|g' web-game/src/constant.js
 
 cd web-app
 npm i
-npm run build
+REACT_APP_EXAM_MODE="${REACT_APP_EXAM_MODE:-false}" npm run build
 npm run deploy
 
 echo "Web app deployed successfully"

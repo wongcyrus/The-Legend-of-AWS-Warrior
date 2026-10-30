@@ -67,6 +67,22 @@ test('keeps Classic as the default and offers a separate enhanced beta', async (
   expect(beta).toHaveAttribute('rel', 'noopener noreferrer');
 });
 
+test('hides game buttons and displays Go to Tasks in exam mode', async () => {
+  const prev = process.env.REACT_APP_EXAM_MODE;
+  process.env.REACT_APP_EXAM_MODE = 'true';
+  try {
+    respond([{ test: 'PassingTest', mark: 10, time: '' }], []);
+    render(<Marks />);
+    await screen.findByText('PassingTest');
+    expect(screen.queryByRole('button', { name: 'Play Classic' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Play AWS Warrior V2' })).not.toBeInTheDocument();
+    const tasksLink = screen.getByRole('link', { name: 'Go to Tasks' });
+    expect(tasksLink).toHaveAttribute('href', '/playground');
+  } finally {
+    process.env.REACT_APP_EXAM_MODE = prev;
+  }
+});
+
 async function loadMarks() {
   respond([{ test: 'PassingTest', mark: 10, time: '' }],
     { test: 'FailingTest', time: '', logUrl: 'https://example.com/log' });

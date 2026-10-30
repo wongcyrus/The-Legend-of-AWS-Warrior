@@ -137,12 +137,20 @@ class Marks extends Component {
         <h2>Your Marks</h2>
         {this.state.error && <p role="alert">{this.state.error}</p>}
         {this.state.resetMessage && <p role="status">{this.state.resetMessage}</p>}
-        <Button variant="outline-primary" onClick={this.handleButtonClick}>
-          Play Classic
-        </Button>
-        <a className="btn btn-primary ms-2" href="game-v2.html" target="_blank" rel="noopener noreferrer">
-          Play AWS Warrior V2
-        </a>
+        {process.env.REACT_APP_EXAM_MODE === "true" ? (
+          <a className="btn btn-primary" href="/playground">
+            Go to Tasks
+          </a>
+        ) : (
+          <>
+            <Button variant="outline-primary" onClick={this.handleButtonClick}>
+              Play Classic
+            </Button>
+            <a className="btn btn-primary ms-2" href="game-v2.html" target="_blank" rel="noopener noreferrer">
+              Play AWS Warrior V2
+            </a>
+          </>
+        )}
         <Button variant="outline-secondary" className="ms-2" onClick={this.loadMarks}
           disabled={this.state.loading || this.state.resetting}>
           {this.state.loading ? "Loading marks..." : "Refresh marks"}

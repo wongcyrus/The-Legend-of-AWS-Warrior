@@ -77,6 +77,24 @@ STACK_NAME=CloudProjectMarker
 AWS_REGION=us-east-1
 ```
 
+### Exam Mode (CloudProjectMarkerExam)
+Deploy a dedicated exam stack where students select tasks, run grading tests, and review marks directly without playing the 3D game:
+Create `.env.local`:
+```bash
+STACK_NAME=CloudProjectMarkerExam
+AWS_REGION=us-east-1
+ENABLE_VOICE_PRACTICE=false
+REACT_APP_EXAM_MODE=true
+```
+Then run:
+```bash
+./deploy.sh <SecretHash>
+```
+In exam mode:
+- The React web app displays the **Tasks** (`/playground`) route and navigation link.
+- "Play Classic" and "Play AWS Warrior V2" buttons are hidden on the Marks page.
+- 3D game assets (`web-game/`) are skipped during S3 sync.
+
 ### Testing (CloudProjectMarkerTest)
 The default `.env` already uses `CloudProjectMarkerTest`, so no changes needed.
 

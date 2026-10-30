@@ -30,3 +30,19 @@ test('renders the marks route without making requests when the key is missing', 
   expect(alert).toHaveBeenCalledWith('Please set the key first!');
   alert.mockRestore();
 });
+
+test('renders Tasks navigation and Exam Mode brand title when REACT_APP_EXAM_MODE is true', () => {
+  const prev = process.env.REACT_APP_EXAM_MODE;
+  process.env.REACT_APP_EXAM_MODE = 'true';
+  try {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('link', { name: 'Tasks' })).toHaveAttribute('href', '/playground');
+    expect(screen.getByText(/Exam Mode/)).toBeInTheDocument();
+  } finally {
+    process.env.REACT_APP_EXAM_MODE = prev;
+  }
+});

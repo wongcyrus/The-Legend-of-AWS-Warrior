@@ -126,7 +126,7 @@ class Playground extends Component {
             <h3>Details</h3>
             <p>Name: {selectedItemDetails.name}</p>
             <p>Instruction: {selectedItemDetails.instruction}</p>
-            <button onClick={this.handleTestButtonClick}>Test</button>
+            <button onClick={this.handleTestButtonClick} className="btn btn-primary">Test</button>
           </div>
         )}
         {testResult && (
