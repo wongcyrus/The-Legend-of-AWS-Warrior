@@ -731,6 +731,10 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const destroyDebris = releaseBoundary.object.children.filter(c => c.userData?.destroyDebris !== undefined);
   assert.ok(destroyPillars.length === 24 && destroyDebris.length === 24,
     'global deployment release-boundary renders destruction pillars and erupting debris across the coverage area');
+  effects.character = () => null;
+  effects.spawnRumblingFormation({ x: 0, z: 0 }, { x: 0, z: 1 });
+  assert.equal(releaseBoundary.rumbling, true, 'spawnRumblingFormation activates The Rumbling on release-boundary');
+  effects.character = () => ({ _target: playerTarget });
   effects.update(2.2);
   assert.equal(playerTarget.position.y, 0, 'main character returns to ground when almighty-push ends');
   assert.equal(effects.active.length, 0);

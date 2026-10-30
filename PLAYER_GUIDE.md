@@ -100,10 +100,11 @@ Combining **2, 3, or 4 Cloud Arts** in a single cast awakens a dedicated **Anime
 | **`3 + 4 + 5 + 6`** *(or `3+4+5+7` / `3+4+6+7`)* | **`Aurora Excalibur`**<br>**誓約勝利・極光聖劍** | Amazon Aurora Global DB | *Fate/Stay Night (Excalibur `約束された勝利の剣`)* — Raises a **44-unit pillar of golden light** into the heavens and cleaves a **110-unit blinding golden-cyan Excalibur beam** forward for **4 devastating ticks** (`4.8×` Power each). |
 | **`3 + 5 + 6 + 7`** *(or `4 + 5 + 6 + 7`)* | **`SageMaker Infinite Void`**<br>**無量空處・全知星圖** | Amazon SageMaker | *Jujutsu Kaisen (Unlimited Void `無量空處`)* — Encloses a **44-unit** radius in a **deep-space cosmic black dome** with an event-horizon accretion disk and 24 orbiting stars, heavily slowing enemies for `6s` across **6 neural-overload bursts** (`3.2×` Power + `6.0×` finale). |
 
-### Ultimate: 全域部署 / Global Deployment
-Select **all 5 Cloud Arts (`3`–`7`)** to transform the cast button into **全域部署 (`87 MP`, `60s` cooldown)**:
-- Summons **four giant Cloud Avatars** (6× player size) facing outward in cardinal directions.
-- Releases three expanding execution waves across a **128-unit radius** that defeat ordinary monsters and bosses on contact (blocked only by solid walls and buildings).
+### Ultimate: 全域部署 / Global Deployment & 地鳴・全域踐踏 / The Rumbling (50/50 Chance)
+Select **all 5 Cloud Arts (`3`–`7`)** to transform the cast button into **全域部署 (`87 MP`, `60s` cooldown)** with a **50% / 50% chance** between two cataclysmic 5-Art forms:
+- **50% Chance — 全域部署 / `Global Deployment`**: Summons **four giant Cloud Avatars** (6× player size) facing outward in cardinal directions with 24 sky-to-ground judgement pillars, tectonic magma fissures, and erupting rock spires across the 128-unit zone.
+- **50% Chance — 地鳴・全域踐踏 / `The Rumbling · Titan Stampede`** *(Attack on Titan — The Rumbling `地鳴`)*: Erects the **Founding Titan's colossal white skeletal ribcage and spine** at the caster's position and unleashes a **ring of 7.5× crimson Colossal Titans marching outward** across the 128-unit radius in clouds of scalding steam and molten footsteps.
+- Both forms release three expanding execution waves across a **128-unit radius** that defeat ordinary monsters and bosses on contact (blocked only by solid walls and buildings).
 
 ---
 

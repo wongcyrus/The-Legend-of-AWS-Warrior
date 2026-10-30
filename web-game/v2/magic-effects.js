@@ -7,7 +7,7 @@ export class MagicEffects {
     Object.assign(this, { scene, low, character, cpuSkinning, active: [] });
   }
   spawnAvatarFormation(origin, forward) {
-    for (const effect of [...this.active]) if (effect.kind === "avatar") this.remove(effect);
+    for (const effect of [...this.active]) if (effect.kind === "avatar" || effect.kind === "titan") this.remove(effect);
     const angle = Math.atan2(forward.x, forward.z);
     for (let i = 0; i < 4; i++) {
       const heading = angle + i * Math.PI / 2;
@@ -16,10 +16,29 @@ export class MagicEffects {
         { color: SPELLS.storm.color, duration: 6 }, 1);
     }
   }
+  spawnRumblingFormation(origin, forward) {
+    for (const effect of [...this.active]) if (effect.kind === "avatar" || effect.kind === "titan") this.remove(effect);
+    const boundary = this.active.find(effect => effect.kind === "release-boundary");
+    if (boundary) {
+      boundary.rumbling = true;
+      boundary.material?.color?.setHex?.(0xff3b1f);
+      boundary.object.traverse(item => {
+        if (item.userData?.destroyPillar !== undefined)
+          item.material?.color?.setHex?.(item.userData.destroyPillar % 2 ? 0xff4500 : 0xfed7aa);
+      });
+    }
+    const angle = Math.atan2(forward.x, forward.z);
+    for (let i = 0; i < 4; i++) {
+      const heading = angle + i * Math.PI / 2;
+      const dx = Math.sin(heading), dz = Math.cos(heading);
+      this.spawn("titan", { x: origin.x + dx * 12, z: origin.z + dz * 12, originX: origin.x, originZ: origin.z, dx, dz },
+        { color: 0xdc2626, range: 118, duration: 6 }, 1);
+    }
+  }
   spawn(kind, from, to, level = 1) {
-    if (kind === "avatar") {
-      const avatars = this.active.filter(effect => effect.kind === "avatar");
-      if (avatars.length >= 4) this.remove(avatars[0]);
+    if (kind === "avatar" || kind === "titan") {
+      const giants = this.active.filter(effect => effect.kind === "avatar" || effect.kind === "titan");
+      if (giants.length >= 4) this.remove(giants[0]);
     }
     const color = to?.color || ({ domain: SPELLS.frost.color, ward: SPELLS.storm.color,
       anchor: SPELLS.shockwave.color, recall: SPELLS.shockwave.color,
@@ -74,6 +93,29 @@ export class MagicEffects {
           transparent: true, opacity: 0.95, depthWrite: true, fog: false, toneMapped: false });
         spire.userData = { destroyDebris: i, rRatio };
       }
+      const ribCount = reduced ? 4 : 6;
+      for (let i = 0; i < ribCount; i++) {
+        const rib = mesh(new THREE.RingGeometry(18 + i * 1.4, 20.4 + i * 1.4, segments, 1, 0, Math.PI), 0, 2, (i - (ribCount - 1) / 2) * 6.5);
+        rib.material = new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true,
+          opacity: 0.94, side: THREE.DoubleSide, depthWrite: true, fog: false, toneMapped: false });
+        rib.scale?.setScalar?.(0.001);
+        rib.userData = { founderBone: i + 1 };
+      }
+      const spine = mesh(new THREE.BoxGeometry(2.8, 2.8, 38), 0, 22, 0);
+      spine.material = new THREE.MeshBasicMaterial({ color: 0xf1f5f9, transparent: true,
+        opacity: 0.95, depthWrite: true, fog: false, toneMapped: false });
+      spine.scale?.setScalar?.(0.001);
+      spine.userData = { founderBone: 99 };
+      const wallCount = reduced ? 4 : 8;
+      for (let i = 0; i < wallCount; i++) {
+        const a = (i + 0.5) * Math.PI * 2 / wallCount;
+        const titanBody = mesh(new THREE.BoxGeometry(11, 28, 7), Math.cos(a) * 14, 14, Math.sin(a) * 14);
+        titanBody.rotation.y = Math.atan2(Math.sin(a), Math.cos(a));
+        titanBody.material = new THREE.MeshBasicMaterial({ color: 0xdc2626, transparent: true,
+          opacity: 0.88, depthWrite: true, fog: false, toneMapped: false });
+        titanBody.scale?.setScalar?.(0.001);
+        titanBody.userData = { rumblingTitan: a };
+      }
     } else if (kind === "release-wave") {
       const slash = mesh(new THREE.RingGeometry(0.88, 1, segments, 1, -Math.PI / 4, Math.PI / 2 - 0.04), 0, 0.02, 0);
       slash.rotation.x = -Math.PI / 2;
@@ -119,7 +161,7 @@ export class MagicEffects {
         kind === "domain" ? 2 + i % 4 * 2 : 3, Math.sin(angle) * radius * 0.85);
         item.rotation.y = -angle;
       }
-    } else if (kind === "clone" || kind === "avatar") {
+    } else if (kind === "clone" || kind === "avatar" || kind === "titan") {
       const controller = this.character();
       if (!controller?._target) { material.dispose(); return; }
       const cpu = this.cpuSkinning();
@@ -127,8 +169,8 @@ export class MagicEffects {
       model = SkeletonUtils.clone(controller._target);
       model.position.set(0, 0, 0);
       model.rotation.set(0, Math.atan2(from.dx, from.dz), 0);
-      if (kind === "avatar") {
-        model.scale.multiplyScalar(6);
+      if (kind === "avatar" || kind === "titan") {
+        model.scale.multiplyScalar(kind === "titan" ? 7.5 : 6);
         model.rotation.y = 0;
         object.rotation.y = Math.atan2(from.dx, from.dz);
       }
@@ -148,14 +190,15 @@ export class MagicEffects {
       object.add(model);
       mixer = new THREE.AnimationMixer(model);
       const runClip = kind === "avatar" ? controller._animations.idle?.clip :
+        kind === "titan" ? (controller._animations.walk?.clip || controller._animations.run?.clip || controller._animations.idle?.clip) :
         controller._animations.run?.clip || controller._animations.walk?.clip;
       const attackClip = controller._animations.attack?.clip;
       if (runClip) mixer.clipAction(runClip).play();
-      if (attackClip) attack = mixer.clipAction(attackClip);
+      if (attackClip && kind !== "titan") attack = mixer.clipAction(attackClip);
       mixer.update(0);
       model.updateMatrixWorld(true);
       this.poseSkins(skins);
-      duration = kind === "avatar" ? 6 : 3.2;
+      duration = kind === "avatar" || kind === "titan" ? 6 : 3.2;
       if (kind === "avatar") {
         const armor = mesh(new THREE.BoxGeometry(15, 18, 9), 0, 22.5, 0);
         armor.material = new THREE.MeshBasicMaterial({ color: SPELLS.storm.color, wireframe: true,
@@ -166,6 +209,24 @@ export class MagicEffects {
         blade = mesh(new THREE.BoxGeometry(0.9, 22.5, 2.1), 12, 21, 0);
         blade.material = new THREE.MeshBasicMaterial({ color: 0xffb454, transparent: true,
           opacity: 0.7, depthWrite: false });
+      } else if (kind === "titan") {
+        const ribs = mesh(new THREE.BoxGeometry(16, 22, 10), 0, 24, 0);
+        ribs.material = new THREE.MeshBasicMaterial({ color: 0xff4500, wireframe: true,
+          transparent: true, opacity: 0.55, depthWrite: false, fog: false, toneMapped: false });
+        const skull = mesh(new THREE.OctahedronGeometry(3.2), 0, 36, 3.8);
+        skull.material = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true,
+          opacity: 0.95, depthWrite: false, fog: false, toneMapped: false });
+        for (let i = 0; i < 3; i++) {
+          const steam = mesh(new THREE.SphereGeometry(4.2, 10, 8), (i - 1) * 5.5, 18 + i * 5, -2);
+          steam.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffedd5 : 0xfed7aa,
+            transparent: true, opacity: 0.55, depthWrite: false, fog: false, toneMapped: false });
+          steam.userData = { titanSteam: i + 1, baseY: 18 + i * 5 };
+        }
+        const stompRing = mesh(new THREE.RingGeometry(6.5, 9.2, segments), 0, 0.35, 0);
+        stompRing.rotation.x = -Math.PI / 2;
+        stompRing.material = new THREE.MeshBasicMaterial({ color: 0xff5436, transparent: true,
+          opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+        stompRing.userData = { titanStep: true };
       }
     } else if (kind === "blade-barrage") {
       object.rotation.y = Math.atan2(to?.dx || 0, to?.dz || 1);
@@ -500,7 +561,7 @@ export class MagicEffects {
     this.active.push({ object, material, kind, from: { x: from.x, z: from.z },
       to: to ? { x: to.x, z: to.z } : null, age: 0, duration, radius,
       reduced, level, mixer, model, attack, skins, ownedGeometries, blade, poseAge: 0, strikes: 0,
-      source: ["anchor", "domain", "ward", "clone", "release-wave", "release-boundary",
+      source: ["anchor", "domain", "ward", "clone", "titan", "release-wave", "release-boundary",
         "blade-barrage", "singularity", "almighty-push", "omniscience", "edge-flash", "titan-meteor",
         "susanoo-mecha", "malevolent-shrine", "planetary-devastation", "time-rewind", "aurora-excalibur", "infinite-void"].includes(kind) ? from : null });
   }
@@ -554,6 +615,8 @@ export class MagicEffects {
         effect.material.opacity = 0.72 * Math.min(1, (effect.duration - effect.age) / 0.5);
         const waveAge = Math.max(0, effect.age - 0.7) % 1.6;
         const waveFront = Math.min(1, waveAge / 1.2);
+        const march = Math.min(1, effect.age / 5.2);
+        const stomp = Math.abs(Math.sin(effect.age * 6.5));
         effect.object.children.forEach(item => {
           if (item.userData?.destroyPillar !== undefined) {
             const active = effect.age >= 0.7 && waveFront + 0.15 >= item.userData.rRatio;
@@ -565,12 +628,40 @@ export class MagicEffects {
               item.rotation.x = (item.rotation.x || 0) + dt * 2.4;
               item.rotation.y = (item.rotation.y || 0) + dt * 3.1;
             }
+          } else if (item.userData?.founderBone !== undefined) {
+            item.scale?.setScalar?.(effect.rumbling ? Math.min(1, effect.age * 2.2) : 0.001);
+          } else if (item.userData?.rumblingTitan !== undefined) {
+            if (effect.rumbling) {
+              const a = item.userData.rumblingTitan;
+              const r = 14 + march * (effect.radius * 0.92 - 14);
+              item.scale?.setScalar?.(1);
+              item.position?.set?.(Math.cos(a) * r, 14 + stomp * 1.8, Math.sin(a) * r);
+            } else {
+              item.scale?.setScalar?.(0.001);
+            }
           }
         });
-      } else if (effect.kind === "clone" || effect.kind === "avatar") {
-        if (effect.source) effect.object.position.set(effect.source.x, 0, effect.source.z);
+      } else if (effect.kind === "clone" || effect.kind === "avatar" || effect.kind === "titan") {
+        if (effect.kind === "titan" && effect.source) {
+          const march = Math.min(1, effect.age / 5.2);
+          const dist = 12 + march * (effect.radius - 12);
+          const stomp = Math.abs(Math.sin(effect.age * 6.5));
+          effect.object.position.set((effect.source.originX ?? effect.source.x) + effect.source.dx * dist,
+            stomp * 1.6, (effect.source.originZ ?? effect.source.z) + effect.source.dz * dist);
+          effect.object.children.forEach(item => {
+            if (item.userData?.titanSteam) {
+              item.position.y = item.userData.baseY + ((effect.age * 8 + item.userData.titanSteam * 2) % 10);
+              item.scale?.setScalar?.(0.85 + Math.sin(effect.age * 6 + item.userData.titanSteam) * 0.25);
+            } else if (item.userData?.titanStep) {
+              item.position.y = 0.35 - stomp * 1.6;
+              item.scale?.setScalar?.(0.65 + (1 - stomp) * 0.85);
+            }
+          });
+        } else if (effect.source) {
+          effect.object.position.set(effect.source.x, 0, effect.source.z);
+        }
         const strikes = effect.kind === "avatar" ? Math.max(0, Math.min(3, Math.floor((effect.age - 0.7) / 1.6) + 1)) :
-          effect.source.strikes;
+          effect.source?.strikes || 0;
         if (effect.attack && effect.strikes !== strikes) {
           effect.strikes = strikes;
           effect.mixer.stopAllAction();

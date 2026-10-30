@@ -37,8 +37,8 @@ import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipmen
 import { AWS_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
 import { bindServiceReader } from "./aws-service-reader.js?v=20261029-mandarin-door-1";
-import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-4";
-import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-4";
+import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-anime-combos-5";
+import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-5";
 
 class BasicCharacterController extends player_entity.BasicCharacterController {
   Update(dt) {
@@ -908,12 +908,13 @@ class Game {
       return false;
     }
     const ultimate = Object.keys(SPELLS).every(id => ids.includes(id));
+    const rumbling = ultimate && (this.random ? this.random() : Math.random()) >= 0.5;
     const combo = typeof comboArtFor === "function" ? comboArtFor(ids) : null;
     const spell = ids[0], level = this.magicLevel, map = this.map;
     const combined = ids.length > 1;
     const cost = ids.reduce((sum, id) => sum + SPELLS[id].cost, 0);
-    const chineseName = ultimate ? "全域部署" : combo ? combo.label : ids.map(id => SPELLS[id].label).join(" ＋ ");
-    const englishName = ultimate ? "Global Deployment" : combo ? combo.englishLabel : ids.map(id => SPELLS[id].englishLabel).join(" + ");
+    const chineseName = ultimate ? (rumbling ? "地鳴・全域踐踏" : "全域部署") : combo ? combo.label : ids.map(id => SPELLS[id].label).join(" ＋ ");
+    const englishName = ultimate ? (rumbling ? "The Rumbling · Titan Stampede" : "Global Deployment") : combo ? combo.englishLabel : ids.map(id => SPELLS[id].englishLabel).join(" + ");
     let origin, forward;
     const valid = () => {
       if (this.map !== map || !this.canCastMagic()) return false;
@@ -929,10 +930,13 @@ class Game {
       this.guard.release();
       this.sound.play({ lightning: "magicLightning", fireball: "magicFire", frost: "magicFrost",
         storm: "magicStorm", shockwave: "magicShock" }[spell]);
-      this.sound.speakAttack(ultimate ? "全域部署。Global Deployment" :
+      this.sound.speakAttack(ultimate ? (rumbling ? "地鳴・全域踐踏。The Rumbling" : "全域部署。Global Deployment") :
         combo ? combo.label :
         ids.map(id => SPELLS[id].label).join("。"));
-      if (ultimate) this.magicEffects.spawnAvatarFormation(origin, forward);
+      if (ultimate) {
+        if (rumbling && this.magicEffects.spawnRumblingFormation) this.magicEffects.spawnRumblingFormation(origin, forward);
+        else this.magicEffects.spawnAvatarFormation(origin, forward);
+      }
       this.magicStatus(`${chineseName} cast! ${free ? "Infinitive Magic Mode - no MP spent." : `Spent ${cost} MP.`}`);
       const title = document.getElementById("cloud-art-title");
       if (title) {
@@ -943,7 +947,7 @@ class Game {
         chinese.textContent = chineseName;
         title.classList.toggle("combo-banner", combined);
         title.replaceChildren(english, chinese);
-        const bannerColor = combo ? (combo.id === "omniscience" ? 0xb8001f : combo.color) : SPELLS[spell].color;
+        const bannerColor = rumbling ? 0xff3b1f : combo ? (combo.id === "omniscience" ? 0xb8001f : combo.color) : SPELLS[spell].color;
         title.style.setProperty("--art-color", `#${bannerColor.toString(16).padStart(6, "0")}`);
         const bannerDuration = ultimate ? 6000 : Math.max(3800, 2600 + ids.length * 1400, (englishName.length + chineseName.length) * 65);
         title.getAnimations().forEach(animation => animation.cancel());

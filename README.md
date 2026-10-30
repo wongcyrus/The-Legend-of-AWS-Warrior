@@ -418,9 +418,7 @@ Select all five arts to turn the existing cast button into **全域部署**; the
 no separate ultimate button. It costs **87 MP** with a **60-second shared cooldown**.
 Deselect any art to return to an ordinary combination.
 
-Alongside the five arts, four avatars appear ahead, behind, left and right,
-facing outward. Each is six times the player's size and performs three slashes
-during its six-second appearance. Three execution waves expand to a **128-unit
+Alongside the five arts, casting all five has a **50% chance** to unleash **全域部署 / `Global Deployment`** (four 6x Cloud Avatars facing outward with 24 sky judgement pillars and tectonic fissures) and a **50% chance** to awaken **地鳴・全域踐踏 / `The Rumbling · Titan Stampede`** (the Founding Titan's colossal skeletal ribcage at the origin and a marching wall of 7.5x crimson Colossal Titans advancing outward in scalding steam). Three execution waves expand to a **128-unit
 radius** over 1.2 seconds each. Their visible radius and hit detection share the
 same progression: a monster is defeated when the wave reaches it, not at cast
 time. This includes bosses. Buildings and solid walls block these waves; water,
