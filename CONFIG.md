@@ -55,6 +55,8 @@ All scripts have been updated to use the centralized configuration:
 
 ### Root Scripts
 - `deploy.sh` - Main deployment script
+- `teardown.sh` - Clean stack teardown script (empties S3, removes API keys, deletes stack)
+- `switch-env.sh` - Environment switcher (prod vs exam)
 - `describe_stack.sh` - Stack information viewer
 - `config.sh` - Configuration loader (sourced by other scripts)
 
@@ -87,6 +89,34 @@ This helper automatically:
 1. Updates `.env.local` and `web-app/.env.local`.
 2. Sets `REACT_APP_EXAM_MODE` appropriately.
 3. Updates `web-app/src/Constant.js` and `web-game/src/constant.js` to point to the active stack's Web API endpoint.
+
+---
+
+## Clean Stack Teardown
+
+To completely and cleanly remove a stack without leaving orphaned API keys, non-empty S3 buckets, or retained resources:
+
+```bash
+# Cleanly tear down the Exam stack
+./teardown.sh exam
+
+# Cleanly tear down a testing stack
+./teardown.sh test
+
+# Cleanly tear down a custom stack by name
+./teardown.sh MyCustomStack
+
+# Cleanly tear down the active stack from .env.local
+./teardown.sh
+```
+
+### What `teardown.sh` does automatically:
+1. **API Keys**: Deletes all dynamic API Gateway keys associated with the stack's usage plan and their DynamoDB lookup records.
+2. **S3 Buckets**: Recursively empties `WebAppS3Bucket`, `TestResultBucket`, and `VoicePracticeAudioBucket` (including versioned objects and delete markers) so CloudFormation can delete them without failing.
+3. **CloudFormation**: Triggers stack deletion and waits for clean completion.
+4. **Retained Resources**: Deletes explicitly retained resources (e.g. `VoicePracticeTable`, `VoiceAudioBucket`).
+5. **Logs**: Cleans up CloudWatch `/aws/lambda/<StackName>-*` log groups.
+6. **Environment Reset**: If the deleted stack was active in `.env.local`, resets your workspace back to Production defaults.
 
 ---
 
