@@ -97,7 +97,7 @@ Combining **2, 3, or 4 Cloud Arts** in a single cast awakens a dedicated **Anime
 #### Tier 3 — 4-Art Mythic Awakening Combos
 | Combo Keys | English / Chinese Banner | AWS Service Theme | Anime Reference & Combat Effect |
 |---|---|---|---|
-| **`3 + 4 + 5 + 6`** *(or `3+4+5+7` / `3+4+6+7`)* | **`Aurora Excalibur`**<br>**誓約勝利・極光聖劍** | Amazon Aurora Global DB | *Fate/Stay Night (Excalibur `約束された勝利の剣`)* — Raises a **44-unit pillar of golden light** into the heavens and cleaves a **110-unit blinding golden-cyan Excalibur beam** forward for **4 devastating ticks** (`4.8×` Power each). |
+| **`3 + 4 + 5 + 6`** *(or `3+4+5+7` / `3+4+6+7`)* | **`Aurora Excalibur`**<br>**誓約勝利・極光聖劍** | Amazon Aurora Global DB | *Fate/Stay Night (Excalibur `約束された勝利の剣`)* — First points a **92-unit towering light beam to the sky** gathering photon rings, then **cuts down from the sky with a colossal holy sword** into a **110-unit blinding golden-cyan Excalibur beam** (`4` devastating ticks of `4.8×` Power each). |
 | **`3 + 5 + 6 + 7`** *(or `4 + 5 + 6 + 7`)* | **`SageMaker Infinite Void`**<br>**無量空處・全知星圖** | Amazon SageMaker | *Jujutsu Kaisen (Unlimited Void `無量空處`)* — Encloses a **44-unit** radius in a **deep-space cosmic black dome** with an event-horizon accretion disk and 24 orbiting stars, heavily slowing enemies for `6s` across **6 neural-overload bursts** (`3.2×` Power + `6.0×` finale). |
 
 ### Ultimate: 全域部署 / Global Deployment & 地鳴・全域踐踏 / The Rumbling (50/50 Chance)

@@ -404,7 +404,7 @@ Combining 2, 3, or 4 Cloud Arts in a single cast awakens one of **six Anime × A
   - **地爆天星・資料湖封印 / `Lake Formation Planetary Devastation` (`[3/4]+[5]+[7]` or `[3]+[6]+[7]`)**: Launches a black gravity core into the sky (`y = 24`) 22 units ahead that rips 18 earthen boulders upward into a floating planetoid, pulling enemies inward 3 times before an `8.5x` Power AoE crush.
   - **時空回溯・快照結界 / `EBS Snapshot Time Rewind` (`[4/5]+[6]+[7]`)**: Projects a 34-unit golden celestial clockwork astrolabe with counter-rotating hands that heavily slows enemies (`2.5s`) and pulses 4 golden time-shockwaves (`3.4x` Power each).
 - **4-Art Mythic Awakening Combos**:
-  - **誓約勝利・極光聖劍 / `Aurora Excalibur` (`[3]+[4]+[5]+[6/7]` or `[3]+[4]+[6]+[7]`)**: Raises a 44-unit pillar of golden light into the heavens and cleaves a 110-unit blinding golden-cyan Excalibur beam forward for 4 ticks (`4.8x` Power each).
+  - **誓約勝利・極光聖劍 / `Aurora Excalibur` (`[3]+[4]+[5]+[6/7]` or `[3]+[4]+[6]+[7]`)**: First points a 92-unit towering light beam to the sky gathering photon rings, then cuts down from the sky with a colossal holy sword into a 110-unit blinding golden-cyan Excalibur beam forward for 4 ticks (`4.8x` Power each).
   - **無量空處・全知星圖 / `SageMaker Infinite Void` (`[3/4]+[5]+[6]+[7]`)**: Encloses a 44-unit radius in a deep-space cosmic black dome with an event-horizon ring and 24 orbiting stars, heavily slowing enemies for `6s` across 6 neural-overload bursts.
 
 The server reserves the whole selection in one transaction: insufficient MP means

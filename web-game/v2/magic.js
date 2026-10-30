@@ -583,7 +583,7 @@ export class MagicCombat {
           }
         }
       } else if (combo.id === "aurora-excalibur") {
-        while (combo.step < 4 && combo.age + 1e-8 >= 0.45 + combo.step * 0.65) {
+        while (combo.step < 4 && combo.age + 1e-8 >= 0.75 + combo.step * 0.55) {
           combo.step++;
           for (const target of this.enemies(combo, 110)) {
             const dx = target.x - combo.x, dz = target.z - combo.z, dist = Math.hypot(dx, dz);

@@ -671,7 +671,7 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
     constructor(geometry, material) {
       Object.assign(this, { geometry, material, rotation: {},
         position: { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; } },
-        scale: { setScalar() {} } });
+        scale: { setScalar() {}, set(x, y, z) { this.x = x; this.y = y; this.z = z; } } });
       this.children = [];
     }
     add(item) { this.children.push(item); }
@@ -731,6 +731,10 @@ test('cloud art visuals reduce detail, expire, remain bounded and dispose shared
   const destroyDebris = releaseBoundary.object.children.filter(c => c.userData?.destroyDebris !== undefined);
   assert.ok(destroyPillars.length === 24 && destroyDebris.length === 24,
     'global deployment release-boundary renders destruction pillars and erupting debris across the coverage area');
+  const excaliburEffect = effects.active.find(e => e.kind === 'aurora-excalibur');
+  const excaliburSword = excaliburEffect.object.children.find(c => c.userData?.excaliburSword === true);
+  assert.ok(excaliburSword && excaliburSword.rotation.x > 1.0,
+    'aurora-excalibur cuts down from the sky with a holy light sword');
   effects.character = () => null;
   effects.spawnRumblingFormation({ x: 0, z: 0 }, { x: 0, z: 1 });
   assert.equal(releaseBoundary.rumbling, true, 'spawnRumblingFormation activates The Rumbling on release-boundary');

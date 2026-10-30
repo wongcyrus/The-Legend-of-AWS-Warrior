@@ -505,23 +505,60 @@ export class MagicEffects {
       }
     } else if (kind === "aurora-excalibur") {
       object.rotation.y = Math.atan2(to?.dx || 0, to?.dz || 1);
-      const skyPillar = mesh(new THREE.BoxGeometry(3.8, 44, 3.8), 0, 22, 0);
-      skyPillar.material = new THREE.MeshBasicMaterial({ color: 0xffe57f, transparent: true,
-        opacity: 0.92, depthWrite: false, fog: false, toneMapped: false });
-      skyPillar.userData = { excaliburPillar: true };
-      const outerBeam = mesh(new THREE.BoxGeometry(7.2, 5.2, radius), 0, 3.8, radius / 2);
+      const skyBeam = mesh(new THREE.BoxGeometry(4.8, 92, 4.8), 0, 46, 2.5);
+      skyBeam.material = new THREE.MeshBasicMaterial({ color: 0xfff9c4, transparent: true,
+        opacity: 0.95, depthWrite: false, fog: false, toneMapped: false });
+      skyBeam.userData = { excaliburSkyBeam: true };
+
+      const skyAura = mesh(new THREE.BoxGeometry(9.6, 92, 9.6), 0, 46, 2.5);
+      skyAura.material = new THREE.MeshBasicMaterial({ color: 0x64ffda, transparent: true,
+        opacity: 0.55, depthWrite: false, fog: false, toneMapped: false });
+      skyAura.userData = { excaliburSkyBeam: true };
+
+      const swordBlade = mesh(new THREE.BoxGeometry(2.2, 46, 1.2), 0, 26.2, 2.5);
+      swordBlade.material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true,
+        opacity: 0.98, depthWrite: false, fog: false, toneMapped: false });
+      swordBlade.userData = { excaliburSword: true, length: 46, hiltY: 3.2, hiltZ: 2.5 };
+
+      const swordAura = mesh(new THREE.BoxGeometry(5.2, 48, 2.4), 0, 26.2, 2.5);
+      swordAura.material = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true,
+        opacity: 0.8, depthWrite: false, fog: false, toneMapped: false });
+      swordAura.userData = { excaliburSword: true, length: 46, hiltY: 3.2, hiltZ: 2.5 };
+
+      for (let i = 0; i < 4; i++) {
+        const ringItem = mesh(new THREE.RingGeometry(3.6 + i * 1.6, 5.0 + i * 1.6, segments), 0, 12 + i * 18, 2.5);
+        ringItem.rotation.x = -Math.PI / 2;
+        ringItem.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0xfff59d : 0x64ffda,
+          transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+        ringItem.userData = { excaliburGatherRing: i + 1, baseY: 12 + i * 18 };
+      }
+
+      const outerBeam = mesh(new THREE.BoxGeometry(8.5, 5.8, radius), 0, 3.2, radius / 2 + 2.5);
       outerBeam.material = new THREE.MeshBasicMaterial({ color: 0x64ffda, transparent: true,
         opacity: 0.82, depthWrite: false, fog: false, toneMapped: false });
+      outerBeam.scale?.setScalar?.(0.001);
       outerBeam.userData = { excaliburBeam: true };
-      const innerBeam = mesh(new THREE.BoxGeometry(3.4, 3.0, radius), 0, 3.8, radius / 2);
-      innerBeam.material = new THREE.MeshBasicMaterial({ color: 0xfff59d, transparent: true,
+
+      const innerBeam = mesh(new THREE.BoxGeometry(4.2, 3.4, radius), 0, 3.2, radius / 2 + 2.5);
+      innerBeam.material = new THREE.MeshBasicMaterial({ color: 0xfff9c4, transparent: true,
         opacity: 0.96, depthWrite: false, fog: false, toneMapped: false });
+      innerBeam.scale?.setScalar?.(0.001);
       innerBeam.userData = { excaliburBeam: true };
+
+      const impactCrest = mesh(new THREE.RingGeometry(5.5, 8.5, segments), 0, 0.4, 6.0);
+      impactCrest.rotation.x = -Math.PI / 2;
+      impactCrest.material = new THREE.MeshBasicMaterial({ color: 0xffe082, transparent: true,
+        opacity: 0.95, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+      impactCrest.scale?.setScalar?.(0.001);
+      impactCrest.userData = { excaliburImpact: true };
+
       const count = reduced ? 5 : 10;
       for (let i = 1; i <= count; i++) {
-        const r = mesh(new THREE.RingGeometry(4.2, 5.2, segments), 0, 3.8, i * radius / count);
-        r.material = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true,
+        const r = mesh(new THREE.RingGeometry(4.6, 6.0, segments), 0, 3.2, i * radius / count);
+        r.material = new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffd700 : 0x64ffda, transparent: true,
           opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, fog: false, toneMapped: false });
+        r.scale?.setScalar?.(0.001);
+        r.userData = { excaliburSurgeRing: i };
       }
     } else if (kind === "infinite-void") {
       for (const existing of this.active) {
@@ -821,12 +858,66 @@ export class MagicEffects {
             item.rotation.y = (item.rotation.y || 0) + dt * item.userData.clockHand;
         });
       } else if (effect.kind === "aurora-excalibur") {
-        const cleaved = effect.age >= 0.35;
+        const cutStart = 0.5;
+        const cutEnd = 0.75;
+        const isCutting = effect.age >= cutStart && effect.age < cutEnd;
+        const hasImpacted = effect.age >= cutEnd;
+        const cutProgress = Math.min(1, Math.max(0, (effect.age - cutStart) / (cutEnd - cutStart)));
+        const swingAngle = Math.pow(cutProgress, 2.0) * (Math.PI / 2);
+
         effect.object.children.forEach(item => {
-          if (item.userData?.excaliburPillar)
-            item.scale?.setScalar?.(cleaved ? Math.max(0.1, 1 - (effect.age - 0.35) * 1.5) : 1);
-          else if (item.userData?.excaliburBeam)
-            item.scale?.setScalar?.(cleaved ? 1 + Math.sin(effect.age * 20) * 0.15 : 0.05);
+          if (item.userData?.excaliburSkyBeam) {
+            if (hasImpacted) {
+              item.scale?.setScalar?.(0.001);
+            } else if (isCutting) {
+              const fade = Math.max(0.01, 1 - cutProgress);
+              if (item.scale?.set) item.scale.set(fade, fade, fade);
+              else item.scale?.setScalar?.(fade);
+            } else {
+              item.scale?.setScalar?.(1 + Math.sin(effect.age * 16) * 0.08);
+            }
+          } else if (item.userData?.excaliburGatherRing) {
+            if (hasImpacted) {
+              item.scale?.setScalar?.(0.001);
+            } else {
+              item.position.y = item.userData.baseY - ((effect.age * 14) % 8);
+              if (item.rotation) item.rotation.z += dt * 4;
+            }
+          } else if (item.userData?.excaliburSword) {
+            const angle = hasImpacted ? (Math.PI / 2) : swingAngle;
+            if (item.rotation) item.rotation.x = angle;
+            const halfLen = item.userData.length / 2;
+            item.position.y = item.userData.hiltY + Math.cos(angle) * halfLen;
+            item.position.z = item.userData.hiltZ + Math.sin(angle) * halfLen;
+            if (hasImpacted) {
+              const swordFade = Math.max(0, (effect.duration - effect.age) / 1.5);
+              if (item.material) item.material.opacity = 0.95 * swordFade;
+            }
+          } else if (item.userData?.excaliburImpact) {
+            if (hasImpacted) {
+              const impactProgress = Math.min(1, (effect.age - cutEnd) / 0.35);
+              item.scale?.setScalar?.(impactProgress * 2.8);
+              if (item.material) item.material.opacity = 0.95 * Math.max(0, 1 - (effect.age - cutEnd) / 1.6);
+            } else {
+              item.scale?.setScalar?.(0.001);
+            }
+          } else if (item.userData?.excaliburBeam) {
+            if (hasImpacted) {
+              const roarPulse = 1 + Math.sin((effect.age - cutEnd) * 22) * 0.14;
+              if (item.scale?.set) item.scale.set(roarPulse, roarPulse, 1);
+              else item.scale?.setScalar?.(roarPulse);
+              if (item.material) item.material.opacity = Math.max(0, Math.min(0.96, (effect.duration - effect.age) / 0.6));
+            } else {
+              item.scale?.setScalar?.(0.001);
+            }
+          } else if (item.userData?.excaliburSurgeRing) {
+            if (hasImpacted) {
+              item.scale?.setScalar?.(1);
+              if (item.rotation) item.rotation.z += dt * 5;
+            } else {
+              item.scale?.setScalar?.(0.001);
+            }
+          }
         });
       } else if (effect.kind === "infinite-void") {
         effect.material.opacity = Math.min(0.95, (1 - t) * 3.5);
