@@ -1,6 +1,19 @@
-# Getting Started with Create React App
+# AWS Project Grader Web App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This is the React frontend for the **The Legend of AWS Warrior** / **AWS Project Grader**.
+
+## Modes & Configuration
+
+The application supports two operating modes controlled via the `REACT_APP_EXAM_MODE` environment variable:
+- **Standard / Game Mode (`REACT_APP_EXAM_MODE=false`)**: Displays links to the 3D RPG games (Classic & AWS Warrior V2). The `/playground` task testing route is hidden from the main navigation.
+- **Exam Mode (`REACT_APP_EXAM_MODE=true`)**: Displays the **Tasks** (`/playground`) page directly in navigation. Game buttons on the Marks page are replaced with a direct "Go to Tasks" link. 3D game files are omitted from the deployed S3 bucket.
+
+### Environment Management
+Use `./switch-env.sh` from the repository root to configure this app:
+```bash
+./switch-env.sh prod   # Configure for Production (Game Mode)
+./switch-env.sh exam   # Configure for Exam Mode (Tasks Grader)
+```
 
 ## Available Scripts
 

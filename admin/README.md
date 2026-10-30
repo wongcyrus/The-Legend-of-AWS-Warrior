@@ -1,6 +1,13 @@
 # Admin Scripts
 
-This directory contains administrative scripts for managing the CloudProjectMarker stack.
+This directory contains administrative scripts for managing CloudProjectMarker stacks (`CloudProjectMarker`, `CloudProjectMarkerExam`, etc.).
+
+> **Tip**: All scripts in this directory automatically read configuration from `.env.local` or `.env` via `config.sh`.
+> To switch which stack these admin tools target, use the switcher from the project root:
+> ```bash
+> ./switch-env.sh prod   # Target CloudProjectMarker (Production)
+> ./switch-env.sh exam   # Target CloudProjectMarkerExam (Exam Mode)
+> ```
 
 ## API Key Management
 

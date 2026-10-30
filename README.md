@@ -140,82 +140,65 @@ See [question-bank operations](src/VoicePractice/OPERATIONS.md#batch-publishing-
 for the content fields, service-specific exports, retirement and conflict handling.
 
 
-## Deploy the updated application.
-For the first time, install AWS SAM CLI and the .NET 8 SDK (x86_64 Linux).
-The setup script requires `curl`, `unzip`, `tar`, and `sudo` (unless running as root).
-It installs a missing .NET 8 SDK under `~/.dotnet` and installs or updates SAM CLI
-system-wide. It stops on errors and removes temporary downloads automatically.
+## Environments and Deployment
+
+This repository supports deploying two different environment modes:
+1. **Production (`CloudProjectMarker`)**: Full 3D RPG adventure game (Classic & AWS Warrior V2), NPC quest generation, and combat grading.
+2. **Exam Mode (`CloudProjectMarkerExam`)**: Direct task playground (`/playground`) and grading without game assets.
+
+For central configuration details, see [**`CONFIG.md`**](CONFIG.md).
+
+### Prerequisites
+For the first time on x86_64 Linux, install AWS SAM CLI and the .NET 8 SDK:
 ```bash
 ./aws_sam_setup.sh
 ```
 
-If .NET was installed under `~/.dotnet`, the setup script prints the environment
-exports needed for direct `dotnet` commands. Add them to `~/.bashrc` for future
-shells. The package update script discovers this local installation automatically.
+### 1. Switching Environments
+Easily switch between environments using `switch-env.sh`:
+```bash
+# Check current environment status
+./switch-env.sh status
+
+# Switch to Production (CloudProjectMarker, 3D Game enabled)
+./switch-env.sh prod
+
+# Switch to Exam Mode (CloudProjectMarkerExam, Tasks only, Game disabled)
+./switch-env.sh exam
+```
+
+### 2. Full Unified Deployment
+`./deploy.sh` builds the SAM backend, injects the deployed API Gateway endpoint, builds the React web app, and deploys static assets to S3 and CloudFront:
 
 ```bash
-sam build && sam deploy --parameter-overrides "SecretHash=bb14ca5898a4e4133bbce2ea2315a1234"
+# Deploy to the active environment (auto-detects and reuses existing SecretHash)
+./deploy.sh
+
+# Or switch and deploy directly in one step:
+./deploy.sh prod
+./deploy.sh exam
+
+# Initial deployment of a brand new stack (requires initial SecretHash)
+./deploy.sh <SecretHash>
+./deploy.sh exam <SecretHash>
 ```
-SecretHash can be any string of any length. It will be hashed using SHA256 to derive a proper AES-256 encryption key. 
 
+> **Note**: `SecretHash` can be any string. It will be hashed using SHA-256 to derive the AES-256 encryption key for student API keys.
 
-## Cleanup
-
-To delete the sample application that you created, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:
+### 3. Clean Stack Teardown
+Deleting a stack directly via `sam delete` or `aws cloudformation delete-stack` fails on non-empty S3 buckets and leaves orphaned API Gateway keys. Use `./teardown.sh` for a 100% clean teardown:
 
 ```bash
-sam delete --stack-name CloudProjectMarker
+# Cleanly tear down the Exam stack
+./teardown.sh exam
+
+# Cleanly tear down the currently active stack (from .env.local)
+./teardown.sh
+
+# Cleanly tear down Production (requires typing stack name to confirm)
+./teardown.sh prod
 ```
-
-## Packages update
-
-Run `./aws_sam_setup.sh` first, or install the
-[.NET 8 SDK for Ubuntu](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu)
-(not just the runtime) and ensure `dotnet` is on your `PATH`. Then run:
-
-```
-./update_packages.sh
-```
-
-The script installs or updates `dotnet-outdated-tool` and upgrades packages in both
-.NET projects. It stops on the first error; completion is reported only if all
-commands succeed.
-
-## Local regression tests
-
-These tests do not call AWS or execute the infrastructure checks in
-`src/ProjectTestsLib/`. The backend tests use NUnitLite, like the application.
-Run from the repository root with the .NET 8 SDK, Node.js 22.7+ and Python 3:
-
-```bash
-dotnet run --project tests/ServerlessAPI.Tests -- --noresult --workers=0
-node --test web-game/tests/*.test.mjs
-python3 -m unittest discover -s tests -p 'test_*.py'
-(cd web-app && CI=true npm test -- --watchAll=false --runInBand)
-```
-
-## Resources
-
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
-
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
-
-## Full deployment
-You can use any string as the hash (any length).
-```
-./deploy.sh bb14ca5898a4e4133bbce2ea2315a1000
-```
-
-## Deploy the WebApps
-Update /web-app/src/Constant.js for the Web Endpoint.
-Then, run the following command.
-
-```
-cd web-app
-npm i
-npm run build
-npm run deploy
-```
+`teardown.sh` removes all dynamically generated API keys from API Gateway and DynamoDB, empties all S3 buckets (including versioned objects), deletes CloudFormation resources, and removes CloudWatch log groups.
 
 ## Web Game
 
