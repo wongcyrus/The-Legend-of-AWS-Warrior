@@ -63,6 +63,7 @@ test('combat manual lists live weapon stats, all spell powers and shields, and p
   assert.match(html, /id="manual-button"[^>]+aria-haspopup="dialog"/);
   assert.match(html, /id="combat-manual"[^>]+aria-labelledby="manual-title"/);
   assert.match(html, /id="manual-combos"[\s\S]*?Fargate Blade Barrage[\s\S]*?Bedrock Titan Meteor/);
+  assert.match(html, /id="manual-ultimates"[\s\S]*?Global Deployment[\s\S]*?Hyperscale Rumbling/);
   assert.doesNotMatch(html, /id="attack-voice-preview"/);
 });
 
