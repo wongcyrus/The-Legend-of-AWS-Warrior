@@ -68,6 +68,28 @@ All scripts have been updated to use the centralized configuration:
 ### Web App Scripts
 - `web-app/scripts/deploy.js` - Deploy web app to S3/CloudFront
 
+## Quick Switch Between Environments
+
+You can easily switch between environments using the helper script:
+
+```bash
+# Check current active environment
+./switch-env.sh status
+
+# Switch to Production (CloudProjectMarker, 3D Game enabled)
+./switch-env.sh prod
+
+# Switch to Exam Mode (CloudProjectMarkerExam, Tasks only, Game disabled)
+./switch-env.sh exam
+```
+
+This helper automatically:
+1. Updates `.env.local` and `web-app/.env.local`.
+2. Sets `REACT_APP_EXAM_MODE` appropriately.
+3. Updates `web-app/src/Constant.js` and `web-game/src/constant.js` to point to the active stack's Web API endpoint.
+
+---
+
 ## Setup for Different Environments
 
 ### Production (CloudProjectMarker)
