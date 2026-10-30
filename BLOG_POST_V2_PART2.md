@@ -332,17 +332,27 @@ All voice practice entities—approved questions, active sessions, capability ha
 | **Voice Session** | `SESSION#<sessionId>` | `SESSION` | Ephemeral session state, SHA-256 capability hashes (`pairingHash`, `mobileHash`), TTL |
 | **Speech Attempt** | `SESSION#<sessionId>` | `ATTEMPT#<attemptHash>` | Individual speech attempt record & immutable saved grade (prevents re-running AI on retry) |
 
-### 5.2 Operational CLI Tooling (`question-bank.mjs`)
-Course leaders manage the multilingual question bank directly from authorized shells via [`src/VoicePractice/question-bank.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/question-bank.mjs):
+### 5.2 Predefined Q&A Governance & Operational CLI Tooling (`questions.json` & `question-bank.mjs`)
+In AWS Warrior V2, **Graded Read-Aloud** is statically bundled for all **302 AWS services** in [`src/VoicePractice/activities.json`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/activities.json) (308 trilingual passages), so every service landmark in the 3D world supports Read-Aloud immediately.
+
+By contrast, **Architectural Q&A is strictly gated by predefined, teacher-approved rubrics in DynamoDB (`PK = "QUESTION_BANK"`)**:
+- When the game loads `/voice/catalog`, [`createQuestions`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/questions.mjs#L68-L83) queries `VoicePracticeTable` for items under `PK = "QUESTION_BANK"` with `status === "approved"`.
+- **If a service has no predefined approved questions in `VoicePracticeTable`, the Q&A mode is not shown for that service in the game** (and any direct API attempt to start a Q&A session for that service is rejected with `HTTP 409: "No approved questions are available for this service and language."`).
+- This guarantees that the AI never invents unvetted questions or arbitrary grading criteria—every Q&A prompt has a human-reviewed trilingual prompt (`en-US`, `zh-HK`, `zh-CN`), 1–8 concepts whose weights sum strictly to `100`, known `misconceptions[]`, `acceptableAnswers[]`, and a `referenceAnswer`.
+- Out of the box, [`src/VoicePractice/questions.json`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/questions.json) defines **12 approved questions across the 6 core foundational services** (`s3`, `ec2`, `iam`, `vpc`, `lambda`, `dynamodb` — 2 questions per service).
+
+Course leaders can validate, import drafts, approve, retire, or publish new Q&A questions for any of the 302 services directly from an authorized shell via [`src/VoicePractice/question-bank.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/question-bank.mjs)—instantly enabling Q&A on those service plaques in-game with zero code changes:
 ```bash
-# Export the entire question catalog to JSON
-node src/VoicePractice/question-bank.mjs export questions-catalog.json
+# Validate predefined questions in src/VoicePractice/questions.json (concept weights must sum to 100)
+node src/VoicePractice/question-bank.mjs validate src/VoicePractice/questions.json
 
-# Validate rubric concept weights (must sum strictly to 100)
-node src/VoicePractice/question-bank.mjs validate questions-catalog.json
+# Publish approved questions to DynamoDB (immediately enables Q&A for those services in-game)
+VOICE_TABLE=CloudProjectMarker-VoicePracticeTable-xxxx \
+  node src/VoicePractice/question-bank.mjs publish src/VoicePractice/questions.json
 
-# Execute transactional all-or-nothing publication (1-100 questions)
-node src/VoicePractice/question-bank.mjs publish questions-catalog.json
+# Export the live DynamoDB question catalog (including private rubrics & revisions) to JSON
+VOICE_TABLE=CloudProjectMarker-VoicePracticeTable-xxxx \
+  node src/VoicePractice/question-bank.mjs export questions-catalog.json
 ```
 
 ---

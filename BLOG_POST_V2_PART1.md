@@ -109,14 +109,15 @@ Approaching a plaque and clicking opens the **AWS Service Discovery Dialog**, pr
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        AWS SERVICE DISCOVERY                           │
-│                      [Amazon S3 Glacier Flexible]                      │
+│                             [Amazon S3]                                │
 ├────────────────────────────────────────────────────────────────────────┤
-│ Official Description: Low-cost cold storage for archive data with      │
-│ retrieval times from minutes to hours. Ideal for backup archives.      │
+│ Official Description: Object storage built to retrieve any amount of   │
+│ data from anywhere with 11 9s of durability and lifecycle tiering.     │
 │                                                                        │
 │ Available Voice Practice:                                              │
-│ [1] Graded Read-Aloud: "Archive Retrieval & Lifecycle Transitions"     │
-│ [2] Architectural Q&A: "Why Glacier Flexible over Instant Retrieval?" │
+│ [1] Graded Read-Aloud: "Object Storage & Lifecycle Management"         │
+│ [2] Architectural Q&A: "S3 Compliance Log Archival"                    │
+│     (Shown when approved questions exist in DynamoDB QUESTION_BANK)    │
 │                                                                        │
 │ Language: [ English (US) ▼ ] [ 廣東話 (HK) ] [ 普通話 (CN) ]          │
 │                                                                        │
@@ -126,17 +127,22 @@ Approaching a plaque and clicking opens the **AWS Service Discovery Dialog**, pr
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Dual Learning Modes: Read-Aloud & Architectural Q&A
+### 3.2 Dual Learning Modes: Read-Aloud (All 302 Services) & Predefined Architectural Q&A (`QUESTION_BANK`)
 
-To scaffold student confidence from beginner terminology familiarity to open-ended architectural reasoning, V2 provides two distinct voice assessment modes:
+To scaffold student confidence from beginner terminology familiarity to open-ended architectural reasoning, V2 provides two distinct voice assessment modes with different content-authoring models:
 
 | Dimension | Mode 1: Graded Read-Aloud (`graded_read_aloud`) | Mode 2: Architectural Q&A (`graded_question_answer`) |
 | :--- | :--- | :--- |
 | **Pedagogical Goal** | Build confidence speaking AWS service terminology and core definitions aloud. | Train interview-style architectural explanation in the student's own words. |
+| **Service Coverage & Content Source** | **All 302 AWS Services out of the box** (308 trilingual passages bundled in [`src/VoicePractice/activities.json`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/activities.json): 2 rounds for the 6 core services + 1 round for the other 296 services). | **Strictly gated by predefined, teacher-approved questions** published to DynamoDB `VoicePracticeTable` (`PK = "QUESTION_BANK"`). Services without published questions in `QUESTION_BANK` only show Read-Aloud in the game. |
 | **Student Prompt** | Authored passage displayed on screen in English, Cantonese, or Mandarin. | Open-ended scenario question without showing the reference answer. |
-| **AI Grading Rubric** | **Transcript Coverage** (`0–70` pts) + **Content Fidelity** (`0–30` pts) = `0–100` score (judging text meaning only, never voice/pronunciation). | Weighted multi-concept rubric (`concepts[]` summing to `100` pts) + mandatory verbatim transcript evidence. |
+| **AI Grading Rubric** | **Transcript Coverage** (`0–70` pts) + **Content Fidelity** (`0–30` pts) = `0–100` score (judging text meaning only, never voice/pronunciation). | Predefined weighted multi-concept rubric (`concepts[]` summing to `100` pts) + mandatory verbatim transcript evidence. |
 | **Pass Threshold** | Score $\ge 60$ | Score $\ge 60$ (derived strictly from server-summed `met` concept weights). |
 | **MP Reward & Cooldown** | **`+5 / +10 / +15 MP`** (`60–74` / `75–89` / `90–100`) on first pass; enters a **7-day service cooldown**. | **`+10 / +20 / +30 MP`** (`60–74` / `75–89` / `90–100`) on first pass per unique question; rotatable across the question bank. |
+
+> [!IMPORTANT]
+> **Why Architectural Q&A Requires Predefined Questions (`questions.json` -> DynamoDB `QUESTION_BANK`)**
+> Unlike Read-Aloud—which is bundled for all 302 services in [`src/VoicePractice/activities.json`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/activities.json)—**Architectural Q&A is never improvised by the LLM on the fly.** For Q&A to appear on a service plaque in the game, an instructor must first predefine and publish `status: "approved"` questions for that `serviceId` into DynamoDB `VoicePracticeTable` (`PK = "QUESTION_BANK"`) via [`src/VoicePractice/question-bank.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/question-bank.mjs). Out of the box, [`src/VoicePractice/questions.json`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/questions.json) seeds **12 approved Q&A questions across the 6 foundational syllabus services** (`s3`, `ec2`, `iam`, `vpc`, `lambda`, `dynamodb` — 2 questions each), and instructors can publish new questions for any of the remaining 296 services at any time without redeploying code.
 
 ### 3.3 Privacy-First Browser Speech-to-Text: Why the AI Grades *Meaning*, Never Voice or Pronunciation
 A critical architectural distinction in AWS Warrior V2 is that **raw voice audio is never sent to AWS or to the AI agent**:
