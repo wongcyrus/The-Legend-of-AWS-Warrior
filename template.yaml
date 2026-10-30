@@ -24,9 +24,9 @@ Parameters:
     Description: Immutable S3 key produced by admin/package_voice_agent.sh.
   VoiceModelId:
     Type: String
-    Default: amazon.nova-lite-v1:0
-    AllowedPattern: "amazon[.][a-zA-Z0-9.:-]+"
-    Description: In-region Amazon Bedrock model ID; confirm access before enabling.
+    Default: us.amazon.nova-2-lite-v1:0
+    AllowedPattern: "(?:(?:us|eu|ap|global)[.])?amazon[.][a-zA-Z0-9.:-]+"
+    Description: In-region Amazon Bedrock model or inference profile ID; confirm access before enabling.
   SecretHash:
     Type: String
     Description: Secret Hash value for the project
@@ -160,7 +160,10 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: bedrock:InvokeModel
-                Resource: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${VoiceModelId}"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${VoiceModelId}"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${VoiceModelId}"
               - Effect: Allow
                 Action: [s3:GetObject, s3:GetObjectVersion]
                 Resource: !Sub "arn:${AWS::Partition}:s3:::${VoiceAgentCodeBucket}/${VoiceAgentCodeKey}"

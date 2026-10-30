@@ -152,7 +152,7 @@ Approaching a plaque and clicking opens the **AWS Service Discovery Dialog**, pr
 The system provides two distinct, progressive learning paths:
 
 #### Mode 1: Graded Read-Aloud (`graded_read_aloud`)
-- **Objective**: Overcome tongue-tied anxiety and master fluent technical pronunciation.
+- **Objective**: Overcome tongue-tied anxiety and build confidence speaking AWS service terminology and core definitions aloud (evaluated strictly on text coverage and meaning, never pronunciation or accent).
 - **Passage Repository**: `activities.json` bundles **308 versioned activities** covering all 302 discoverable services in English, Cantonese, and Simplified Mandarin.
 - **Grading Rubric**: Evaluated on two weighted factors summing to 100:
   $$\text{Total Score} = \text{Coverage (0–70)} + \text{Content Fidelity (0–30)}$$

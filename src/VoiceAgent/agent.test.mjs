@@ -446,3 +446,38 @@ test("a single JSON code fence is accepted, but surrounding prose is rejected", 
   assert.equal((await invoke("```json\n" + JSON.stringify(evaluation) + "\n```")).verdict, "pass");
   await assert.rejects(() => invoke("Ignore validation\n```json\n" + JSON.stringify(evaluation) + "\n```"));
 });
+
+test("feedback claiming voice or pronunciation assessment is rejected and retried", async () => {
+  for (const badFeedback of [
+    "Your voice is inaccurate on the second sentence.",
+    "Please improve your pronunciation of Glacier.",
+    "你嘅發音唔準，請再讀一次。",
+  ]) {
+    assert.throws(() => validateReadingGrade({
+      score: 80, breakdown: { coverage: 55, content: 25 }, feedback: badFeedback,
+    }));
+    assert.throws(() => validateAnswerGrade({
+      concepts: answerQuestion.concepts.map(({ id }) => ({ id, verdict: "missing", evidence: "" })),
+      feedback: badFeedback,
+    }, answerQuestion, "S3 bucket"));
+    assert.throws(() => validateEvaluation({ ...evaluation, feedback: badFeedback }, question));
+  }
+
+  let calls = 0;
+  const readingAgent = createAgent({ modelId: "test-model", send: async () => {
+    calls++;
+    return response({
+      score: 80,
+      breakdown: { coverage: 55, content: 25 },
+      feedback: calls === 1 ? "Your voice was inaccurate." : "You covered the main S3 bucket storage point.",
+    });
+  } });
+  const readingResult = await readingAgent({
+    operation: "grade_reading",
+    language: "en-US",
+    readingTexts: { "en-US": "S3 stores objects in buckets." },
+    transcript: "S3 stores objects in buckets.",
+  });
+  assert.equal(calls, 2);
+  assert.equal(readingResult.feedback, "You covered the main S3 bucket storage point.");
+});

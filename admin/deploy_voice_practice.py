@@ -64,7 +64,7 @@ def main():
     parser.add_argument("--stack", required=True)
     parser.add_argument("--artifact-bucket", required=True)
     parser.add_argument("--region", default="us-east-1")
-    parser.add_argument("--model", default="amazon.nova-lite-v1:0")
+    parser.add_argument("--model", default="us.amazon.nova-2-lite-v1:0")
     parser.add_argument("--execute", action="store_true",
                         help="Execute the validated change set; default only prepares it.")
     args = parser.parse_args()

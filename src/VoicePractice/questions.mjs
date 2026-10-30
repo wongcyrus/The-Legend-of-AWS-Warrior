@@ -37,9 +37,12 @@ export function questionRubric(question, language) {
     referenceAnswer: question.referenceAnswer };
 }
 
+const forbiddenVoiceClaim = /\b(?:pronunciat\w*|mispronounc\w*|your\s+voice|voice\s+(?:is|was|quality|tone|clarity|inaccurate|accurate)|accent|intonation|enunciat\w*)\b|發音|讀音|咬字|聲線|語調|口音|发音|读音/iu;
+
 export function validateAnswerGrade(value) {
   if (!Number.isInteger(value?.score) || value.score < 0 || value.score > 100 ||
-      value.breakdown?.understanding !== value.score || !text(value.feedback, 1600))
+      value.breakdown?.understanding !== value.score || !text(value.feedback, 1600) ||
+      forbiddenVoiceClaim.test(value.feedback))
     throw new Error("Invalid answer grade");
   return { score: value.score, passed: value.score >= 60,
     breakdown: { understanding: value.score }, feedback: value.feedback.trim() };
