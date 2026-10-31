@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createQuestionAdmin, validateDrafts, validateQuestionBatch } from "../../src/VoicePractice/question-bank.mjs";
-import { gradeAnswer, validateAnswerGrade, validateQuestion, isAnswerTranscript } from "../../src/VoicePractice/questions.mjs";
+import { createQuestions, gradeAnswer, questionActivityId, validateAnswerGrade, validateQuestion, isAnswerTranscript } from "../../src/VoicePractice/questions.mjs";
+import { languageConfig } from "../../src/VoicePractice/content.mjs";
 import { rewardFor } from "../../src/VoicePractice/activities.mjs";
 import { createAgent } from "../../src/VoiceAgent/agent.mjs";
 import { questionRubric } from "../../src/VoicePractice/questions.mjs";
@@ -166,4 +167,39 @@ test("direct batch publishing and private export round-trip without draft approv
   await assert.rejects(() => admin.publish(drafts), /matching status/);
   await assert.rejects(() => admin.exportQuestions("not-a-service"), /Unknown service/);
   assert.ok((await admin.exportQuestions("s3")).every(row => row.expectedRevision === 1 && row.version === 2));
+});
+
+test("after cooldown expires on completed questions, choose prioritizes uncompleted first then least-recently-passed (LRU)", async () => {
+  const s3Questions = published.filter(q => q.serviceId === "s3");
+  const qA = { ...s3Questions[0], id: "a-first" };
+  const qB = { ...s3Questions[1], id: "b-second" };
+  const qC = { ...s3Questions[0], id: "c-third" };
+  const progress = new Map();
+  let currentNow = 20 * 86400;
+  const store = {
+    async listQuestions() { return [qA, qB, qC]; },
+    async get(key) { return progress.get(`${key.PK}#${key.SK}`); },
+  };
+  const qDomain = createQuestions({
+    store,
+    config: languageConfig,
+    services: new Map([["s3", "Amazon S3"]]),
+    fail: (code, msg) => { throw new Error(`${code}: ${msg}`); },
+    now: () => currentNow,
+  });
+
+  // 1. qA was passed on Day 1 (cooldown expired on Day 8), qB was passed on Day 5 (cooldown expired on Day 12), qC is uncompleted:
+  progress.set(`PLAYER#p1#ACTIVITY#${questionActivityId("s3", "a-first")}`, { completed: true, lastPassedAt: 1 * 86400 });
+  progress.set(`PLAYER#p1#ACTIVITY#${questionActivityId("s3", "b-second")}`, { completed: true, lastPassedAt: 5 * 86400 });
+  assert.equal((await qDomain.choose("p1", "s3", "en-US")).id, "c-third", "Uncompleted question must be chosen before expired-cooldown repeats");
+
+  // 2. Now qC is passed on Day 6, and qA was passed again most recently on Day 10 (all cooldowns expired by Day 20):
+  // Oldest lastPassedAt is now qB (Day 5), then qC (Day 6), then qA (Day 10).
+  progress.set(`PLAYER#p1#ACTIVITY#${questionActivityId("s3", "a-first")}`, { completed: true, lastPassedAt: 10 * 86400 });
+  progress.set(`PLAYER#p1#ACTIVITY#${questionActivityId("s3", "c-third")}`, { completed: true, lastPassedAt: 6 * 86400 });
+  assert.equal((await qDomain.choose("p1", "s3", "en-US")).id, "b-second", "Should pick least-recently-passed question (qB) instead of repeating alphabetically first (qA)");
+
+  // 3. Once qB is passed on Day 20, the next oldest after cooldown is qC (Day 6):
+  progress.set(`PLAYER#p1#ACTIVITY#${questionActivityId("s3", "b-second")}`, { completed: true, lastPassedAt: 20 * 86400 });
+  assert.equal((await qDomain.choose("p1", "s3", "en-US")).id, "c-third");
 });

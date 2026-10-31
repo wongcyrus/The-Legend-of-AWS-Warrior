@@ -90,7 +90,10 @@ export function createQuestions({ store, config, services, fail, now }) {
     })));
     const eligible = options.filter((_, index) => taskAvailableAt(progress[index]) <= now());
     if (!eligible.length) fail(409, `All Q&A questions for this service are on a one-week cooldown. Available again ${new Date(Math.min(...progress.map(taskAvailableAt)) * 1000).toISOString()}. Return to the game to discover another service.`);
-    return eligible.find(question => !progress[options.indexOf(question)]?.completed) ?? eligible[0];
+    return eligible.find(question => !progress[options.indexOf(question)]?.completed) ??
+      [...eligible].sort((a, b) =>
+        taskAvailableAt(progress[options.indexOf(a)]) - taskAvailableAt(progress[options.indexOf(b)]) ||
+        a.id.localeCompare(b.id))[0];
   };
   return { activities, choose };
 }
