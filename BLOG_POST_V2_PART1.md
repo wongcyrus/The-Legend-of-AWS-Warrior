@@ -138,7 +138,7 @@ To scaffold student confidence from beginner terminology familiarity to open-end
 | **Student Prompt** | Authored passage displayed on screen in English, Cantonese, or Mandarin. | Open-ended scenario question without showing the reference answer. |
 | **AI Grading Rubric** | **Transcript Coverage** (`0–70` pts) + **Content Fidelity** (`0–30` pts) = `0–100` score (judging text meaning only, never voice/pronunciation). | Predefined weighted multi-concept rubric (`concepts[]` summing to `100` pts) + mandatory verbatim transcript evidence. |
 | **Pass Threshold** | Score $\ge 60$ | Score $\ge 60$ (derived strictly from server-summed `met` concept weights). |
-| **MP Reward & Cooldown** | **`+5 / +10 / +15 MP`** (`60–74` / `75–89` / `90–100`) on first pass; enters a **7-day service cooldown**. | **`+10 / +20 / +30 MP`** (`60–74` / `75–89` / `90–100`) on first pass per unique question; rotatable across the question bank. |
+| **MP Reward & Cooldown** | **`+5 / +10 / +15 MP`** (`60–74` / `75–89` / `90–100`) on first pass; enters a **7-day service cooldown**. | **`+10 / +20 / +30 MP`** (`60–74` / `75–89` / `90–100`) on first pass per unique question; rotatable across the question bank (uncompleted questions served first, then Least-Recently-Passed LRU rotation after the 7-day cooldown). |
 
 > [!IMPORTANT]
 > **Why Architectural Q&A Requires Predefined Questions (`questions.json` -> DynamoDB `QUESTION_BANK`)**
