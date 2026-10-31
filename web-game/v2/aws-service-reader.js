@@ -1,5 +1,5 @@
 import { AWS_SERVICES } from "./aws-theme.js?v=20261028-voice-1";
-import { bindVoicePractice } from "./voice-practice.js?v=20261031-voice-counts-1";
+import { bindVoicePractice } from "./voice-practice.js?v=20261031-voice-counts-2";
 
 export const READ_SERVICES_KEY = "aws-warrior:v2:read-services";
 
@@ -47,6 +47,7 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
       button.textContent = reading && qa ? `Available: ${readLabel} / ${qaLabel}`
         : reading ? `Available: ${readLabel}` : qa ? `Available: ${qaLabel}` : "No voice tasks available";
       button.disabled = false;
+      button.hidden = Boolean((speechButton || qaButton) && (reading || qa));
       if (qaBadge && (readTotal > 0 || qaTotal > 0)) {
         qaBadge.textContent = qaTotal > 0
           ? `Speech: ${readAvailable}/${readTotal} · Q&A: ${qaAvailable}/${qaTotal} available`
@@ -67,6 +68,7 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
       if (epoch !== availabilityEpoch || selected !== id) return;
       button.textContent = "Check voice task availability";
       button.disabled = false;
+      button.hidden = false;
     }
   };
   game.refreshServiceReader = () => {

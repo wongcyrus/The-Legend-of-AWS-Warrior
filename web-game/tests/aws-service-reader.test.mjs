@@ -109,6 +109,7 @@ test('icon clicks check current voice availability without marking completion fr
     assert.deepEqual(availabilityRequests, ['ecs']);
     assert.equal(get('service-explain').textContent, 'Available: Read aloud / Q&A');
     assert.equal(get('service-explain').disabled, false);
+    assert.equal(get('service-explain').hidden, true);
     assert.equal(get('service-qa-badge').textContent, 'Speech: 1/1 · Q&A: 1/1 available');
     assert.equal(get('service-qa-badge').hidden, false);
     assert.equal(get('service-start-speech').textContent, 'Start Speech (1/1 available)');
@@ -137,7 +138,9 @@ test('icon clicks check current voice availability without marking completion fr
     await Promise.resolve();
     assert.equal(get('service-explain').textContent, 'Available: Q&A');
     assert.equal(get('service-read-state').textContent, 'Read');
-    assert.equal(get('service-explain').hidden, false);
+    assert.equal(get('service-explain').hidden, true);
+    assert.equal(get('service-start-speech').hidden, true);
+    assert.equal(get('service-start-qa').hidden, false);
     get('service-explain').onclick();
     assert.deepEqual(voiceRequests, ['ecs']);
     voiceRequests.length = 0;

@@ -1,7 +1,7 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118.1/build/three.module.js";
 import { instances, normalized } from "./assets.js?v=20261027-maps-1";
 import { mapScenery } from "./maps.js?v=20261027-maps-1";
-import { servicePlaque } from "./aws-world.js?v=20261029-sign-post-1";
+import { servicePlaque } from "./aws-world.js?v=20261031-voice-counts-2";
 import { CLOUD_REGIONS, AWS_LANDMARKS } from "./aws-theme.js?v=20261028-voice-1";
 
 export function buildGates(world) {

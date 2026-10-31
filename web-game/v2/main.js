@@ -17,7 +17,7 @@ import { baseUrl } from "../src/constant.js";
 import { Assets } from "./assets.js?v=20261027-maps-1";
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js?v=20261029-ajax-collision-1";
 import { GameSave, initialGameSave } from "./game-save.js?v=20261029-save-1";
-import { World } from "./world.js?v=20261031-voice-counts-1";
+import { World } from "./world.js?v=20261031-voice-counts-2";
 import { MAPS, isSafePosition, nearbyGate, isMagicWaveClear } from "./maps.js?v=20261029-monster-density-1";
 import { sharedResources, disposeMap, cleanupExpiredEffects } from "./map-lifecycle.js?v=20261029-v2-features-1";
 import { drawMinimap } from "./minimap.js?v=20261029-v2-features-1";
@@ -35,8 +35,8 @@ import { MonsterModels } from "./monster-models.js?v=20261028-magic-1";
 import { SHIELDS, ShieldGuard } from "./shields.js?v=20261029-v2-features-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 import { AWS_SERVICES, AWS_LANDMARKS, BUILDING_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
-import { loadServiceImages } from "./aws-world.js?v=20261031-voice-counts-1";
-import { bindServiceReader } from "./aws-service-reader.js?v=20261031-voice-counts-1";
+import { loadServiceImages } from "./aws-world.js?v=20261031-voice-counts-2";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261031-voice-counts-2";
 import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-recovery-hp-1";
 import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-6";
 
@@ -2389,7 +2389,11 @@ class Game {
       this.worldEvents?.activeZone?.label ? this.worldEvents.activeZone.label :
       outage ? `Outage Alert: ${outage.label} (${Math.ceil(outage.remaining)}s)` : "";
     const landmark = this.nearbyAwsLandmark?.(14);
-    const landmarkHint = landmark ? `${AWS_SERVICES[landmark.service]?.label || landmark.service.toUpperCase()}: Press E or click sign to learn` : "";
+    const lmSummary = landmark ? this.serviceVoiceSummary?.get?.(landmark.service) : null;
+    const lmCounts = lmSummary
+      ? ` (Speech ${lmSummary.readAvailableCount ?? 0}/${lmSummary.readTotal ?? 2}${lmSummary.qaTotal > 0 ? ` · Q&A ${lmSummary.qaAvailable}/${lmSummary.qaTotal}` : ""} available)`
+      : "";
+    const landmarkHint = landmark ? `${AWS_SERVICES[landmark.service]?.label || landmark.service.toUpperCase()}${lmCounts}: Press E or click sign to learn` : "";
     document.getElementById("explore-hint").textContent = gate ? MAPS[gate.to].name :
       nearbyEnemy ? `${nearbyEnemy.GetComponent("NPCController").profile.label}: ${Math.ceil(enemyHealth._health)} / ${enemyHealth._maxHealth} HP` :
       chest ? chest.name :

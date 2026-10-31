@@ -287,14 +287,18 @@ test('AWS plaques fall back to text on image errors, remain map-owned, and relea
   assert.ok(calls.some(([kind, text]) => kind === 'fillText' && text === 'READ - Click to revisit'));
   assert.ok(calls.some(([kind, text]) => kind === 'fillText' && text === 'Amazon S3'));
   assert.ok(calls.some(([kind, text]) => kind === 'fillText' && text === 'AWS'));
-  // setVoiceSummary renders both Speech and Q&A count badges in the top-right text region (x >= 174), never overlapping the 128x128 icon (x: 24..152):
+  // setVoiceSummary renders both Speech and Q&A count badges and updates the service title in the right-hand text region (x >= 170), never overlapping the 128x128 icon (x: 24..152):
   const beforeSummary = calls.length;
   plaque.userData.setVoiceSummary({ readAvailableCount: 2, readTotal: 2, qaAvailable: 2, qaTotal: 2, readAvailable: true });
   const summaryCalls = calls.slice(beforeSummary);
   assert.ok(summaryCalls.some(([kind, text, x, y]) =>
     kind === 'fillText' && text === 'Speech: 2/2 · Q&A: 2/2 available' && x >= 176 && y <= 44));
+  assert.ok(summaryCalls.some(([kind, text, x]) =>
+    kind === 'fillText' && text === 'Amazon S3 (4/4)' && x >= 176));
+  assert.ok(summaryCalls.some(([kind, text, x]) =>
+    kind === 'fillText' && text === '★ 4 TASKS AVAILABLE - Click' && x >= 176));
   for (const [kind, x, y] of summaryCalls.filter(([k]) => k === 'fillRect')) {
-    assert.ok(x >= 174 && y <= 44, `Badge rect (${x}, ${y}) must not overlap the left-hand service icon`);
+    assert.ok(x >= 170, `Badge rect (${x}, ${y}) must not overlap the left-hand service icon`);
   }
   await loadServiceImages();
   const initialServices = new Set([...BUILDING_SERVICES,

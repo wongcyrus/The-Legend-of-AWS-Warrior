@@ -75,22 +75,34 @@ export function servicePlaque(world, parent, id, { x, y, z, width = 8, rotation 
   plaque.userData.awsService = id;
   plaque.userData.awsWidth = width;
   plaque.userData.setRead = read => {
+    plaque.userData.serviceRead = read;
     ctx.fillStyle = "#182635";
     ctx.fillRect(170, 140, 324, 36);
-    ctx.fillStyle = read ? "#9ed6b5" : "#ffb454";
-    ctx.font = "bold 20px sans-serif";
-    ctx.fillText(read ? "READ - Click to revisit" : "NEW - Click to learn", 176, 165, 316);
-    plaque.userData.serviceRead = read;
+    const summary = plaque.userData.voiceSummary;
+    if (summary) {
+      const totalAvailable = Number(summary.readAvailableCount ?? (summary.readAvailable ? 2 : 0)) + Number(summary.qaAvailable ?? 0);
+      ctx.fillStyle = totalAvailable > 0 ? "#9ed6b5" : "#ffb454";
+      ctx.font = "bold 20px sans-serif";
+      ctx.fillText(totalAvailable > 0
+        ? `★ ${totalAvailable} TASK${totalAvailable === 1 ? "" : "S"} AVAILABLE - Click`
+        : "0 TASKS AVAILABLE - Cooldown", 176, 165, 316);
+    } else {
+      ctx.fillStyle = read ? "#9ed6b5" : "#ffb454";
+      ctx.font = "bold 20px sans-serif";
+      ctx.fillText(read ? "READ - Click to revisit" : "NEW - Click to learn", 176, 165, 316);
+    }
     texture.needsUpdate = true;
   };
   plaque.userData.setVoiceSummary = summary => {
     ctx.fillStyle = "#182635";
-    ctx.fillRect(174, 10, 322, 36);
+    ctx.fillRect(174, 10, 322, 82);
     if (summary) {
       const readAvailableCount = Number(summary.readAvailableCount ?? (summary.readAvailable ? 2 : 0));
       const readTotal = Number(summary.readTotal ?? 2);
       const qaAvailable = Number(summary.qaAvailable ?? 0);
       const qaTotal = Number(summary.qaTotal ?? 0);
+      const totalAvailable = readAvailableCount + qaAvailable;
+      const totalTasks = readTotal + qaTotal;
       const hasAvailable = qaAvailable > 0 || readAvailableCount > 0 || Boolean(summary.readAvailable);
       ctx.fillStyle = hasAvailable ? "#1f3b2c" : "#3a2a1d";
       ctx.fillRect(176, 12, 316, 30);
@@ -100,8 +112,16 @@ export function servicePlaque(world, parent, id, { x, y, z, width = 8, rotation 
         ? `Speech: ${readAvailableCount}/${readTotal} · Q&A: ${qaAvailable}/${qaTotal} available`
         : `Speech: ${readAvailableCount}/${readTotal} available`;
       ctx.fillText(text, 186, 33, 296);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 28px sans-serif";
+      ctx.fillText(`${service.label} (${totalAvailable}/${totalTasks})`, 176, 82, 316);
+    } else {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 29px sans-serif";
+      ctx.fillText(service.label, 176, 82, 316);
     }
     plaque.userData.voiceSummary = summary || null;
+    plaque.userData.setRead(Boolean(plaque.userData.serviceRead));
     texture.needsUpdate = true;
   };
   plaque.userData.setRead(Boolean(world.readServices?.has(id)));
