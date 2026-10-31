@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { Agent, BedrockModel, Graph, McpClient, TextBlock, tool } from "@strands-agents/sdk";
+import { BeforeMultiAgentInvocationEvent, BeforeNodeCallEvent, Status } from "@strands-agents/sdk/multiagent";
 import { createAgent as createGraderAgent } from "./agent.mjs";
 
 let telemetryInitialized = false;
@@ -49,10 +50,17 @@ export function extractGraphTopology(graph, { steps = [], handoffs = [] } = {}) 
 
   const edges = graph.edges.map(edge => {
     const key = `${edge.source}->${edge.target}`;
+    const stageByTarget = {
+      trilingual_localizer: "localization",
+      aws_docs_fact_checker: "rubric",
+      interview_miner: "topic",
+    };
+    const loopStage = edge.source === "calibration_critic" ? stageByTarget[edge.target] ?? null : null;
     return {
       source: edge.source,
       target: edge.target,
       conditional: typeof edge.handler === "function",
+      loopStage,
       traversals: handoffCounts.get(key) ?? 0,
     };
   });
@@ -66,7 +74,8 @@ export function extractGraphTopology(graph, { steps = [], handoffs = [] } = {}) 
   for (const edge of edges) {
     const countLabel = edge.traversals > 0 ? ` (${edge.traversals}x)` : "";
     if (edge.conditional) {
-      mermaidLines.push(`  ${edge.source} -. "conditional loop${countLabel}" .-> ${edge.target}`);
+      const stageLabel = edge.loopStage ? `: ${edge.loopStage}` : "";
+      mermaidLines.push(`  ${edge.source} -. "conditional loop${stageLabel}${countLabel}" .-> ${edge.target}`);
     } else {
       mermaidLines.push(`  ${edge.source} -->|"handoff${countLabel}"| ${edge.target}`);
     }
@@ -277,6 +286,24 @@ export function findDuplicateOrOverlappingQuestion(question, avoidQuestions = []
     }
   }
   return null;
+}
+
+export function classifyFailureStage(errorOrMessage) {
+  if (errorOrMessage && typeof errorOrMessage === "object" && typeof errorOrMessage.failureStage === "string") {
+    return errorOrMessage.failureStage;
+  }
+  const msg = String(errorOrMessage?.message ?? errorOrMessage ?? "");
+  if (
+    /already used|overlaps too closely|duplicate_id|duplicate_title|duplicate_prompt|overlapping_prompt|overlapping_concepts|Question id is required|Question serviceId is required/i.test(msg)
+  ) {
+    return "topic";
+  }
+  if (
+    /Mandarin prompt \(zh-CN\) contains Cantonese-only characters|Synthetic goodZhHk failed calibration|Question prompt for zh-HK is required|Question prompt for zh-CN is required/i.test(msg)
+  ) {
+    return "localization";
+  }
+  return "rubric";
 }
 
 export function parseJsonFromText(raw) {
@@ -542,6 +569,7 @@ export function createQuestionGenerator({
         const verified = await verifyAndCalibrate(input, state.targetMeta);
         state.calibratedResult = verified;
         state.lastCritique = null;
+        state.lastFailureStage = null;
         return {
           passed: true,
           questionId: verified.question.id,
@@ -550,8 +578,10 @@ export function createQuestionGenerator({
       } catch (error) {
         state.calibratedResult = null;
         state.lastCritique = error.message;
+        state.lastFailureStage = classifyFailureStage(error);
         return {
           passed: false,
+          failureStage: state.lastFailureStage,
           critique: error.message,
         };
       }
@@ -592,16 +622,17 @@ Your job is to find the most common, practical cloud engineering interview quest
       tools: activeDocTools,
       traceAttributes,
       systemPrompt: `You are Agent 2 (AwsDocsFactCheckerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
-You receive the mined interview question from [node: interview_miner].
+You receive the mined interview question from [node: interview_miner] (and, if a rubric calibration retry occurred, a targeted previousAttemptCritique from [node: calibration_critic]).
 Your job is to verify BOTH the question premise and the answer against official AWS documentation using your documentation search tools (such as aws___search_documentation).
 1. Call aws___search_documentation to verify current AWS behavior, security defaults, and best practices for this service and topic.
-2. If the mined interview question premise or traditional answer is outdated, rewrite the question and rubric so they are 100% accurate according to current official AWS documentation.
-3. Ensure the id, title, enPrompt, and concepts[] do NOT duplicate or overlap with any existing question listed in avoidQuestions or avoidQuestionIds.
-4. Place any outdated community belief or common mistake into misconceptions[] (1-3 concise strings).
-5. Design 2 or 3 atomic grading concepts in concepts[] whose integer weights MUST sum strictly to 100 (e.g. 60 + 40, or 50 + 50, or 40 + 35 + 25).
-6. Each concept description must describe a clear architectural idea in plain English that a student can express in their own spoken words.
-7. Never mention voice, pronunciation, accent, or speaking tone anywhere.
-8. Return ONLY valid JSON:
+2. If [node: calibration_critic] reported a rubric or grading calibration critique, fix the concepts[], weights, misconceptions[], or prompt clarity to resolve that exact critique.
+3. If the mined interview question premise or traditional answer is outdated, rewrite the question and rubric so they are 100% accurate according to current official AWS documentation.
+4. Ensure the id, title, enPrompt, and concepts[] do NOT duplicate or overlap with any existing question listed in avoidQuestions or avoidQuestionIds.
+5. Place any outdated community belief or common mistake into misconceptions[] (1-3 concise strings).
+6. Design 2 or 3 atomic grading concepts in concepts[] whose integer weights MUST sum strictly to 100 (e.g. 60 + 40, or 50 + 50, or 40 + 35 + 25).
+7. Each concept description must describe a clear architectural idea in plain English that a student can express in their own spoken words.
+8. Never mention voice, pronunciation, accent, or speaking tone anywhere.
+9. Return ONLY valid JSON:
 {
   "id": "kebab-case-question-id",
   "serviceId": "...",
@@ -626,14 +657,15 @@ Your job is to verify BOTH the question premise and the answer against official 
       tools: [],
       traceAttributes,
       systemPrompt: `You are Agent 3 (TrilingualLocalizationAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
-You receive the AWS-documentation-verified question and rubric from [node: aws_docs_fact_checker].
+You receive the AWS-documentation-verified question and rubric from [node: aws_docs_fact_checker] (and, if a localization retry occurred, a targeted previousAttemptCritique from [node: calibration_critic]).
 Your job is to produce the complete trilingual question object with prompts in "en-US", "zh-HK", and "zh-CN".
 Rules:
-1. "en-US": Keep the clear, conversational English scenario interview prompt.
-2. "zh-HK": Translate into authentic spoken Hong Kong Cantonese (using natural HK Cantonese phrasing such as 你嘅、點解、點樣、入面、邊啲) while keeping official English AWS service/feature terms (e.g., Amazon S3, IAM role, Security Group) where HK cloud engineers naturally code-switch.
-3. "zh-CN": Translate into natural Simplified Chinese Mandarin. NEVER use Cantonese characters (嘅, 喺, 唔, 畀, 佢, 哋, 乜, 啲, 揀, 嚟) in "zh-CN".
-4. Preserve id, serviceId, version, status, expectedRevision, title, concepts, misconceptions, acceptableAnswers, and referenceAnswer exactly as required by the schema.
-5. Return ONLY valid JSON:
+1. If [node: calibration_critic] reported a localization critique (such as Cantonese characters in "zh-CN" or a mismatch in "zh-HK"), fix the localized prompts while keeping the verified rubric intact.
+2. "en-US": Keep the clear, conversational English scenario interview prompt.
+3. "zh-HK": Translate into authentic spoken Hong Kong Cantonese (using natural HK Cantonese phrasing such as 你嘅、點解、點樣、入面、邊啲) while keeping official English AWS service/feature terms (e.g., Amazon S3, IAM role, Security Group) where HK cloud engineers naturally code-switch.
+4. "zh-CN": Translate into natural Simplified Chinese Mandarin. NEVER use Cantonese characters (嘅, 喺, 唔, 畀, 佢, 哋, 乜, 啲, 揀, 嚟) in "zh-CN".
+5. Preserve id, serviceId, version, status, expectedRevision, title, concepts, misconceptions, acceptableAnswers, and referenceAnswer exactly as required by the schema.
+6. Return ONLY valid JSON:
 {
   "id": "...",
   "serviceId": "...",
@@ -682,7 +714,54 @@ Return ONLY valid JSON:
 }`,
     });
 
-    return new Graph({
+    const evaluateCriticOutcome = async state => {
+      const criticResults = state.node("calibration_critic")?.results ?? [];
+      const turnNumber = criticResults.length;
+      if (invocationState.evaluatedCriticTurn === turnNumber) {
+        return;
+      }
+      invocationState.evaluatedCriticTurn = turnNumber;
+      if (!invocationState.calibratedResult) {
+        const criticNode = state.node("calibration_critic");
+        const finalText = (criticNode?.content ?? [])
+          .map(block => (typeof block?.text === "string" ? block.text : ""))
+          .join("\n")
+          .trim();
+        try {
+          const parsed = parseJsonFromText(finalText);
+          invocationState.calibratedResult = await verifyAndCalibrate(parsed, invocationState.targetMeta);
+          invocationState.lastCritique = null;
+          invocationState.lastFailureStage = null;
+        } catch (error) {
+          invocationState.lastCritique = error.message;
+          invocationState.lastFailureStage = classifyFailureStage(error);
+        }
+      }
+      if (invocationState.calibratedResult) {
+        invocationState.shouldRetry = false;
+        return;
+      }
+      invocationState.cycleCount = (invocationState.cycleCount ?? 0) + 1;
+      invocationState.lastFailureStage = invocationState.lastFailureStage ?? classifyFailureStage(invocationState.lastCritique);
+      invocationState.shouldRetry = invocationState.cycleCount < maxAttempts;
+      const targetByStage = {
+        localization: "trilingual_localizer",
+        rubric: "aws_docs_fact_checker",
+        topic: "interview_miner",
+      };
+      const critiqueMessage = JSON.stringify({
+        previousAttemptCritique: invocationState.lastCritique,
+        failureStage: invocationState.lastFailureStage,
+        targetNode: targetByStage[invocationState.lastFailureStage] ?? "interview_miner",
+        cycle: invocationState.cycleCount,
+      });
+      const lastCriticResult = criticResults[criticResults.length - 1];
+      if (lastCriticResult && Array.isArray(lastCriticResult.content)) {
+        lastCriticResult.content.push(new TextBlock(critiqueMessage));
+      }
+    };
+
+    const graph = new Graph({
       id: "aws-interview-question-pipeline",
       sources: ["interview_miner"],
       ...(traceAttributes ? { traceAttributes } : {}),
@@ -698,42 +777,59 @@ Return ONLY valid JSON:
         ["trilingual_localizer", "calibration_critic"],
         {
           source: "calibration_critic",
+          target: "trilingual_localizer",
+          handler: async state => {
+            const lastNodeId = state.results.at(-1)?.nodeId;
+            if (lastNodeId === "aws_docs_fact_checker") return true;
+            if (lastNodeId !== "calibration_critic") return false;
+            await evaluateCriticOutcome(state);
+            return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === "localization");
+          },
+        },
+        {
+          source: "calibration_critic",
+          target: "aws_docs_fact_checker",
+          handler: async state => {
+            const lastNodeId = state.results.at(-1)?.nodeId;
+            if (lastNodeId === "interview_miner") return true;
+            if (lastNodeId !== "calibration_critic") return false;
+            await evaluateCriticOutcome(state);
+            return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === "rubric");
+          },
+        },
+        {
+          source: "calibration_critic",
           target: "interview_miner",
           handler: async state => {
-            if (!invocationState.calibratedResult) {
-              const criticNode = state.node("calibration_critic");
-              const finalText = (criticNode?.content ?? [])
-                .map(block => (typeof block?.text === "string" ? block.text : ""))
-                .join("\n")
-                .trim();
-              try {
-                const parsed = parseJsonFromText(finalText);
-                invocationState.calibratedResult = await verifyAndCalibrate(parsed, invocationState.targetMeta);
-                invocationState.lastCritique = null;
-              } catch (error) {
-                invocationState.lastCritique = error.message;
-              }
-            }
-            if (invocationState.calibratedResult) {
-              return false;
-            }
-            invocationState.cycleCount = (invocationState.cycleCount ?? 0) + 1;
-            const critiqueMessage = JSON.stringify({
-              previousAttemptCritique: invocationState.lastCritique,
-              cycle: invocationState.cycleCount,
-            });
-            const criticResults = state.node("calibration_critic")?.results;
-            const lastCriticResult = criticResults?.[criticResults.length - 1];
-            if (lastCriticResult && Array.isArray(lastCriticResult.content)) {
-              lastCriticResult.content.push(new TextBlock(critiqueMessage));
-            }
-            return invocationState.cycleCount < maxAttempts;
+            const lastNodeId = state.results.at(-1)?.nodeId;
+            if (lastNodeId !== "calibration_critic") return false;
+            await evaluateCriticOutcome(state);
+            return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === "topic");
           },
         },
       ],
       maxConcurrency: 1,
       maxSteps: Math.max(4, maxAttempts * 4),
     });
+
+    graph.addHook(BeforeMultiAgentInvocationEvent, event => {
+      const criticNodeState = event.state.node("calibration_critic");
+      if (criticNodeState && criticNodeState.results.length === 0) {
+        criticNodeState.status = Status.COMPLETED;
+      }
+    });
+
+    graph.addHook(BeforeNodeCallEvent, event => {
+      if (event.nodeId !== "calibration_critic") {
+        const criticResults = event.state.node("calibration_critic")?.results ?? [];
+        const lastCriticResult = criticResults[criticResults.length - 1];
+        if (lastCriticResult && Array.isArray(lastCriticResult.content) && lastCriticResult.content.length > 0) {
+          lastCriticResult.content = [];
+        }
+      }
+    });
+
+    return graph;
   };
 
   const generateOrRefreshQuestion = async ({
@@ -775,6 +871,9 @@ Return ONLY valid JSON:
         targetMeta,
         calibratedResult: null,
         lastCritique: null,
+        lastFailureStage: null,
+        evaluatedCriticTurn: 0,
+        shouldRetry: false,
         cycleCount: 0,
       };
 
@@ -858,11 +957,13 @@ Return ONLY valid JSON:
             usage: event.result?.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
           });
         } else if (event.type === "multiAgentHandoffEvent") {
+          const isLoopBack = event.source === "calibration_critic" && (event.targets ?? []).length > 0;
           handoffs.push({
             source: event.source,
             targets: [...(event.targets ?? [])],
             timestamp: Date.now(),
-            isLoopBack: event.source === "calibration_critic" && (event.targets ?? []).includes("interview_miner"),
+            isLoopBack,
+            failureStage: isLoopBack ? invocationState.lastFailureStage : null,
           });
         }
         next = await streamGen.next();

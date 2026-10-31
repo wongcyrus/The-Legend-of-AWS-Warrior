@@ -46,7 +46,9 @@ flowchart TB
     N1 -->|"handoff"| N2
     N2 -->|"handoff"| N3
     N3 -->|"handoff"| N4
-    N4 -. "Conditional Edge Handler:<br/>!calibratedResult && cycleCount < maxAttempts<br/>(appends TextBlock critique)" .-> N1
+    N4 -. "stage = localization" .-> N3
+    N4 -. "stage = rubric" .-> N2
+    N4 -. "stage = topic" .-> N1
   end
 
   subgraph InnerLoop1["Inner Loop (Node 1 ReAct Cycle)"]
@@ -73,11 +75,19 @@ When a node executes, Strands runs its internal **Reason → Tool Use (`tool_use
 - In **`aws_docs_fact_checker`**, the model autonomously queries the live **AWS Knowledge MCP Server** (`https://knowledge-mcp.global.api.aws`) via [`McpClient`](../src/VoiceAgent/question-generator.mjs#L348-L363) (`aws___search_documentation`, `aws___read_documentation`) to verify current AWS behavior.
 - In **`calibration_critic`**, the model drafts 3 synthetic student transcripts (`goodEn`, `goodZhHk`, `wrongOutdated`) and calls [`verify_and_calibrate_question`](../src/VoiceAgent/question-generator.mjs#L519-L559). If the failure is only in how the critic phrased a synthetic transcript, the critic can adjust the synthetic transcript and re-call `verify_and_calibrate_question` **within its own inner agent loop** without restarting the entire 4-agent graph!
 
-### Level 2: The Outer Loop (Strands `Graph` Multi-Agent Feedback Cycle)
-When the question or rubric itself is flawed (for example, it overlaps with an existing question topic, or the rubric concepts are ambiguous so a good answer fails calibration), the outer [`Graph`](../src/VoiceAgent/question-generator.mjs#L685-L736) conditional edge [`calibration_critic -> interview_miner`](../src/VoiceAgent/question-generator.mjs#L699-L732) fires:
-1. It checks `invocationState.calibratedResult`. If verified and calibrated, the edge returns `false` and the graph terminates with status `COMPLETED`.
-2. If `calibratedResult` is `null`, it increments `invocationState.cycleCount`, packages `previousAttemptCritique` into a Strands [`TextBlock`](../src/VoiceAgent/question-generator.mjs#L728) on the `calibration_critic` result, and returns `invocationState.cycleCount < maxAttempts`.
-3. Because every node is configured with `preserveContext: true`, Strands routes execution back to `interview_miner` with full memory of the prior attempt and the exact verifier critique.
+### Level 2: The Outer Loop (Strands `Graph` Stage-Classified Feedback Cycle)
+When the question, rubric, or localization fails verification, the Assurance Plane classifies the defect via [`classifyFailureStage`](../src/VoiceAgent/question-generator.mjs#L291-L307) into one of three fault domains and routes the Strands [`Graph`](../src/VoiceAgent/question-generator.mjs#L761-L828) back to the **exact specialist node** responsible for fixing it:
+1. **`failureStage === "localization"` (`calibration_critic ──► trilingual_localizer`)**:
+   - Triggered when `zh-CN` contains Cantonese characters, a localized prompt is missing, or `goodZhHk` fails calibration (`< 80%`) while `goodEn` passed.
+   - Re-runs **only** `trilingual_localizer` → `calibration_critic` (6 steps total instead of 8), preserving the mined question and AWS documentation verification without re-calling web search or MCP tools.
+2. **`failureStage === "rubric"` (`calibration_critic ──► aws_docs_fact_checker`)**:
+   - Triggered when concept weights do not sum to `100`, `goodEn` fails calibration (`< 80%`), `wrongOutdated` passes unexpectedly (`>= 60%`), or forbidden voice/pronunciation terms appear.
+   - Re-runs `aws_docs_fact_checker` → `trilingual_localizer` → `calibration_critic` (7 steps total), preserving the mined question from `interview_miner`.
+3. **`failureStage === "topic"` (`calibration_critic ──► interview_miner`)**:
+   - Triggered when [`findDuplicateOrOverlappingQuestion`](../src/VoiceAgent/question-generator.mjs#L241-L280) detects a duplicate ID (`duplicate_id`) or semantic Jaccard overlap (`overlapping_prompt >= 0.55`, `overlapping_concepts >= 0.60`) against `avoidQuestions`.
+   - Routes all the way back to `interview_miner` to mine an orthogonal AWS interview scenario.
+4. **Targeted Critique Injection & Cleanup**:
+   - The failed turn packages `{ previousAttemptCritique, failureStage, targetNode, cycle }` into a native Strands [`TextBlock`](../src/VoiceAgent/question-generator.mjs#L756) and clears it via a `BeforeNodeCallEvent` hook once delivered to the target node so downstream nodes never receive stale critique blocks.
 
 ---
 

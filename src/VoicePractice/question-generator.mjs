@@ -3,6 +3,7 @@ import { activities } from "./activities.mjs";
 import { gradeAnswer, validateQuestion } from "./questions.mjs";
 import { createQuestionAdmin, validateQuestionBatch } from "./question-bank.mjs";
 import {
+  classifyFailureStage,
   createNovaWebSearchTool,
   createQuestionGenerator as createAgentQuestionGenerator,
   enableStrandsTelemetry,
@@ -16,6 +17,7 @@ import {
 } from "../VoiceAgent/question-generator.mjs";
 
 export {
+  classifyFailureStage,
   createNovaWebSearchTool,
   enableStrandsTelemetry,
   extractGraphTopology,

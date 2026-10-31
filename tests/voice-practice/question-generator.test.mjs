@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tool } from "../../src/VoiceAgent/node_modules/@strands-agents/sdk/dist/src/index.js";
 import {
+  classifyFailureStage,
   createNovaWebSearchTool,
   createQuestionGenerator,
   extractNovaGroundingResult,
@@ -303,18 +304,25 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
   assert.match(html, /verify_and_calibrate_question/);
 });
 
-test("CalibrationCriticAgent retries when first attempt has Cantonese in zh-CN or fails synthetic calibration", async () => {
+test("Stage-classified loop routing sends localization defects to trilingual_localizer and rubric defects to aws_docs_fact_checker", async () => {
+  assert.equal(classifyFailureStage("Mandarin prompt (zh-CN) contains Cantonese-only characters"), "localization");
+  assert.equal(classifyFailureStage("Synthetic goodZhHk failed calibration (score=50, expected >=80)"), "localization");
+  assert.equal(classifyFailureStage("Synthetic goodEn failed calibration (score=40, expected >=80)"), "rubric");
+  assert.equal(classifyFailureStage("Question concept weights must sum to 100"), "rubric");
+  assert.equal(classifyFailureStage('Question topic overlaps too closely (overlapping_prompt) with existing question "s3-1"'), "topic");
+
+  // 1. Localization defect -> routes calibration_critic -> trilingual_localizer (6 steps total, miner & fact_checker run only once)
   let attemptCount = 0;
   const qGood = sampleGeneratedQuestion("rds", "multi-az-failover", 1, null);
   const qBadMandarin = {
     ...qGood,
     prompts: {
       ...qGood.prompts,
-      "zh-CN": "你嘅資料庫點解要用 Multi-AZ？", // Contains Cantonese characters 嘅, 點
+      "zh-CN": "你嘅資料庫點解要用 Multi-AZ？", // Contains Cantonese character 嘅
     },
   };
 
-  const send = async command => {
+  const sendLocalization = async command => {
     const sys = command.input.system?.[0]?.text ?? "";
     if (sys.includes("CalibrationCriticAgent")) {
       attemptCount++;
@@ -349,7 +357,7 @@ test("CalibrationCriticAgent retries when first attempt has Cantonese in zh-CN o
   });
 
   const generator = createQuestionGenerator({
-    send,
+    send: sendLocalization,
     webSearchTool: null,
     docTools: [],
     grader,
@@ -364,8 +372,81 @@ test("CalibrationCriticAgent retries when first attempt has Cantonese in zh-CN o
   assert.equal(attemptCount, 2);
   assert.equal(result.question.id, "multi-az-failover");
   assert.equal(result.trace.cycles, 2);
-  assert.equal(result.trace.steps.length, 8);
-  assert.equal(result.trace.handoffs.some(h => h.source === "calibration_critic" && h.isLoopBack), true);
+  assert.equal(result.trace.steps.length, 6);
+  assert.deepEqual(
+    result.trace.steps.map(s => s.nodeId),
+    [
+      "interview_miner",
+      "aws_docs_fact_checker",
+      "trilingual_localizer",
+      "calibration_critic",
+      "trilingual_localizer",
+      "calibration_critic",
+    ]
+  );
+  const locLoopHandoff = result.trace.handoffs.find(h => h.source === "calibration_critic" && h.isLoopBack);
+  assert.ok(locLoopHandoff);
+  assert.deepEqual(locLoopHandoff.targets, ["trilingual_localizer"]);
+  assert.equal(locLoopHandoff.failureStage, "localization");
+
+  // 2. Rubric defect (weights sum to 90 instead of 100) -> routes calibration_critic -> aws_docs_fact_checker (7 steps total, miner runs only once)
+  let rubricAttempt = 0;
+  const qBadWeights = {
+    ...qGood,
+    concepts: [
+      { ...qGood.concepts[0], weight: 50 },
+      { ...qGood.concepts[1], weight: 40 },
+    ],
+  };
+  const generatorRubric = createQuestionGenerator({
+    send: async command => {
+      const sys = command.input.system?.[0]?.text ?? "";
+      if (sys.includes("CalibrationCriticAgent")) {
+        rubricAttempt++;
+        const chosen = rubricAttempt === 1 ? qBadWeights : qGood;
+        return {
+          stopReason: "end_turn",
+          output: {
+            message: {
+              role: "assistant",
+              content: [{ text: JSON.stringify({ question: chosen, syntheticTranscripts: sampleSyntheticTranscripts }) }],
+            },
+          },
+        };
+      }
+      return {
+        stopReason: "end_turn",
+        output: { message: { role: "assistant", content: [{ text: JSON.stringify(qGood) }] } },
+      };
+    },
+    webSearchTool: null,
+    docTools: [],
+    grader,
+    maxAttempts: 2,
+  });
+
+  const rubricResult = await generatorRubric.generateOrRefreshQuestion({
+    serviceId: "rds",
+    label: "Amazon RDS",
+    passage: "Amazon RDS manages relational databases.",
+  });
+  assert.equal(rubricResult.trace.steps.length, 7);
+  assert.deepEqual(
+    rubricResult.trace.steps.map(s => s.nodeId),
+    [
+      "interview_miner",
+      "aws_docs_fact_checker",
+      "trilingual_localizer",
+      "calibration_critic",
+      "aws_docs_fact_checker",
+      "trilingual_localizer",
+      "calibration_critic",
+    ]
+  );
+  const rubricLoopHandoff = rubricResult.trace.handoffs.find(h => h.source === "calibration_critic" && h.isLoopBack);
+  assert.ok(rubricLoopHandoff);
+  assert.deepEqual(rubricLoopHandoff.targets, ["aws_docs_fact_checker"]);
+  assert.equal(rubricLoopHandoff.failureStage, "rubric");
 });
 
 test("runQuestionBatchJob checkpoints per service, skips completed services on resume, and refreshes existing revisions", async () => {
