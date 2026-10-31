@@ -3,13 +3,13 @@
 **By Cyrus Wong**
 *AWS AI Hero | AWS AI User Group Hong Kong Leader | Programme Leader of Higher Diploma in Cloud and Data Centre Administration (IT114115), Hong Kong Institute of Information Technology (HKIIT)*
 
-> 3-Part Technical Blog Series: [Part 1 covers the Game and Pedagogy](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART1.md), [Part 2 covers the AWS Serverless and AgentCore Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART2.md), and Part 3 covers Autonomous Question Generation with Strands Multi-Agent Graphs.
+> 3-Part Technical Blog Series: [Part 1 covers the Game and Pedagogy](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md), [Part 2 covers the AWS Serverless and AgentCore Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md), and Part 3 covers Autonomous Question Generation with Strands Multi-Agent Graphs.
 
 ---
 
 ## 1. Introduction: The Question-Bank Scaling and Freshness Dilemma
 
-In **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART1.md)** and **[Part 2 - The AWS Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART2.md)**, we established why **Architectural Q&A** in **The Legend of AWS Warrior V2** never improvises questions at runtime:
+In **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)** and **[Part 2 - The AWS Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md)**, we established why **Architectural Q&A** in **The Legend of AWS Warrior V2** never improvises questions at runtime:
 
 - Every Q&A session is strictly backed by a predefined, `status: approved` question in DynamoDB (`PK = QUESTION_BANK`) containing trilingual prompts (`en-US`, `zh-HK`, `zh-CN`), 2-3 atomic concepts whose weights sum to `100`, known misconceptions, acceptable answers, and a reference answer.
 - However, manually writing, translating, and calibrating questions across **302 AWS service landmarks**—and keeping them accurate as AWS evolves—faces three major hurdles:
@@ -47,7 +47,7 @@ In modern AI systems engineering, **Loop Engineering** is the third foundational
 
 Our question generator (`createQuestionGenerator`) implements **two nested levels** of native Strands loops—with zero imperative `for`/`while` retry loops around the graph:
 
-> **[INSERT IMAGE: docs/aws_warrior_v2_strands_question_generator_diagram.png — AWS Strands Multi-Agent Question Generator and Dual-Level Loop Engineering]**
+> **[INSERT IMAGE: docs/images/aws_warrior_v2_strands_question_generator_diagram.png — AWS Strands Multi-Agent Question Generator and Dual-Level Loop Engineering]**
 
 ```mermaid
 graph TD
@@ -282,11 +282,11 @@ node src/VoicePractice/question-bank.mjs generate \
 
 Opening `http://localhost:16686` in the browser reveals the complete **41-span trace hierarchy** (`traceId: ca1e8feaead2c97eb97c5f3380747da7`, total duration `34.29s`, `35,711` total tokens across `us.amazon.nova-2-lite-v1:0`):
 
-> **[INSERT IMAGE: docs/strands_otel_jaeger_trace_s3.png — Live Strands OpenTelemetry 41-Span Trace Waterfall in Jaeger UI]**
+> **[INSERT IMAGE: docs/images/strands_otel_jaeger_trace_s3.png — Live Strands OpenTelemetry 41-Span Trace Waterfall in Jaeger UI]**
 
 Clicking into the root `invoke_graph aws-interview-question-pipeline` span (or any child `node`, `invoke_agent`, `chat`, or `execute_tool` span) in Jaeger displays Strands' native GenAI OpenTelemetry tags (`aws.service.id: s3`, `gen_ai.agent.execution_time: 34287`, `gen_ai.agent.input` with `avoidQuestions`, `service.namespace: strands`, and token usage):
 
-> **[INSERT IMAGE: docs/strands_otel_jaeger_spans_detail_s3.png — Expanded Strands GenAI Span Attributes in Jaeger UI]**
+> **[INSERT IMAGE: docs/images/strands_otel_jaeger_spans_detail_s3.png — Expanded Strands GenAI Span Attributes in Jaeger UI]**
 
 ```
 invoke_graph aws-interview-question-pipeline (34,286.7ms | 35,711 tokens)
@@ -366,6 +366,6 @@ Because the two baseline S3 questions (`private-screenshots` and `asset-storage`
 
 Across this 3-part series on **The Legend of AWS Warrior V2**, we showed how modern cloud education and generative AI engineering reinforce one another:
 
-1. **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART1.md)**: Turning trilingual AWS oral interview practice into the Magic Power (MP) source for **19 Anime x AWS Cloud Arts** in a 4-region Three.js 3D Action RPG—paired with **Mobile QR-Code Wireless Microphone Handoff** for mic-less lab PCs—defeats the "Copy-to-AI, Paste-Back" reflex and makes students want to practice speaking cloud architecture aloud.
-2. **[Part 2 - The AWS Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART2.md)**: Placing a **Zero-Trust Referee Lambda** in front of an IAM-isolated **Amazon Bedrock AgentCore Runtime** (`@strands-agents/harness` + `BedrockModel`), backed by **Two-Phase `NFKC` Verbatim Substring Verification** and **Single-Table DynamoDB Transactions**, eliminates hallucinated evidence, score drift, and prompt-injection reward theft.
+1. **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)**: Turning trilingual AWS oral interview practice into the Magic Power (MP) source for **19 Anime x AWS Cloud Arts** in a 4-region Three.js 3D Action RPG—paired with **Mobile QR-Code Wireless Microphone Handoff** for mic-less lab PCs—defeats the "Copy-to-AI, Paste-Back" reflex and makes students want to practice speaking cloud architecture aloud.
+2. **[Part 2 - The AWS Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md)**: Placing a **Zero-Trust Referee Lambda** in front of an IAM-isolated **Amazon Bedrock AgentCore Runtime** (`@strands-agents/harness` + `BedrockModel`), backed by **Two-Phase `NFKC` Verbatim Substring Verification** and **Single-Table DynamoDB Transactions**, eliminates hallucinated evidence, score drift, and prompt-injection reward theft.
 3. **Part 3 - Gen Question**: Applying **Dual-Level Loop Engineering** with `@strands-agents/harness` (`createHarness`, `GoalLoop`, `ContextOffloader`), `@strands-agents/sdk` (`Graph`, `McpClient`), **Amazon Nova Web Grounding**, the **AWS Knowledge MCP Server**, and **Native Strands OpenTelemetry Tracing** lets educators autonomously scale and refresh a 100% documentation-grounded, live-calibrated question bank across all 302 AWS services.

@@ -34,7 +34,7 @@ In modern AI systems engineering, **Loop Engineering** is the system-level disci
 
 Our Question Generator ([`createQuestionGenerator`](../src/VoiceAgent/question-generator.mjs#L398-L996)) implements **two nested levels** of native AWS Strands loops—with zero imperative `for`/`while` retry loops around the graph:
 
-![AWS Strands Multi-Agent Question Generator & Dual-Level Loop Engineering](aws_warrior_v2_strands_question_generator_diagram.png)
+![AWS Strands Multi-Agent Question Generator & Dual-Level Loop Engineering](images/aws_warrior_v2_strands_question_generator_diagram.png)
 
 ```mermaid
 flowchart TB
@@ -221,11 +221,11 @@ node src/VoicePractice/question-bank.mjs refresh \
 ### Example Live Trace Hierarchy in Jaeger (`http://localhost:16686`)
 When running the single-service `s3` generation above, Jaeger captures **41 hierarchical OpenTelemetry spans** under a single root trace (`invoke_graph aws-interview-question-pipeline`, `34.29s`, `35,711` total tokens):
 
-![Live Strands OpenTelemetry 41-Span Trace Timeline in Jaeger UI](strands_otel_jaeger_trace_s3.png)
+![Live Strands OpenTelemetry 41-Span Trace Timeline in Jaeger UI](images/strands_otel_jaeger_trace_s3.png)
 
 Expanding any span in the Jaeger UI reveals the full GenAI OpenTelemetry attributes (`gen_ai.operation.name`, `gen_ai.agent.id`, `gen_ai.agent.input`, `gen_ai.usage.*`, `service.namespace: strands`):
 
-![Expanded Strands GenAI Span Attributes in Jaeger UI](strands_otel_jaeger_spans_detail_s3.png)
+![Expanded Strands GenAI Span Attributes in Jaeger UI](images/strands_otel_jaeger_spans_detail_s3.png)
 
 - `invoke_graph aws-interview-question-pipeline` (`34,286.7ms`)
   - `node interview_miner` (`7,934.9ms`) → `invoke_agent interview_miner`

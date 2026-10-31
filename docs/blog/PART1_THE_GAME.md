@@ -3,7 +3,7 @@
 **By Cyrus Wong**
 *AWS AI Hero | AWS AI User Group Hong Kong Leader | Programme Leader of Higher Diploma in Cloud and Data Centre Administration (IT114115), Hong Kong Institute of Information Technology (HKIIT)*
 
-> 3-Part Technical Blog Series: Part 1 covers the Game and Pedagogy, [Part 2 covers the AWS Serverless and AgentCore Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART2.md), and [Part 3 covers Autonomous Question Generation with Strands Multi-Agent Graphs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART3.md).
+> 3-Part Technical Blog Series: Part 1 covers the Game and Pedagogy, [Part 2 covers the AWS Serverless and AgentCore Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md), and [Part 3 covers Autonomous Question Generation with Strands Multi-Agent Graphs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md).
 
 ---
 
@@ -15,7 +15,7 @@ By coupling a browser-based RPG with a serverless .NET automatic grading backend
 
 <Youtube id="60bc3f0d_74" />
 
-> **[INSERT IMAGE: docs/v2_screen_1_title.png — The Legend of AWS Warrior V2 Title Screen]**
+> **[INSERT IMAGE: docs/images/v2_screen_1_title.png — The Legend of AWS Warrior V2 Title Screen]**
 
 ### The Pedagogical Gap: Why We Replaced Text Boxes with Spoken Answers
 
@@ -37,11 +37,11 @@ Enter **The Legend of AWS Warrior V2**—a complete generational leap into a **f
 
 Across the four open-world realms (`96` in Cloudlands Village, `76` in Frostpeak Highlands, `62` in Sunspire Desert, and `68` across the nine chambers of the Forgotten Vault), every one of the **302 official AWS services** features an interactive 3D service plaque with official AWS architecture icons and live task-availability indicators.
 
-> **[INSERT IMAGE: docs/v2_screen_2_gameplay.png — Cloudlands Village 3D Gameplay and AWS ServicePlaques]**
+> **[INSERT IMAGE: docs/images/v2_screen_2_gameplay.png — Cloudlands Village 3D Gameplay and AWS ServicePlaques]**
 
 Clicking any service plaque within `24 units` opens the **AWS Service Discovery Dialog**:
 
-> **[INSERT IMAGE: docs/v2_screen_3_dialog.png — AWS Service Discovery Dialog and Voice Practice]**
+> **[INSERT IMAGE: docs/images/v2_screen_3_dialog.png — AWS Service Discovery Dialog and Voice Practice]**
 
 ### 2.2 Dual Voice Practice Modes: Graded Read-Aloud vs. Architectural Q&A
 
@@ -71,7 +71,7 @@ In a physical computer lab, 40 students sit side-by-side at institutional deskto
 
 We solved this with an **Ephemeral Capability-Token QR Handoff** ([src/VoicePractice/domain.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoicePractice/domain.mjs)):
 
-> **[INSERT IMAGE: docs/aws_warrior_v2_qr_handoff_diagram.png — Seamless Cross-Device Mobile QR Handoff Diagram]**
+> **[INSERT IMAGE: docs/images/aws_warrior_v2_qr_handoff_diagram.png — Seamless Cross-Device Mobile QR Handoff Diagram]**
 
 ```mermaid
 graph TD
@@ -110,7 +110,7 @@ Every `75 seconds`, a dynamic **AZ Outage Alert** highlights a degraded perimete
 
 Players can switch seamlessly across **15 melee weapon styles** (`C` or `Shift + Scroll`) and **5 shield styles** (`V`):
 
-> **[INSERT IMAGE: docs/v2_screen_4_equipment.png — Equipment Panel with 15 Weapons and 5 Shields]**
+> **[INSERT IMAGE: docs/images/v2_screen_4_equipment.png — Equipment Panel with 15 Weapons and 5 Shields]**
 
 - **Timed Perfect Parry (Press `R` within 0.25s of impact)**: Holding `R` raises your shield to block frontal melee hits and cactus spikes within 60 degrees. Pressing `R` within **0.25 seconds** before impact executes a **Timed Perfect Parry**: negating **100% of damage** (even from heavy boss strikes) without guard break, reflecting ranged spikes back at the attacker for **2x damage**, and staggering melee attackers for `2.5s` (`+25%` bonus counterattack damage).
 - **Close-Range 360-Degree and Standoff Melee Target Acquisition ([web-game/v2/main.js](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/web-game/v2/main.js))**: In 3D action RPGs, two frustrating edge cases can happen if melee hit detection uses a naive fixed-length forward cone: (1) a fast enemy steps inside your character collision radius where the angle dot product drops below the cone threshold, or (2) a large boss/monster has an `attackRange` (`4.8-5.8` units) longer than a short weapon's reach (`3.7-4.6` units), allowing the monster to hit you while your swings miss. Our `findAttackTarget()` resolver eliminates both blind spots:
@@ -161,6 +161,16 @@ Passing graded voice practice activities charges the server-backed **MP Wallet**
 | `6` | **Private Cloud Barrier / 結界術・私有雲界** | Amazon VPC | `15 MP` / `25s` | 12-unit protective ward for 8s that halves incoming damage and pushes back intruders. |
 | `7` | **Cross-Region Recovery / 終式・跨區復甦** | Disaster Recovery | `25 MP` / `60s` | Places a 12s recovery anchor that intercepts a lethal/low-HP hit and restores you to 35% HP at the anchor. |
 
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 瞬式・事件雷切 (Event-Driven λ).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 影分身・彈性軍勢 (Auto Scaling Army).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 領域展開・無量儲存 (Domain - Infinite Storage).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 結界術・私有雲界 (Private Cloud Barrier).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 終式・跨區復甦 (Cross-Region Recovery).mp4]**
+
 </SimpleTab>
 
 <SimpleTab name="Tier 1 Combo Arts (2 Arts)">
@@ -173,6 +183,18 @@ Passing graded voice practice activities charges the server-backed **MP Wallet**
 | `5+6` / `6+7` | **CloudWatch Omniscience / 天照・全知之眼** | CloudWatch and X-Ray | *Naruto (Amaterasu)* — Erupts 24 pitch-black flame pillars and a floating Mangekyo eye with a sweeping X-Ray laser pulsing 6 times (`1.8x` Power + slow). |
 | `3+7` / `4+7` | **CloudFront Edge Flash / 炎呼吸・邊緣瞬閃** | Amazon CloudFront | *Demon Slayer* — Twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a 65-unit corridor (`3.2x` Power x 3 slashes). |
 | `5+7` | **Bedrock Titan Meteor / 天礙震星・基岩星隕** | Amazon Bedrock | *Naruto (Tengai Shinsei)* — Drops twin colossal craggy boulders from a sky portal 22 units ahead (`9.0x` Power AoE across 26 units). |
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 千刃・容器萬解 (Fargate Blade Barrage).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 赫式・毫秒爆裂 (Dynamo Singularity).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 神羅・負載天征 (ALB Almighty Push).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 天照・全知之眼 (CloudWatch Omniscience).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 炎呼吸・邊緣瞬閃 (CloudFront Edge Flash).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 天礙震星・基岩星隕 (Bedrock Titan Meteor).mp4]**
 
 </SimpleTab>
 
@@ -187,6 +209,18 @@ Passing graded voice practice activities charges the server-backed **MP Wallet**
 | **Tier 3 (4 Arts)** | `3+4+5+[6/7]` / `3+4+6+7` | **Aurora Excalibur / 誓約勝利・極光聖劍** | Aurora Global DB | *Fate/Stay Night (Excalibur)* — Points a 92-unit light beam to the sky, then cleaves down into a 110-unit golden-cyan Excalibur beam (`4.8x` Power x 4 ticks). |
 | **Tier 3 (4 Arts)** | `[3/4]+5+6+7` | **SageMaker Infinite Void / 無量空處・全知星圖** | Amazon SageMaker | *Jujutsu Kaisen (Unlimited Void)* — Encloses a 44-unit radius in a cosmic black dome with 24 orbiting stars (`3.2x` Power x 6 bursts + `6.0x` finale). |
 
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 須佐能乎・容器魔神 (EKS Susanoo Mecha).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 伏魔御廚子・無伺服器斬界 (Step Functions Malevolent Shrine).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 地爆天星・資料湖封印 (Lake Formation Planetary Devastation).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 時空回溯・快照結界 (EBS Snapshot Time Rewind).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 誓約勝利・極光聖劍 (Aurora Excalibur).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 無量空處・全知星圖 (SageMaker Infinite Void).mp4]**
+
 </SimpleTab>
 
 <SimpleTab name="Cataclysmic 5-Art Ultimates (87 MP)">
@@ -196,6 +230,10 @@ Selecting all 5 Cloud Arts (`3`-`7`) transforms the cast button into **全域部
 1. **Global Deployment / 全域部署 (50% Chance — AWS Global Multi-Region Infrastructure)**: Summons **four 6x Cloud Avatars** facing North, South, East, and West with 24 sky-to-ground judgement pillars and tectonic fissures.
 2. **Hyperscale Rumbling / 地鳴・超大規模踏境 (50% Chance — AWS Hyperscale Compute Fleet)**: Erects the **Founding Titan's colossal skeletal spine and ribcage** at the origin and marches an expanding wall of **7.5x crimson Colossal Titans** outward in scalding steam.
 3. Both formations release **three expanding execution shockwaves** across `128 units` (`1.2s` per wave) that defeat ordinary monsters and bosses on wave contact (blocked by solid walls and buildings).
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 全域部署 (Global Deployment).mp4]**
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 地鳴・超大規模踏境 (Hyperscale Rumbling).mp4]**
 
 </SimpleTab>
 
@@ -207,4 +245,4 @@ Selecting all 5 Cloud Arts (`3`-`7`) transforms the cast button into **全域部
 
 Now that you have seen how speaking AWS architecture into a smartphone fuels high-tier anime super attacks on a lab PC, how do we prevent students from jailbreaking the AI grader, fabricating quotes, or stealing Magic Power (MP)?
 
-Continue to **[Part 2 - The AWS Design: Zero-Trust Serverless Referee, Amazon Bedrock AgentCore Runtime and Single-Table DynamoDB Architecture](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART2.md)**.
+Continue to **[Part 2 - The AWS Design: Zero-Trust Serverless Referee, Amazon Bedrock AgentCore Runtime and Single-Table DynamoDB Architecture](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md)**.

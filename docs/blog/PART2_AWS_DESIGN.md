@@ -3,13 +3,13 @@
 **By Cyrus Wong**
 *AWS AI Hero | AWS AI User Group Hong Kong Leader | Programme Leader of Higher Diploma in Cloud and Data Centre Administration (IT114115), Hong Kong Institute of Information Technology (HKIIT)*
 
-> 3-Part Technical Blog Series: [Part 1 covers the Game and Pedagogy](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART1.md), Part 2 covers the AWS Serverless and AgentCore Design, and [Part 3 covers Autonomous Question Generation with Strands Multi-Agent Graphs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART3.md).
+> 3-Part Technical Blog Series: [Part 1 covers the Game and Pedagogy](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md), Part 2 covers the AWS Serverless and AgentCore Design, and [Part 3 covers Autonomous Question Generation with Strands Multi-Agent Graphs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md).
 
 ---
 
 ## 1. Introduction: Why Conversational Chatbots Fail as Academic Graders
 
-In **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART1.md)**, we explored how **The Legend of AWS Warrior V2** turns oral cloud interview practice in **English (`en-US`)**, **Hong Kong Cantonese (`zh-HK`)**, and **Mandarin (`zh-CN`)** into the **Magic Power (MP)** combat economy of a four-region 3D Action RPG.
+In **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)**, we explored how **The Legend of AWS Warrior V2** turns oral cloud interview practice in **English (`en-US`)**, **Hong Kong Cantonese (`zh-HK`)**, and **Mandarin (`zh-CN`)** into the **Magic Power (MP)** combat economy of a four-region 3D Action RPG.
 
 However, putting a Large Language Model (LLM) in charge of grading students and awarding in-game currency introduces four severe cloud security and reliability risks:
 
@@ -29,7 +29,7 @@ AWS Warrior V2 is 100% serverless, provisioned with **AWS SAM ([template.yaml](h
 1. **The Core Lab Grader (.NET 8 Lambda + NUnitLite + DynamoDB)**: Evaluates live AWS resources inside student AWS Academy Learner Lab accounts.
 2. **The Generative AI Voice Practice and RPG Progression Engine (Node.js 22 Lambda + Amazon Bedrock AgentCore + Strands Harness + Amazon Nova 2 Lite)**: Evaluates spoken architectural explanations, manages cross-device QR sessions, persists V2 checkpoints, and drives the authoritative MP combat economy.
 
-> **[INSERT IMAGE: docs/aws_warrior_v2_architecture_diagram.png — The Legend of AWS Warrior V2 Architecture Diagram]**
+> **[INSERT IMAGE: docs/images/aws_warrior_v2_architecture_diagram.png — The Legend of AWS Warrior V2 Architecture Diagram]**
 
 ```mermaid
 graph TD
@@ -55,7 +55,7 @@ When architects inspect our voice practice pipeline (`API Gateway -> VoicePracti
 
 In our design, **`VoicePracticeFunction` (Lambda) is the Trusted Referee (Control Plane)** while **`VoiceAgentRuntime` (AgentCore) is an Untrusted AI Sandbox (Data Plane)**.
 
-> **[INSERT IMAGE: docs/aws_warrior_v2_zero_trust_referee_diagram.png — Zero-Trust Referee Pattern Diagram]**
+> **[INSERT IMAGE: docs/images/aws_warrior_v2_zero_trust_referee_diagram.png — Zero-Trust Referee Pattern Diagram]**
 
 ```mermaid
 graph LR
@@ -80,7 +80,7 @@ Five concrete engineering requirements drive this separation:
 
 Inside the sandbox, **Amazon Bedrock AgentCore** (`AWS::BedrockAgentCore::Runtime`) runs a custom Node.js 22 HTTP service ([src/VoiceAgent/server.js](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/server.js) and [src/VoiceAgent/agent.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/agent.mjs)) powered by **`@strands-agents/harness` (`createHarness`)** and **`@strands-agents/sdk` (`BedrockModel`)**.
 
-> **[INSERT IMAGE: docs/aws_warrior_v2_agentcore_runtime_diagram.png — Amazon Bedrock AgentCore Runtime and Anti-Hallucination Engine Diagram]**
+> **[INSERT IMAGE: docs/images/aws_warrior_v2_agentcore_runtime_diagram.png — Amazon Bedrock AgentCore Runtime and Anti-Hallucination Engine Diagram]**
 
 ### 4.1 Hardened Single-Turn Strands Harness Grader (`src/VoiceAgent/agent.mjs`)
 
@@ -201,4 +201,4 @@ In Part 2, we saw why **Architectural Q&A is strictly gated by predefined, appro
 
 > With 302 AWS services—and AWS constantly updating security defaults, service limits, and features—how do we author, fact-check against official AWS documentation, translate into English, Cantonese, and Mandarin, and calibrate hundreds of interview Q&A rubrics without human bottleneck or LLM hallucination?
 
-Continue to **[Part 3 - Gen Question: Autonomous AWS Question Bank Generation with Loop Engineering, Strands Multi-Agent Graphs, Harness Plugins and Live OpenTelemetry Tracing](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/BLOG_POST_V2_PART3.md)**.
+Continue to **[Part 3 - Gen Question: Autonomous AWS Question Bank Generation with Loop Engineering, Strands Multi-Agent Graphs, Harness Plugins and Live OpenTelemetry Tracing](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md)**.

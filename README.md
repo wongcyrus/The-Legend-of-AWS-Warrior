@@ -8,7 +8,11 @@ The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. 
 
 
 ## Tech Blog
-[The Legend of AWS Warrior: A Free Opensource 3D RPG Adventure Game with Generative AI for learning AWS](https://community.aws/content/2ftYEIAT0IlnPwAhvKhlD4PL52h/behind-the-scene-of-the-legend-of-aws-warrior)
+- **V1 Tech Blog**: [The Legend of AWS Warrior: A Free Opensource 3D RPG Adventure Game with Generative AI for learning AWS](https://community.aws/content/2ftYEIAT0IlnPwAhvKhlD4PL52h/behind-the-scene-of-the-legend-of-aws-warrior)
+- **V2 3-Part Technical Blog Series ([`docs/blog/README.md`](docs/blog/README.md))**:
+  1. [**Part 1 — The Game**](docs/blog/PART1_THE_GAME.md): *Gamifying Cloud Architecture, Oral Interview Prep & 19 Anime × AWS Cloud Arts in a 3D Action RPG*
+  2. [**Part 2 — The AWS Design**](docs/blog/PART2_AWS_DESIGN.md): *Zero-Trust Serverless Referee, Amazon Bedrock AgentCore Runtime & Single-Table DynamoDB Architecture*
+  3. [**Part 3 — Gen Question**](docs/blog/PART3_GEN_QUESTION.md): *Autonomous AWS Question Bank Generation with Loop Engineering, Strands Multi-Agent Graphs, Harness Plugins & Live OpenTelemetry Tracing*
 
 ## Architecture
 
