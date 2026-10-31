@@ -6,16 +6,25 @@ import {
   createNovaWebSearchTool,
   createQuestionGenerator as createAgentQuestionGenerator,
   extractNovaGroundingResult,
+  findDuplicateOrOverlappingQuestion,
   loadAwsKnowledgeMcpTools,
   parseJsonFromText,
+  summarizeExistingQuestion,
 } from "../VoiceAgent/question-generator.mjs";
 
 export {
   createNovaWebSearchTool,
   extractNovaGroundingResult,
+  findDuplicateOrOverlappingQuestion,
   loadAwsKnowledgeMcpTools,
   parseJsonFromText,
+  summarizeExistingQuestion,
 };
+
+const baselineQuestionsPath = new URL("./questions.json", import.meta.url);
+const baselineQuestions = existsSync(baselineQuestionsPath)
+  ? JSON.parse(readFileSync(baselineQuestionsPath, "utf8"))
+  : [];
 
 const serviceCatalog = new Map();
 for (const activity of activities) {
@@ -56,6 +65,7 @@ export async function runQuestionBatchJob({
   checkpointFile = null,
   force = false,
   publish = false,
+  includeBaselineQuestions = true,
   store = null,
   generator = createQuestionGenerator(),
   onServiceComplete = null,
@@ -85,46 +95,58 @@ export async function runQuestionBatchJob({
       continue;
     }
 
+    const baselineForService = includeBaselineQuestions
+      ? baselineQuestions.filter(q => q.serviceId === serviceId)
+      : [];
     const existingDbQuestions = admin ? await admin.exportQuestions(serviceId) : [];
-    const existingIds = new Set([
-      ...existingDbQuestions.map(q => q.id),
-      ...checkpointForService.map(q => q.id),
-    ]);
+    const existingQuestionsById = new Map();
+    for (const q of [...baselineForService, ...existingDbQuestions, ...checkpointForService]) {
+      if (q?.id) existingQuestionsById.set(q.id, q);
+    }
+    const existingIds = new Set(existingQuestionsById.keys());
     const generatedForService = [];
 
     if (mode === "refresh") {
       const targets = existingDbQuestions.length
         ? existingDbQuestions
-        : checkpointForService;
+        : checkpointForService.length
+          ? checkpointForService
+          : baselineForService;
       if (!targets.length) {
         throw new Error(`No existing questions found to refresh for service ${serviceId}`);
       }
       for (let i = 0; i < targets.length; i++) {
         const existingQuestion = targets[i];
+        const avoidQuestions = [...existingQuestionsById.values()].filter(q => q.id !== existingQuestion.id);
         const { question } = await generator.generateOrRefreshQuestion({
           serviceId,
           label: meta.label,
           passage: meta.passage,
           existingQuestion,
           avoidIds: [...existingIds].filter(id => id !== existingQuestion.id),
+          avoidQuestions,
           slotIndex: i + 1,
           status,
         });
+        existingQuestionsById.set(question.id, question);
         generatedForService.push(question);
         byKey.set(`${serviceId}:${question.id}`, question);
       }
     } else {
       for (let i = 0; i < countPerService; i++) {
+        const avoidQuestions = [...existingQuestionsById.values()];
         const { question } = await generator.generateOrRefreshQuestion({
           serviceId,
           label: meta.label,
           passage: meta.passage,
           existingQuestion: null,
           avoidIds: [...existingIds],
+          avoidQuestions,
           slotIndex: i + 1,
           status,
         });
         existingIds.add(question.id);
+        existingQuestionsById.set(question.id, question);
         generatedForService.push(question);
         byKey.set(`${serviceId}:${question.id}`, question);
       }

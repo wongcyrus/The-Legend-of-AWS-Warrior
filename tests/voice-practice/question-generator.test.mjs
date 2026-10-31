@@ -8,6 +8,7 @@ import {
   createNovaWebSearchTool,
   createQuestionGenerator,
   extractNovaGroundingResult,
+  findDuplicateOrOverlappingQuestion,
   runQuestionBatchJob,
 } from "../../src/VoicePractice/question-generator.mjs";
 
@@ -413,4 +414,138 @@ test("runQuestionBatchJob checkpoints per service, skips completed services on r
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("semantic deduplication blocks repeated topics with different IDs and passes baseline + prior-slot avoidQuestions", async () => {
+  const existingRdsQuestion = sampleGeneratedQuestion("rds", "multi-az-failover", 1, null);
+  const disguisedDuplicate = {
+    ...sampleGeneratedQuestion("rds", "rds-ha-standby-vs-replica", 1, null),
+    title: "High Availability Multi-AZ vs Read Replica",
+  };
+  const distinctRdsQuestion = {
+    id: "automated-backups-pitr",
+    serviceId: "rds",
+    version: 1,
+    status: "approved",
+    expectedRevision: null,
+    title: "Automated Backups and Point-in-Time Recovery",
+    prompts: {
+      "en-US": "A bad deployment corrupts table rows in Amazon RDS five minutes ago. How do automated backups and transaction logs allow you to recover vs a manual snapshot?",
+      "zh-HK": "五分鐘前一次錯誤部署整壞咗 Amazon RDS 入面嘅資料表。自動備份同交易日誌點樣幫你還原，同手動 Snapshot 有咩分別？",
+      "zh-CN": "五分钟前一次错误部署损坏了 Amazon RDS 中的表数据。自动备份和事务日志如何帮助你恢复，与手动快照有什么区别？",
+    },
+    concepts: [
+      {
+        id: "pitr-logs",
+        description: "Automated backups combine daily snapshots with transaction logs to enable point-in-time recovery to any second within the retention window.",
+        weight: 60,
+      },
+      {
+        id: "manual-retention",
+        description: "Manual snapshots capture a single point in time and persist even after the RDS instance is deleted.",
+        weight: 40,
+      },
+    ],
+    misconceptions: [
+      "Automated backups are kept forever even after deleting the RDS database without final snapshot.",
+    ],
+    acceptableAnswers: [
+      "Use point-in-time recovery from automated backups and transaction logs to restore to just before the corruption; manual snapshots remain after instance deletion.",
+    ],
+    referenceAnswer: "Automated backups and transaction logs let you restore to a specific second via Point-in-Time Recovery, while manual snapshots persist after instance deletion.",
+  };
+
+  const overlapCheck = findDuplicateOrOverlappingQuestion(disguisedDuplicate, [existingRdsQuestion], []);
+  assert.ok(overlapCheck);
+  assert.notEqual(overlapCheck.reason, "duplicate_id");
+  assert.equal(overlapCheck.matchId, "multi-az-failover");
+  assert.equal(findDuplicateOrOverlappingQuestion(distinctRdsQuestion, [existingRdsQuestion], []), null);
+
+  let attempt = 0;
+  let receivedCritique = "";
+  const send = async command => {
+    const sys = command.input.system?.[0]?.text ?? "";
+    const userText = command.input.messages?.[0]?.content?.[0]?.text ?? "";
+    if (userText.includes("previousAttemptCritique")) {
+      receivedCritique = userText;
+    }
+    if (sys.includes("CalibrationCriticAgent")) {
+      attempt++;
+      const chosen = attempt === 1 ? disguisedDuplicate : distinctRdsQuestion;
+      return {
+        stopReason: "end_turn",
+        output: {
+          message: {
+            role: "assistant",
+            content: [{
+              text: JSON.stringify({
+                question: chosen,
+                syntheticTranscripts: {
+                  goodEn: "Automated backups and transaction logs enable point-in-time recovery to any second, while manual snapshots persist after the RDS instance is deleted.",
+                  goodZhHk: "Automated backups 同 transaction logs 可以做到 point-in-time recovery，而 manual snapshots 喺刪除 RDS instance 之後仍然保留。",
+                  wrongOutdated: "Automated backups are kept forever after deleting the database.",
+                },
+              }),
+            }],
+          },
+        },
+      };
+    }
+    return {
+      stopReason: "end_turn",
+      output: { message: { role: "assistant", content: [{ text: JSON.stringify(distinctRdsQuestion) }] } },
+    };
+  };
+
+  const grader = async ({ transcript }) => ({
+    concepts: transcript.includes("point-in-time recovery")
+      ? [
+          { id: "pitr-logs", verdict: "met", evidence: "point-in-time recovery" },
+          { id: "manual-retention", verdict: "met", evidence: "manual snapshots" },
+        ]
+      : [
+          { id: "pitr-logs", verdict: "missing", evidence: "" },
+          { id: "manual-retention", verdict: "missing", evidence: "" },
+        ],
+    feedback: "Checked.",
+  });
+
+  const generator = createQuestionGenerator({
+    send,
+    webSearchTool: null,
+    docTools: [],
+    grader,
+    maxAttempts: 2,
+  });
+
+  const res = await generator.generateOrRefreshQuestion({
+    serviceId: "rds",
+    label: "Amazon RDS",
+    passage: "Amazon RDS manages relational databases.",
+    avoidQuestions: [existingRdsQuestion],
+  });
+  assert.equal(attempt, 2);
+  assert.match(receivedCritique, /overlaps too closely/);
+  assert.equal(res.question.id, "automated-backups-pitr");
+
+  // Also verify runQuestionBatchJob loads baseline questions.json (e.g. s3 has 2 baseline questions)
+  // and accumulates each generated slot into avoidQuestions for the next slot
+  const seenAvoidCounts = [];
+  await runQuestionBatchJob({
+    mode: "generate",
+    services: ["s3"],
+    countPerService: 2,
+    publish: false,
+    generator: {
+      async generateOrRefreshQuestion({ serviceId, slotIndex, avoidQuestions }) {
+        seenAvoidCounts.push(avoidQuestions.length);
+        return {
+          question: sampleGeneratedQuestion(serviceId, `s3-new-${slotIndex}`, 1, null),
+          calibration: { goodEnScore: 100, goodZhHkScore: 100, wrongOutdatedScore: 0 },
+        };
+      },
+    },
+  });
+  // s3 has 2 baseline questions in questions.json -> slot 1 sees 2 avoidQuestions, slot 2 sees 3 avoidQuestions!
+  assert.deepEqual(seenAvoidCounts, [2, 3]);
 });

@@ -5,6 +5,87 @@ import { createAgent as createGraderAgent } from "./agent.mjs";
 const defaultClient = new BedrockRuntimeClient({ maxAttempts: 3, retryMode: "adaptive" });
 const cantoneseOnlyChars = /[嘅喺唔畀佢哋乜啲揀嚟]/u;
 const forbiddenVoiceClaim = /\b(?:pronunciat\w*|mispronounc\w*|your\s+voice|voice\s+(?:is|was|quality|tone|clarity|inaccurate|accurate)|accent|intonation|enunciat\w*)\b|發音|讀音|咬字|聲線|語調|口音|发音|读音/iu;
+const stopWords = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "because", "by", "can", "could", "do", "does",
+  "for", "from", "game", "give", "how", "if", "in", "into", "is", "it", "its", "need", "needs",
+  "not", "of", "on", "one", "only", "or", "other", "our", "out", "over", "player", "players",
+  "should", "so", "some", "such", "than", "that", "the", "their", "them", "then", "there",
+  "these", "they", "this", "to", "up", "use", "used", "using", "want", "what", "when", "where",
+  "which", "while", "who", "why", "will", "with", "would", "you", "your", "amazon", "aws",
+  "service", "services", "application", "applications", "system", "example", "explain",
+]);
+
+export function summarizeExistingQuestion(question) {
+  if (!question || typeof question !== "object") return null;
+  const id = String(question.id ?? "").trim();
+  if (!id) return null;
+  const title = String(question.title ?? "").trim();
+  const enPrompt = String(question.prompts?.["en-US"] ?? question.enPrompt ?? "").trim();
+  const concepts = Array.isArray(question.concepts)
+    ? question.concepts.map(c => (typeof c === "string" ? c : `${c?.id ?? ""}: ${c?.description ?? ""}`.trim())).filter(Boolean)
+    : [];
+  return { id, title, enPrompt, concepts };
+}
+
+function tokenizeTopicText(text, serviceId = "") {
+  const serviceParts = new Set(String(serviceId).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const tokens = String(text ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(token => token.length > 2 && !stopWords.has(token) && !serviceParts.has(token));
+  return new Set(tokens);
+}
+
+function jaccardSimilarity(setA, setB) {
+  if (!setA.size || !setB.size) return 0;
+  let intersection = 0;
+  for (const item of setA) {
+    if (setB.has(item)) intersection++;
+  }
+  return intersection / (setA.size + setB.size - intersection);
+}
+
+export function findDuplicateOrOverlappingQuestion(question, avoidQuestions = [], avoidIds = []) {
+  const blockedIds = new Set(avoidIds.map(id => String(id).trim()).filter(Boolean));
+  if (blockedIds.has(question.id)) {
+    return { reason: "duplicate_id", matchId: question.id };
+  }
+  const normalizedTitle = String(question.title ?? "").normalize("NFKC").trim().toLowerCase();
+  const normalizedPrompt = String(question.prompts?.["en-US"] ?? "").normalize("NFKC").trim().toLowerCase();
+  const candidatePromptTokens = tokenizeTopicText(`${question.title ?? ""} ${question.prompts?.["en-US"] ?? ""}`, question.serviceId);
+  const candidateConceptTokens = tokenizeTopicText(
+    (question.concepts ?? []).map(c => `${c.id} ${c.description}`).join(" "),
+    question.serviceId
+  );
+
+  for (const rawExisting of avoidQuestions) {
+    const existing = summarizeExistingQuestion(rawExisting);
+    if (!existing) continue;
+    if (existing.id === question.id) {
+      return { reason: "duplicate_id", matchId: existing.id, matchTitle: existing.title };
+    }
+    const existingTitle = existing.title.normalize("NFKC").trim().toLowerCase();
+    const existingPrompt = existing.enPrompt.normalize("NFKC").trim().toLowerCase();
+    if (normalizedTitle && existingTitle && normalizedTitle === existingTitle) {
+      return { reason: "duplicate_title", matchId: existing.id, matchTitle: existing.title };
+    }
+    if (normalizedPrompt && existingPrompt && normalizedPrompt === existingPrompt) {
+      return { reason: "duplicate_prompt", matchId: existing.id, matchTitle: existing.title };
+    }
+    const existingPromptTokens = tokenizeTopicText(`${existing.title} ${existing.enPrompt}`, question.serviceId);
+    const promptSim = jaccardSimilarity(candidatePromptTokens, existingPromptTokens);
+    if (promptSim >= 0.55) {
+      return { reason: "overlapping_prompt", similarity: promptSim, matchId: existing.id, matchTitle: existing.title };
+    }
+    const existingConceptTokens = tokenizeTopicText(existing.concepts.join(" "), question.serviceId);
+    const conceptSim = jaccardSimilarity(candidateConceptTokens, existingConceptTokens);
+    if (conceptSim >= 0.6) {
+      return { reason: "overlapping_concepts", similarity: conceptSim, matchId: existing.id, matchTitle: existing.title };
+    }
+  }
+  return null;
+}
 
 export function parseJsonFromText(raw) {
   if (typeof raw !== "string" || !raw.trim()) throw new Error("Empty model response");
@@ -142,7 +223,7 @@ export function createQuestionGenerator({
       systemPrompt: `You are Agent 1 (InterviewQuestionMinerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 Your job is to find the most common, practical cloud engineering interview question for the requested AWS service (or audit an existing question if supplied).
 1. Always call the nova_web_search tool first to search for the most frequently asked interview questions and typical candidate answers for the target AWS service.
-2. If avoidQuestionIds is non-empty, pick a DIFFERENT interview question topic and a unique candidateId that is NOT in avoidQuestionIds.
+2. If avoidQuestions or avoidQuestionIds is non-empty, you MUST pick a COMPLETELY DIFFERENT interview question topic, architectural scenario, and AWS capability/feature that does NOT overlap in prompt or grading concepts with any entry in avoidQuestions, and choose a unique candidateId not in avoidQuestionIds.
 3. Focus on practical, foundational scenario-based interview questions that a student can answer orally in 20-45 seconds (explaining WHY and HOW, not memorizing obscure quotas).
 4. Identify any parts of the popular interview question or traditional candidate answer that might be outdated due to AWS updates.
 5. Return ONLY valid JSON:
@@ -168,11 +249,12 @@ You receive the mined interview question from [node: interview_miner].
 Your job is to verify BOTH the question premise and the answer against official AWS documentation using your documentation search tools (such as aws___search_documentation).
 1. Call aws___search_documentation to verify current AWS behavior, security defaults, and best practices for this service and topic.
 2. If the mined interview question premise or traditional answer is outdated, rewrite the question and rubric so they are 100% accurate according to current official AWS documentation.
-3. Place any outdated community belief or common mistake into misconceptions[] (1-3 concise strings).
-4. Design 2 or 3 atomic grading concepts in concepts[] whose integer weights MUST sum strictly to 100 (e.g. 60 + 40, or 50 + 50, or 40 + 35 + 25).
-5. Each concept description must describe a clear architectural idea in plain English that a student can express in their own spoken words.
-6. Never mention voice, pronunciation, accent, or speaking tone anywhere.
-7. Return ONLY valid JSON:
+3. Ensure the id, title, enPrompt, and concepts[] do NOT duplicate or overlap with any existing question listed in avoidQuestions or avoidQuestionIds.
+4. Place any outdated community belief or common mistake into misconceptions[] (1-3 concise strings).
+5. Design 2 or 3 atomic grading concepts in concepts[] whose integer weights MUST sum strictly to 100 (e.g. 60 + 40, or 50 + 50, or 40 + 35 + 25).
+6. Each concept description must describe a clear architectural idea in plain English that a student can express in their own spoken words.
+7. Never mention voice, pronunciation, accent, or speaking tone anywhere.
+8. Return ONLY valid JSON:
 {
   "id": "kebab-case-question-id",
   "serviceId": "...",
@@ -273,8 +355,16 @@ Return ONLY valid JSON:
       ...(targetMeta.lockedId ? { id: targetMeta.lockedId } : {}),
     };
     const question = validateQuestion(rawQuestion);
-    if (!targetMeta.lockedId && targetMeta.avoidIds?.includes(question.id)) {
-      throw new Error(`Question id "${question.id}" is already used; choose a different id and interview topic not in [${targetMeta.avoidIds.join(", ")}]`);
+    if (!targetMeta.lockedId) {
+      const overlap = findDuplicateOrOverlappingQuestion(question, targetMeta.avoidQuestions, targetMeta.avoidIds);
+      if (overlap) {
+        if (overlap.reason === "duplicate_id") {
+          throw new Error(`Question id "${question.id}" is already used; choose a different id and interview topic not in [${targetMeta.avoidIds.join(", ")}]`);
+        }
+        throw new Error(
+          `Question topic overlaps too closely (${overlap.reason}) with existing question "${overlap.matchId}" ("${overlap.matchTitle ?? ""}"); choose a completely different AWS feature or architectural scenario`
+        );
+      }
     }
     if (cantoneseOnlyChars.test(question.prompts["zh-CN"] ?? "")) {
       throw new Error("Mandarin prompt (zh-CN) contains Cantonese-only characters");
@@ -365,6 +455,7 @@ Return ONLY valid JSON:
     passage,
     existingQuestion = null,
     avoidIds = [],
+    avoidQuestions = [],
     slotIndex = 1,
     status = "approved",
   }) => {
@@ -375,13 +466,22 @@ Return ONLY valid JSON:
     })());
 
     try {
+      const normalizedAvoidQuestions = avoidQuestions
+        .map(summarizeExistingQuestion)
+        .filter(q => q && q.id !== existingQuestion?.id);
+      const mergedAvoidIds = [...new Set([
+        ...avoidIds,
+        ...normalizedAvoidQuestions.map(q => q.id),
+      ])].filter(id => id && id !== existingQuestion?.id);
+
       const targetMeta = {
         serviceId,
         status,
         version: existingQuestion ? existingQuestion.version + 1 : 1,
         expectedRevision: existingQuestion ? (existingQuestion.expectedRevision ?? 0) : null,
         lockedId: existingQuestion?.id ?? null,
-        avoidIds,
+        avoidIds: mergedAvoidIds,
+        avoidQuestions: normalizedAvoidQuestions,
       };
 
       let lastError = null;
@@ -393,7 +493,8 @@ Return ONLY valid JSON:
           serviceLabel: label,
           baselineServicePassage: passage,
           slotIndex,
-          avoidQuestionIds: avoidIds,
+          avoidQuestionIds: mergedAvoidIds,
+          avoidQuestions: normalizedAvoidQuestions,
           targetVersion: targetMeta.version,
           targetStatus: targetMeta.status,
           targetExpectedRevision: targetMeta.expectedRevision,
