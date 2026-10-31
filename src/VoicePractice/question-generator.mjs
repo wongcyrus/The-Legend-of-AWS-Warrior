@@ -12,7 +12,6 @@ import {
   findDuplicateOrOverlappingQuestion,
   loadAwsKnowledgeMcpTools,
   parseJsonFromText,
-  renderStrandsTraceReportHtml,
   summarizeExistingQuestion,
 } from "../VoiceAgent/question-generator.mjs";
 
@@ -25,7 +24,6 @@ export {
   findDuplicateOrOverlappingQuestion,
   loadAwsKnowledgeMcpTools,
   parseJsonFromText,
-  renderStrandsTraceReportHtml,
   summarizeExistingQuestion,
 };
 
@@ -72,7 +70,6 @@ export async function runQuestionBatchJob({
   status = "approved",
   checkpointFile = null,
   traceFile = null,
-  traceHtmlFile = null,
   force = false,
   publish = false,
   includeBaselineQuestions = true,
@@ -170,9 +167,6 @@ export async function runQuestionBatchJob({
     saveCheckpointFile(checkpointFile, allSaved);
     if (traceFile && summary.traces.length) {
       writeFileSync(traceFile, JSON.stringify(summary.traces, null, 2) + "\n", { mode: 0o600 });
-    }
-    if (traceHtmlFile && summary.traces.length) {
-      writeFileSync(traceHtmlFile, renderStrandsTraceReportHtml(summary.traces), { mode: 0o600 });
     }
 
     if (publish && admin) {

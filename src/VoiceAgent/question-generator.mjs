@@ -6,18 +6,16 @@ import { ContextOffloader, InMemoryStorage } from "@strands-agents/sdk/vended-pl
 import { GoalLoop } from "@strands-agents/sdk/vended-plugins/goal";
 import { createAgent as createGraderAgent } from "./agent.mjs";
 
-let telemetryInitialized = false;
+let tracerProvider = null;
 
 export async function enableStrandsTelemetry({
   otlp = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT || process.env.LANGFUSE_BASE_URL),
   console: consoleExporter = process.env.STRANDS_TRACE_CONSOLE === "1",
 } = {}) {
-  if (telemetryInitialized) return true;
+  if (tracerProvider) return true;
   if (!otlp && !consoleExporter) return false;
   const telemetry = await import("@strands-agents/sdk/telemetry");
-  telemetry.setupTracer({ exporters: { otlp, console: consoleExporter } });
-  telemetry.setupMeter({ exporters: { otlp, console: consoleExporter } });
-  telemetryInitialized = true;
+  tracerProvider = telemetry.setupTracer({ exporters: { otlp, console: consoleExporter } });
   return true;
 }
 
@@ -55,16 +53,18 @@ export function extractGraphTopology(graph, { steps = [], handoffs = [] } = {}) 
   }));
 
   const edges = graph.edges.map(edge => {
-    const key = `${edge.source}->${edge.target}`;
+    const sourceId = typeof edge.source === "string" ? edge.source : edge.source?.id ?? String(edge.source);
+    const targetId = typeof edge.target === "string" ? edge.target : edge.target?.id ?? String(edge.target);
+    const key = `${sourceId}->${targetId}`;
     const stageByTarget = {
       trilingual_localizer: "localization",
       aws_docs_fact_checker: "rubric",
       interview_miner: "topic",
     };
-    const loopStage = edge.source === "calibration_critic" ? stageByTarget[edge.target] ?? null : null;
+    const loopStage = sourceId === "calibration_critic" ? stageByTarget[targetId] ?? null : null;
     return {
-      source: edge.source,
-      target: edge.target,
+      source: sourceId,
+      target: targetId,
       conditional: typeof edge.handler === "function",
       loopStage,
       traversals: handoffCounts.get(key) ?? 0,
@@ -93,120 +93,6 @@ export function extractGraphTopology(graph, { steps = [], handoffs = [] } = {}) 
     edges,
     mermaid: mermaidLines.join("\n"),
   };
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-export function renderStrandsTraceReportHtml(traces = [], { title = "AWS Strands Multi-Agent Graph & Runtime Trace Report" } = {}) {
-  const traceList = Array.isArray(traces) ? traces : [traces];
-  const cardsHtml = traceList.map((trace, idx) => {
-    const totalDuration = Math.max(1, trace.duration ?? 1);
-    const baseStart = trace.steps?.[0]?.startTime ?? 0;
-    const stepsRows = (trace.steps ?? []).map(step => {
-      const offsetPct = baseStart > 0 && step.startTime >= baseStart
-        ? Math.min(95, Math.max(0, ((step.startTime - baseStart) / totalDuration) * 100))
-        : 0;
-      const widthPct = Math.max(4, Math.min(100 - offsetPct, ((step.duration ?? 0) / totalDuration) * 100));
-      const toolBadges = (step.toolCalls ?? [])
-        .map(tc => `<span class="badge tool">🔧 ${escapeHtml(tc.name)} (${escapeHtml(tc.status)})</span>`)
-        .join(" ");
-      const innerCycles = (step.agentTraces ?? [])
-        .map(at => {
-          const children = (at.children ?? []).map(c => `${escapeHtml(c.name)} (${c.duration ?? 0}ms)`).join(" → ");
-          return `<div class="inner-trace">↻ <b>${escapeHtml(at.name)}</b> (${at.duration ?? 0}ms)${children ? `: ${children}` : ""}</div>`;
-        })
-        .join("");
-      return `
-        <tr>
-          <td>#${step.stepIndex}</td>
-          <td><code>${escapeHtml(step.nodeId)}</code></td>
-          <td><span class="badge status-${escapeHtml(String(step.status).toLowerCase())}">${escapeHtml(step.status)}</span></td>
-          <td>${step.duration ?? 0} ms</td>
-          <td>${step.usage?.totalTokens ?? 0} (${step.usage?.inputTokens ?? 0} in / ${step.usage?.outputTokens ?? 0} out)</td>
-          <td>
-            <div class="waterfall-track">
-              <div class="waterfall-bar" style="left:${offsetPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%"></div>
-            </div>
-            ${toolBadges ? `<div class="tools-row">${toolBadges}</div>` : ""}
-            ${innerCycles}
-          </td>
-        </tr>`;
-    }).join("");
-
-    const handoffBadges = (trace.handoffs ?? [])
-      .map(h => `<span class="badge ${h.isLoopBack ? "loopback" : "handoff"}">${escapeHtml(h.source)} ──► ${escapeHtml((h.targets ?? []).join(", "))}${h.isLoopBack ? " (Cyclic Retry)" : ""}</span>`)
-      .join(" ");
-
-    return `
-      <section class="card">
-        <div class="card-header">
-          <div>
-            <h2>Run #${idx + 1}: <code>${escapeHtml(trace.serviceId)}</code> · Question <code>${escapeHtml(trace.questionId ?? "pending")}</code></h2>
-            <p class="meta">Graph ID: <code>${escapeHtml(trace.graphId)}</code> · Mode: <b>${escapeHtml(trace.mode)}</b> · Slot: <b>#${escapeHtml(trace.slotIndex)}</b> · Status: <b>${escapeHtml(trace.status)}</b> · Duration: <b>${trace.duration ?? 0} ms</b> · Total Tokens: <b>${trace.usage?.totalTokens ?? 0}</b></p>
-          </div>
-          ${trace.calibration ? `<div class="calibration">goodEn: <b>${trace.calibration.goodEnScore}%</b> · goodZhHk: <b>${trace.calibration.goodZhHkScore}%</b> · wrongOutdated: <b>${trace.calibration.wrongOutdatedScore}%</b></div>` : ""}
-        </div>
-        <div class="mermaid">${escapeHtml(trace.topology?.mermaid ?? "flowchart LR\n  interview_miner --> aws_docs_fact_checker --> trilingual_localizer --> calibration_critic")}</div>
-        ${handoffBadges ? `<div class="handoffs"><strong>Edge Handoffs:</strong> ${handoffBadges}</div>` : ""}
-        <table>
-          <thead>
-            <tr>
-              <th>Step</th>
-              <th>Strands Node</th>
-              <th>Status</th>
-              <th>Duration</th>
-              <th>Tokens</th>
-              <th>Runtime Waterfall &amp; Inner Agent Loop Traces</th>
-            </tr>
-          </thead>
-          <tbody>${stepsRows}</tbody>
-        </table>
-      </section>`;
-  }).join("\n");
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${escapeHtml(title)}</title>
-  <script type="module">
-    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-    mermaid.initialize({ startOnLoad: true, theme: "dark" });
-  </script>
-  <style>
-    body { font-family: system-ui, -apple-system, sans-serif; background: #0d1117; color: #e6edf3; margin: 0; padding: 24px; }
-    h1 { color: #ff9900; margin-top: 0; }
-    .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; margin-bottom: 24px; }
-    .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-    .meta { color: #8b949e; font-size: 14px; margin: 4px 0 12px; }
-    .calibration { background: #1f2937; border: 1px solid #374151; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
-    .mermaid { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 16px; margin: 12px 0; overflow-x: auto; }
-    .handoffs { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
-    th, td { border-top: 1px solid #21262d; padding: 10px 8px; text-align: left; vertical-align: top; }
-    th { color: #8b949e; font-weight: 600; }
-    .waterfall-track { position: relative; height: 10px; background: #21262d; border-radius: 5px; overflow: hidden; margin-bottom: 6px; }
-    .waterfall-bar { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #ff9900, #38bdf8); border-radius: 5px; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-    .badge.tool { background: #1e3a5f; color: #7dd3fc; }
-    .badge.handoff { background: #1f2937; color: #d1d5db; border: 1px solid #374151; }
-    .badge.loopback { background: #451a03; color: #fdba74; border: 1px solid #f97316; }
-    .badge.status-completed { background: #064e3b; color: #6ee7b7; }
-    .inner-trace { color: #9ca3af; font-size: 12px; margin-top: 4px; }
-    code { color: #79c0ff; }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(title)}</h1>
-  ${cardsHtml}
-</body>
-</html>`;
 }
 
 const defaultClient = new BedrockRuntimeClient({ maxAttempts: 3, retryMode: "adaptive" });
@@ -407,21 +293,29 @@ async function createStrandsNodeAgent({
   traceAttributes,
 }) {
   const boundedMaxTurns = Math.min(10, Math.max(1, Math.trunc(Number(maxTurns) || 4)));
-  const model = new BedrockModel({ modelId, maxTokens, temperature: 0, stream: false });
-  model._client.send = async command => {
-    const response = await send(command);
-    if (!["end_turn", "tool_use"].includes(response?.stopReason)) {
-      throw new Error(`Incomplete model response (${response?.stopReason ?? "unknown"})`);
-    }
-    return {
-      ...response,
-      output: {
-        ...response.output,
-        message: { role: "assistant", ...response.output?.message },
-      },
-      usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+  const model = new BedrockModel({
+    modelId,
+    maxTokens,
+    temperature: 0,
+    stream: false,
+    clientConfig: { maxAttempts: 3, retryMode: "adaptive" },
+  });
+  if (typeof send === "function") {
+    model._client.send = async command => {
+      const response = await send(command);
+      if (!["end_turn", "tool_use"].includes(response?.stopReason)) {
+        throw new Error(`Incomplete model response (${response?.stopReason ?? "unknown"})`);
+      }
+      return {
+        ...response,
+        output: {
+          ...response.output,
+          message: { role: "assistant", ...response.output?.message },
+        },
+        usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      };
     };
-  };
+  }
 
   const jsonGoalLoop = new GoalLoop({
     name: `${id}:json-goal-loop`,
@@ -500,7 +394,7 @@ async function createStrandsNodeAgent({
 }
 
 export function createQuestionGenerator({
-  send = command => defaultClient.send(command),
+  send,
   modelId = process.env.VOICE_MODEL_ID ?? "us.amazon.nova-2-lite-v1:0",
   webSearchTool = createNovaWebSearchTool({ send, modelId }),
   docTools = null,
@@ -1095,6 +989,9 @@ Return ONLY valid JSON:
       );
     } finally {
       if (mcpSession) await mcpSession.disconnect().catch(() => {});
+      if (tracerProvider && typeof tracerProvider.forceFlush === "function") {
+        await tracerProvider.forceFlush().catch(() => {});
+      }
     }
   };
 

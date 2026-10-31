@@ -31,11 +31,11 @@ export const COMBO_ARTS = [
   // 2-Art Awakening Combos (all 10 pairs)
   { id: "blade-barrage", requires: ["lightning", "fireball"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
   { id: "singularity", requires: ["lightning", "frost"], label: "赫式・毫秒爆裂", englishLabel: "Dynamo Singularity", service: "Amazon DynamoDB", color: 0xb537f2 },
-  { id: "almighty-push", requires: ["fireball", "storm"], label: "神羅・負載天徵", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
+  { id: "almighty-push", requires: ["fireball", "storm"], label: "神羅・負載天征", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
   { id: "omniscience", requires: ["frost", "storm"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0x050208 },
   { id: "edge-flash", requires: ["lightning", "shockwave"], label: "炎呼吸・邊緣瞬閃", englishLabel: "CloudFront Edge Flash", service: "Amazon CloudFront", color: 0xff5500 },
   { id: "titan-meteor", requires: ["frost", "shockwave"], label: "天礙震星・基岩星隕", englishLabel: "Bedrock Titan Meteor", service: "Amazon Bedrock", color: 0xd95b26 },
-  { id: "almighty-push", requires: ["lightning", "storm"], label: "神羅・負載天徵", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
+  { id: "almighty-push", requires: ["lightning", "storm"], label: "神羅・負載天征", englishLabel: "ALB Almighty Push", service: "Elastic Load Balancing", color: 0xa87bff },
   { id: "blade-barrage", requires: ["fireball", "frost"], label: "千刃・容器萬解", englishLabel: "Fargate Blade Barrage", service: "AWS Fargate", color: 0xffb400 },
   { id: "edge-flash", requires: ["fireball", "shockwave"], label: "炎呼吸・邊緣瞬閃", englishLabel: "CloudFront Edge Flash", service: "Amazon CloudFront", color: 0xff5500 },
   { id: "omniscience", requires: ["storm", "shockwave"], label: "天照・全知之眼", englishLabel: "CloudWatch Omniscience", service: "Amazon CloudWatch", color: 0x050208 },

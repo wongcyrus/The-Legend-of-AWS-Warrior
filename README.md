@@ -124,7 +124,19 @@ node src/VoicePractice/question-bank.mjs export questions-export.json
 # Edit the file, then validate and publish only new or changed questions.
 node src/VoicePractice/question-bank.mjs validate questions-export.json
 node src/VoicePractice/question-bank.mjs publish questions-export.json
+
+# Or autonomously generate & calibrate new questions (or refresh existing ones)
+# using the 4-agent AWS Strands Graph + Harness pipeline (Nova Web Grounding + AWS Knowledge MCP):
+node src/VoicePractice/question-bank.mjs generate generated-questions.json rds,cloudfront,ecs --count=2
+node src/VoicePractice/question-bank.mjs refresh refreshed-questions.json s3,ec2
+
+# Run single-service generation with live Strands OpenTelemetry tracing (e.g. Jaeger on http://localhost:16686):
+OTEL_TRACES_EXPORTER=otlp OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+  node src/VoicePractice/question-bank.mjs generate /tmp/s3-single-question.json s3 \
+  --count=1 --no-publish --force --otel --trace-console --trace-json=/tmp/s3-single-trace.json
 ```
+
+For the full multi-agent Loop Engineering architecture, `@strands-agents/harness` (`createHarness`, `GoalLoop`, `ContextOffloader`) plugins, multi-layer turn limits, and live OpenTelemetry tracing guide, see [**`docs/QUESTION_GENERATOR_AGENT.md`**](docs/QUESTION_GENERATOR_AGENT.md).
 
 For **new questions**, use a unique ID, `status:"approved"`, `version:1` and
 `expectedRevision:null`. For **existing questions**, keep the exported ID and
@@ -377,7 +389,7 @@ Combined casts add the selected MP costs and use the longest selected cooldown.
 Combining 2, 3, or 4 Cloud Arts in a single cast awakens one of **six Anime × AWS Awakening Combo Arts** alongside the selected base spells:
 - **千刃・容器萬解 / `Fargate Blade Barrage` (`[3] + [4]` or `[4] + [5]`)**: Opens 5 golden container portals behind the player and fires 18 glowing blades up to 75 units ahead across 3 volleys (`2.2x` Power per volley).
 - **赫式・毫秒爆裂 / `Dynamo Singularity` (`[3] + [5]`)**: Fuses Blue (`蒼`) and Red (`赫`) orbs into a giant 18-unit Hollow Purple (`茈`) sphere that shoots 115 units across the map (`3.4x` Power across 4 waves + knockback), plus **Cold-Start Surge** lightning across the 16-unit Storage domain.
-- **神羅・負載天徵 / `ALB Almighty Push` (`[4] + [6]` or `[3] + [6]`)**: The player flies up into the sky (`y = 18`) while a 360° gravity sphere and 16 radial spikes expand outward from his body across 32 units (`3.0x` Power + knockback per wave) alongside **VPC Peered Fleet** shadow clones (`5.8`-unit strike radius and knockback).
+- **神羅・負載天征 / `ALB Almighty Push` (`[4] + [6]` or `[3] + [6]`)**: The player flies up into the sky (`y = 18`) while a 360° gravity sphere and 16 radial spikes expand outward from his body across 32 units (`3.0x` Power + knockback per wave) alongside **VPC Peered Fleet** shadow clones (`5.8`-unit strike radius and knockback).
 - **天照・全知之眼 / `CloudWatch Omniscience` (`[5] + [6]` or `[6] + [7]`)**: Darkens the domain into an obsidian void and erupts 24 pitch-black Amaterasu flame pillars (`0x050208`) with a floating Mangekyō eye and sweeping X-Ray laser that pulse 6 times over 7s (`1.8x` Power + `1.5s` slow).
 - **炎呼吸・邊緣瞬閃 / `CloudFront Edge Flash` (`[3] + [7]` or `[4] + [7]`)**: Unleashes twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a 65-unit corridor for 3 rapid slashes (`3.2x` Power each).
 - **天礙震星・基岩星隕 / `Bedrock Titan Meteor` (`[5] + [7]`)**: Tears open a sky portal and drops twin colossal craggy rock boulders straight down from the sky 22 units ahead after `1.2s`, dealing `9.0x` Power AoE damage across a 26-unit radius.

@@ -10,7 +10,6 @@ import {
   createQuestionGenerator,
   extractNovaGroundingResult,
   findDuplicateOrOverlappingQuestion,
-  renderStrandsTraceReportHtml,
   runQuestionBatchJob,
 } from "../../src/VoicePractice/question-generator.mjs";
 
@@ -299,9 +298,7 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
   assert.ok(result.trace.steps[0].agentTraces.length >= 2);
   assert.match(result.trace.topology.mermaid, /flowchart LR/);
   assert.match(result.trace.topology.mermaid, /conditional loop/);
-  const html = renderStrandsTraceReportHtml([result.trace]);
-  assert.match(html, /aws-interview-question-pipeline/);
-  assert.match(html, /verify_and_calibrate_question/);
+  assert.doesNotThrow(() => JSON.stringify(result.trace));
 });
 
 test("Stage-classified loop routing sends localization defects to trilingual_localizer and rubric defects to aws_docs_fact_checker", async () => {

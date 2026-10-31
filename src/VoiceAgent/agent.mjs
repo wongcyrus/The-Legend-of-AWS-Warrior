@@ -108,21 +108,29 @@ export function validateReadingGrade(value) {
   return { score, breakdown: { coverage: breakdown.coverage, content: breakdown.content }, feedback: feedback.trim() };
 }
 
-export function createAgent({ send = command => client.send(command), modelId = process.env.VOICE_MODEL_ID } = {}) {
+export function createAgent({ send, modelId = process.env.VOICE_MODEL_ID } = {}) {
   const invoke = async (system, input, maxTokens) => {
-    const model = new BedrockModel({ modelId, maxTokens, temperature: 0, stream: false });
-    model._client.send = async command => {
-      const response = await send(command);
-      if (response?.stopReason !== "end_turn") throw new Error("Incomplete model response");
-      return {
-        ...response,
-        output: {
-          ...response.output,
-          message: { role: "assistant", ...response.output?.message },
-        },
-        usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    const model = new BedrockModel({
+      modelId,
+      maxTokens,
+      temperature: 0,
+      stream: false,
+      clientConfig: { maxAttempts: 3, retryMode: "adaptive" },
+    });
+    if (typeof send === "function") {
+      model._client.send = async command => {
+        const response = await send(command);
+        if (response?.stopReason !== "end_turn") throw new Error("Incomplete model response");
+        return {
+          ...response,
+          output: {
+            ...response.output,
+            message: { role: "assistant", ...response.output?.message },
+          },
+          usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        };
       };
-    };
+    }
     const strandsAgent = await createHarness({
       model,
       effort: "auto",
@@ -139,6 +147,7 @@ export function createAgent({ send = command => client.send(command), modelId = 
       retryStrategy: null,
     });
     const result = await strandsAgent.invoke(JSON.stringify(input), { limits: { turns: 1 } });
+    if (!["end_turn", "endTurn"].includes(result.stopReason)) throw new Error("Incomplete model response");
     const raw = result.toString();
     if (raw.length > 30000) throw new Error("Model response too large");
     const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(raw.trim());

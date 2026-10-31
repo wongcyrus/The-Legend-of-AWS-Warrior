@@ -138,7 +138,16 @@ node src/VoicePractice/question-bank.mjs retire s3 private-screenshots 0
 # and checkpoints/publishes approved questions per service:
 node src/VoicePractice/question-bank.mjs generate generated-questions.json rds,cloudfront,ecs --count=2
 node src/VoicePractice/question-bank.mjs refresh refreshed-questions.json s3,ec2
+
+# Single-service generation with live Strands OpenTelemetry tracing (Jaeger on http://localhost:16686):
+OTEL_TRACES_EXPORTER=otlp \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_SERVICE_NAME=aws-warrior-question-generator \
+node src/VoicePractice/question-bank.mjs generate /tmp/s3-single-question.json s3 \
+  --count=1 --no-publish --force --otel --trace-console --trace-json=/tmp/s3-single-trace.json
 ```
+
+See [`docs/QUESTION_GENERATOR_AGENT.md`](../../docs/QUESTION_GENERATOR_AGENT.md) for the complete architecture of the 4-agent Strands `Graph` pipeline (`interview_miner` → `aws_docs_fact_checker` → `trilingual_localizer` → `calibration_critic`), `@strands-agents/harness` (`createHarness`, `GoalLoop`, `ContextOffloader`), multi-layer turn limits (`maxTurnsPerNode = 4`, `limits: { turns: 1 }`, `maxAttempts = 3`), stage-classified feedback routing (`localization`, `rubric`, `topic`), and native Strands OpenTelemetry tracing.
 
 Exports include private concepts, acceptable answers and reference answers, **not
 student attempts, grades or wallets**. They use owner-only file permissions and
@@ -394,6 +403,12 @@ requests. A later independent attack may trigger another check.
 World populations are 24 ordinary enemies plus the Warden in the village, and
 14 ordinary enemies plus one elite in each expedition. Boss models are twice
 their earlier size, without changing their HP or the execution-wave rule.
+Melee target acquisition (`findAttackTarget()` in `web-game/v2/main.js`) accounts
+for both point-blank contact (`closeRangeLeeway = 2.6 + (m.hitRadius ?? 0)`,
+allowing 360° hits when an enemy overlaps the player) and large monster attack
+ranges (`Math.max(weapon.reach, (m.attackRange ?? 0) + 1.0)`), ensuring any
+monster close enough to melee-strike the player can always be struck back with
+any equipped melee weapon.
 Existing actor pools and respawn behavior are retained; these frontend changes
 do not migrate student data or create new rewards.
 
