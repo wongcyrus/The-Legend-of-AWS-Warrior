@@ -106,6 +106,9 @@ async function main(args) {
         : id.split(",").map(s => s.trim()).filter(Boolean);
     const countFlag = flags.find(f => f.startsWith("--count="));
     const countPerService = countFlag ? Number(countFlag.split("=")[1]) : 2;
+    const concurrencyFlag = flags.find(f => f.startsWith("--concurrency="));
+    const concurrency = concurrencyFlag ? Number(concurrencyFlag.split("=")[1]) : 1;
+    const continueOnError = flags.includes("--continue-on-error") || id === "all";
     const traceJsonFlag = flags.find(f => f.startsWith("--trace-json="));
     const traceFile = traceJsonFlag ? traceJsonFlag.slice("--trace-json=".length) : null;
     const otel = flags.includes("--otel");
@@ -118,20 +121,24 @@ async function main(args) {
     const generator = createQuestionGenerator({
       otel,
       traceConsole,
-      onTraceEvent: event => {
-        if (event.type === "beforeNodeCallEvent") {
-          console.log(`  [Strands Graph] ▶ Node started: ${event.nodeId}`);
-        } else if (event.type === "nodeResultEvent") {
-          console.log(`  [Strands Graph] ✔ Node finished: ${event.nodeId} (${event.result?.status}, ${event.result?.duration ?? 0}ms)`);
-        } else if (event.type === "multiAgentHandoffEvent") {
-          console.log(`  [Strands Graph] ──► Handoff: ${event.source} -> ${(event.targets ?? []).join(", ")}`);
-        }
-      },
+      onTraceEvent: concurrency === 1
+        ? event => {
+            if (event.type === "beforeNodeCallEvent") {
+              console.log(`  [Strands Graph] ▶ Node started: ${event.nodeId}`);
+            } else if (event.type === "nodeResultEvent") {
+              console.log(`  [Strands Graph] ✔ Node finished: ${event.nodeId} (${event.result?.status}, ${event.result?.duration ?? 0}ms)`);
+            } else if (event.type === "multiAgentHandoffEvent") {
+              console.log(`  [Strands Graph] ──► Handoff: ${event.source} -> ${(event.targets ?? []).join(", ")}`);
+            }
+          }
+        : null,
     });
     const summary = await runQuestionBatchJob({
       mode: action,
       services: serviceList,
       countPerService,
+      concurrency,
+      continueOnError,
       status: "approved",
       checkpointFile: target,
       traceFile,
@@ -140,13 +147,16 @@ async function main(args) {
       store,
       generator,
       onServiceComplete: ({ serviceId, questions }) => {
-        console.log(`[${action}] Completed ${serviceId}: ${questions.length} calibrated approved question(s) saved to ${target}${shouldPublish ? " & published to DynamoDB" : ""}.`);
+        console.log(`[${action}] (${summary.completedServices.length}/${serviceList.length}) Completed ${serviceId}: ${questions.length} calibrated approved question(s) saved to ${target}${shouldPublish ? " & published to DynamoDB" : ""}.`);
+      },
+      onServiceError: ({ serviceId, error }) => {
+        console.warn(`[${action}] ⚠ Failed ${serviceId}: ${error.message}`);
       },
     });
     if (traceFile && summary.traces.length) {
       console.log(`Saved Strands Graph & Runtime Trace JSON to ${traceFile}`);
     }
-    console.log(`Finished ${action}: ${summary.completedServices.length} service(s) processed, ${summary.skippedServices.length} skipped from checkpoint, ${summary.publishedCount} question(s) published.`);
+    console.log(`Finished ${action}: ${summary.completedServices.length} service(s) processed, ${summary.skippedServices.length} skipped from checkpoint, ${summary.failedServices.length} failed, ${summary.publishedCount} question(s) published.`);
     return;
   }
   throw new Error("Usage: node question-bank.mjs validate|publish|import FILE\n       node question-bank.mjs export FILE [SERVICE]\n       node question-bank.mjs approve|retire SERVICE QUESTION EXPECTED_REVISION\n       node question-bank.mjs generate|refresh FILE SERVICE[,SERVICE...] [--count=2] [--publish|--no-publish] [--force] [--trace-json=FILE] [--otel] [--trace-console]");

@@ -67,6 +67,8 @@ export async function runQuestionBatchJob({
   mode = "generate",
   services = [],
   countPerService = 2,
+  concurrency = 1,
+  continueOnError = false,
   status = "approved",
   checkpointFile = null,
   traceFile = null,
@@ -76,6 +78,7 @@ export async function runQuestionBatchJob({
   store = null,
   generator = createQuestionGenerator(),
   onServiceComplete = null,
+  onServiceError = null,
 } = {}) {
   if (!["generate", "refresh"].includes(mode)) throw new Error("mode must be generate or refresh");
   if (!Array.isArray(services) || !services.length) throw new Error("Specify at least one serviceId");
@@ -90,17 +93,18 @@ export async function runQuestionBatchJob({
   const summary = {
     completedServices: [],
     skippedServices: [],
+    failedServices: [],
     publishedCount: 0,
     questions: [],
     traces: [],
   };
 
-  for (const serviceId of services) {
+  const processOneService = async serviceId => {
     const meta = serviceCatalog.get(serviceId);
     const checkpointForService = [...byKey.values()].filter(q => q.serviceId === serviceId);
     if (!force && checkpointForService.length >= (mode === "generate" ? countPerService : 1)) {
       summary.skippedServices.push(serviceId);
-      continue;
+      return;
     }
 
     const baselineForService = includeBaselineQuestions
@@ -180,7 +184,32 @@ export async function runQuestionBatchJob({
     if (typeof onServiceComplete === "function") {
       await onServiceComplete({ serviceId, questions: generatedForService });
     }
-  }
+  };
+
+  const boundedConcurrency = Math.min(12, Math.max(1, Math.trunc(Number(concurrency) || 1)));
+  let nextIdx = 0;
+  const runWorker = async () => {
+    while (nextIdx < services.length) {
+      const serviceId = services[nextIdx++];
+      try {
+        await processOneService(serviceId);
+      } catch (error) {
+        if (!continueOnError) throw error;
+        try {
+          await processOneService(serviceId);
+        } catch (retryError) {
+          summary.failedServices.push({ serviceId, error: retryError.message });
+          if (typeof onServiceError === "function") {
+            await onServiceError({ serviceId, error: retryError });
+          }
+        }
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(boundedConcurrency, services.length) }, () => runWorker())
+  );
 
   summary.questions = [...byKey.values()];
   return summary;
