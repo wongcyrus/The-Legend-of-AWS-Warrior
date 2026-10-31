@@ -1,6 +1,9 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
-import { Agent, BedrockModel, BeforeInvocationEvent, BeforeModelCallEvent, Graph, McpClient, TextBlock, tool } from "@strands-agents/sdk";
+import { createHarness } from "@strands-agents/harness";
+import { BedrockModel, BeforeInvocationEvent, BeforeModelCallEvent, Graph, McpClient, TextBlock, tool } from "@strands-agents/sdk";
 import { BeforeMultiAgentInvocationEvent, BeforeNodeCallEvent, Status } from "@strands-agents/sdk/multiagent";
+import { ContextOffloader, InMemoryStorage } from "@strands-agents/sdk/vended-plugins/context-offloader";
+import { GoalLoop } from "@strands-agents/sdk/vended-plugins/goal";
 import { createAgent as createGraderAgent } from "./agent.mjs";
 
 let telemetryInitialized = false;
@@ -43,6 +46,9 @@ export function extractGraphTopology(graph, { steps = [], handoffs = [] } = {}) 
     type: node.type,
     description: node.config?.description ?? "",
     preserveContext: Boolean(node.preserveContext),
+    harness: Boolean(node.agent?.goalLoop),
+    plugins: [node.agent?.contextOffloader?.name, node.agent?.goalLoop?.name].filter(Boolean),
+    goalLoopResult: node.agent?.goalLoop?.lastResult?.(node.agent) ?? null,
     visits: visitCounts.get(node.id) ?? 0,
     totalDurationMs: durationByNode.get(node.id) ?? 0,
     toolsUsed: [...(toolsByNode.get(node.id) ?? [])],
@@ -389,7 +395,7 @@ export async function loadAwsKnowledgeMcpTools({
   };
 }
 
-function createStrandsNodeAgent({
+async function createStrandsNodeAgent({
   id,
   description,
   systemPrompt,
@@ -416,20 +422,73 @@ function createStrandsNodeAgent({
       usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
     };
   };
-  const agent = new Agent({
+
+  const jsonGoalLoop = new GoalLoop({
+    name: `${id}:json-goal-loop`,
+    maxAttempts: Math.min(2, boundedMaxTurns),
+    preserveContext: true,
+    goal: response => {
+      const text = (response?.content ?? [])
+        .map(block => (typeof block?.text === "string" ? block.text : ""))
+        .join("\n")
+        .trim();
+      try {
+        parseJsonFromText(text);
+        return { passed: true };
+      } catch (error) {
+        return {
+          passed: false,
+          feedback: `Output from ${id} was not valid JSON (${error.message}). Return ONLY valid JSON matching your node schema.`,
+        };
+      }
+    },
+  });
+
+  const plugins = [jsonGoalLoop];
+  let contextOffloader = null;
+  if (tools.length > 0) {
+    contextOffloader = new ContextOffloader({
+      storage: new InMemoryStorage(),
+      maxResultTokens: 2500,
+      previewTokens: 1000,
+      includeRetrievalTool: false,
+    });
+    plugins.unshift(contextOffloader);
+  }
+
+  const agent = await createHarness({
     id,
     name: id,
     description,
     model,
+    effort: "auto",
+    caching: false,
     systemPrompt,
     tools,
+    plugins,
+    builtinTools: [],
+    builtinPlugins: [],
+    contextManager: {
+      strategies: ["largeToolOffloading", "overflowProtection"],
+      stash: false,
+    },
+    session: false,
+    memory: false,
+    skills: false,
+    backgroundTasks: false,
     printer: false,
     retryStrategy: null,
     ...(traceAttributes ? { traceAttributes } : {}),
   });
+
+  agent.goalLoop = jsonGoalLoop;
+  agent.contextOffloader = contextOffloader;
+
   let turnsInCurrentInvocation = 0;
-  agent.addHook(BeforeInvocationEvent, () => {
-    turnsInCurrentInvocation = 0;
+  agent.addHook(BeforeInvocationEvent, event => {
+    if (!event?.resumed) {
+      turnsInCurrentInvocation = 0;
+    }
   });
   agent.addHook(BeforeModelCallEvent, () => {
     turnsInCurrentInvocation += 1;
@@ -615,8 +674,8 @@ export function createQuestionGenerator({
     },
   });
 
-  const buildGraph = (activeDocTools, invocationState, traceAttributes) => {
-    const interviewMiner = createStrandsNodeAgent({
+  const buildGraph = async (activeDocTools, invocationState, traceAttributes) => {
+    const interviewMiner = await createStrandsNodeAgent({
       id: "interview_miner",
       description: "Mines the most common real-world AWS interview questions using Amazon Nova web grounding.",
       modelId,
@@ -642,7 +701,7 @@ Your job is to find the most common, practical cloud engineering interview quest
 }`,
     });
 
-    const awsDocsFactChecker = createStrandsNodeAgent({
+    const awsDocsFactChecker = await createStrandsNodeAgent({
       id: "aws_docs_fact_checker",
       description: "Audits interview questions and answers against official AWS documentation via AWS Knowledge MCP.",
       modelId,
@@ -678,7 +737,7 @@ Your job is to verify BOTH the question premise and the answer against official 
 }`,
     });
 
-    const trilingualLocalizer = createStrandsNodeAgent({
+    const trilingualLocalizer = await createStrandsNodeAgent({
       id: "trilingual_localizer",
       description: "Localizes AWS-verified interview questions into English (en-US), Hong Kong Cantonese (zh-HK), and Simplified Chinese Mandarin (zh-CN).",
       modelId,
@@ -718,7 +777,7 @@ Rules:
 }`,
     });
 
-    const calibrationCritic = createStrandsNodeAgent({
+    const calibrationCritic = await createStrandsNodeAgent({
       id: "calibration_critic",
       description: "Generates synthetic spoken student transcripts (Good English, Good HK Cantonese code-switched, and Outdated/Misconception) and invokes verify_and_calibrate_question to calibrate the rubric.",
       modelId,
@@ -915,7 +974,7 @@ Return ONLY valid JSON:
         "strands.slot.index": Number(slotIndex),
       };
 
-      const graph = buildGraph(activeDocTools, invocationState, traceAttributes);
+      const graph = await buildGraph(activeDocTools, invocationState, traceAttributes);
       const taskPrompt = JSON.stringify({
         mode,
         serviceId,

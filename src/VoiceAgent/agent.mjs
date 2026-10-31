@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
-import { Agent, BedrockModel } from "@strands-agents/sdk";
+import { createHarness } from "@strands-agents/harness";
+import { BedrockModel } from "@strands-agents/sdk";
 
 const client = new BedrockRuntimeClient({ maxAttempts: 3, retryMode: "adaptive" });
 const text = (value, limit) => typeof value === "string" && value.trim().length > 0 && value.length <= limit;
@@ -122,9 +123,18 @@ export function createAgent({ send = command => client.send(command), modelId = 
         usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       };
     };
-    const strandsAgent = new Agent({
+    const strandsAgent = await createHarness({
       model,
+      effort: "auto",
+      caching: false,
       systemPrompt: system,
+      builtinTools: [],
+      builtinPlugins: [],
+      contextManager: false,
+      session: false,
+      memory: false,
+      skills: false,
+      backgroundTasks: false,
       printer: false,
       retryStrategy: null,
     });

@@ -720,3 +720,159 @@ test("Inner Agent maxTurnsPerNode and Outer Graph maxAttempts prevent infinite l
   );
   assert.equal(modelTurnCalls, 3);
 });
+
+test("Strands Harness and harness-sdk GoalLoop + ContextOffloader plugins self-correct malformed JSON output within a node", async () => {
+  const mockWebTool = tool({
+    name: "nova_web_search",
+    description: "Mock Nova web search",
+    inputSchema: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+    callback: async () => ({ answer: "RDS Multi-AZ high availability", citations: [] }),
+  });
+  const mockDocTool = tool({
+    name: "aws___search_documentation",
+    description: "Mock AWS docs search",
+    inputSchema: {
+      type: "object",
+      properties: { search_phrase: { type: "string" } },
+      required: ["search_phrase"],
+    },
+    callback: async () => ({ results: [{ title: "RDS Multi-AZ", url: "https://docs.aws.amazon.com/rds" }] }),
+  });
+
+  let localizerTurn = 0;
+  const generator = createQuestionGenerator({
+    webSearchTool: mockWebTool,
+    docTools: [mockDocTool],
+    send: async command => {
+      const systemText = command.input?.system?.[0]?.text ?? "";
+      if (systemText.includes("InterviewQuestionMinerAgent")) {
+        return {
+          stopReason: "end_turn",
+          output: {
+            message: {
+              role: "assistant",
+              content: [{
+                text: JSON.stringify({
+                  serviceId: "rds",
+                  candidateId: "rds-multi-az",
+                  interviewTopic: "Multi-AZ vs Read Replicas",
+                  commonQuestion: "How does RDS Multi-AZ differ from Read Replicas?",
+                  typicalCommunityAnswer: "Multi-AZ is for failover.",
+                  suspectedOutdatedClaims: [],
+                  webCitations: [],
+                }),
+              }],
+            },
+          },
+        };
+      }
+      if (systemText.includes("AwsDocsFactCheckerAgent")) {
+        return {
+          stopReason: "end_turn",
+          output: {
+            message: {
+              role: "assistant",
+              content: [{
+                text: JSON.stringify({
+                  id: "rds-multi-az",
+                  serviceId: "rds",
+                  title: "RDS Multi-AZ High Availability",
+                  enPrompt: sampleGeneratedQuestion("rds", "rds-multi-az").prompts["en-US"],
+                  concepts: sampleGeneratedQuestion("rds", "rds-multi-az").concepts,
+                  misconceptions: sampleGeneratedQuestion("rds", "rds-multi-az").misconceptions,
+                  acceptableAnswers: sampleGeneratedQuestion("rds", "rds-multi-az").acceptableAnswers,
+                  referenceAnswer: sampleGeneratedQuestion("rds", "rds-multi-az").referenceAnswer,
+                  awsDocCitations: [],
+                }),
+              }],
+            },
+          },
+        };
+      }
+      if (systemText.includes("TrilingualLocalizationAgent")) {
+        localizerTurn++;
+        if (localizerTurn === 1) {
+          return {
+            stopReason: "end_turn",
+            output: {
+              message: {
+                role: "assistant",
+                content: [{ text: "Sorry, here is some unformatted text without any JSON braces!" }],
+              },
+            },
+          };
+        }
+        return {
+          stopReason: "end_turn",
+          output: {
+            message: {
+              role: "assistant",
+              content: [{ text: JSON.stringify(sampleGeneratedQuestion("rds", "rds-multi-az")) }],
+            },
+          },
+        };
+      }
+      if (systemText.includes("CalibrationCriticAgent")) {
+        return {
+          stopReason: "end_turn",
+          output: {
+            message: {
+              role: "assistant",
+              content: [{
+                text: JSON.stringify({
+                  question: sampleGeneratedQuestion("rds", "rds-multi-az"),
+                  syntheticTranscripts: sampleSyntheticTranscripts,
+                }),
+              }],
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected system prompt: ${systemText}`);
+    },
+    grader: async ({ transcript }) => {
+      if (transcript.includes("synchronous standby")) {
+        return {
+          concepts: [
+            { id: "standby-failover", verdict: "met", evidence: "synchronous standby" },
+            { id: "vs-read-replica", verdict: "met", evidence: "Read Replicas" },
+          ],
+          feedback: "Well explained based on AWS documentation.",
+        };
+      }
+      return {
+        concepts: [
+          { id: "standby-failover", verdict: "missing", evidence: "" },
+          { id: "vs-read-replica", verdict: "contradicted", evidence: "distribute read-heavy query traffic" },
+        ],
+        feedback: "Multi-AZ standby does not serve read traffic.",
+      };
+    },
+  });
+
+  const result = await generator.generateOrRefreshQuestion({
+    serviceId: "rds",
+    label: "Amazon RDS",
+    passage: "Amazon RDS manages relational databases.",
+  });
+
+  assert.equal(localizerTurn, 2);
+  assert.equal(result.question.id, "rds-multi-az");
+  const nodes = result.trace.topology.nodes;
+  for (const node of nodes) {
+    assert.equal(node.harness, true);
+    assert.ok(node.plugins.includes(`${node.id}:json-goal-loop`));
+  }
+  const minerNode = nodes.find(n => n.id === "interview_miner");
+  assert.ok(minerNode.plugins.includes("strands:context-offloader"));
+  const localizerNode = nodes.find(n => n.id === "trilingual_localizer");
+  assert.equal(localizerNode.goalLoopResult?.passed, true);
+  assert.equal(localizerNode.goalLoopResult?.stopReason, "satisfied");
+  assert.equal(localizerNode.goalLoopResult?.attempts?.length, 2);
+  assert.equal(localizerNode.goalLoopResult?.attempts?.[0]?.passed, false);
+  assert.equal(localizerNode.goalLoopResult?.attempts?.[1]?.passed, true);
+});

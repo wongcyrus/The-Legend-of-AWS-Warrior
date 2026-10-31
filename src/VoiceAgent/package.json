@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
-    "@strands-agents/sdk": "^1.22.0"
+    "@strands-agents/harness": "^0.3.3",
+    "@strands-agents/sdk": "^1.23.0"
   }
 }
