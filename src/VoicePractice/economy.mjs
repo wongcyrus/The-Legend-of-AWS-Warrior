@@ -54,9 +54,8 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     const catalog = [...activities];
     for (const [serviceId, group] of qaByService) {
       const hasInProgress = group.attempted.some(a => !rows.get(a.activityId)?.completed);
-      const hasUnlocked = group.unattempted.length > 0 ||
-        group.attempted.some(a => taskAvailableAt(rows.get(a.activityId)) <= now());
-      const exhausted = !hasUnlocked;
+      const exhausted = group.approved.length > 0 && group.unattempted.length === 0 &&
+        group.approved.every(a => rows.get(a.activityId)?.completed === true);
       for (const activity of group.attempted) {
         catalog.push({ ...activity, exhausted });
       }
@@ -78,8 +77,9 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
       if (row.type === "question_answer" && !ids.has(row.activityId)) {
         const group = qaByService.get(row.serviceId);
         const exhausted = group
-          ? group.unattempted.length === 0 && group.approved.every(a => taskAvailableAt(rows.get(a.activityId)) > now())
-          : taskAvailableAt(row) > now();
+          ? group.approved.length > 0 && group.unattempted.length === 0 &&
+            group.approved.every(a => rows.get(a.activityId)?.completed === true)
+          : row.completed === true;
         catalog.push({ ...row, available: false, exhausted });
       }
     }

@@ -316,7 +316,8 @@ test("completions summary never leaks unattempted question bank titles or IDs an
   assert.equal(rawMid.includes(unchosen.title), false, "Remaining unattempted question title must not leak");
   assert.equal(rawMid.includes(unchosen.id), false, "Remaining unattempted question ID must not leak");
 
-  // 3. After passing the second question, the service Q&A bank is exhausted (exhausted: true, no unstarted slot left):
+  // 3. After passing the second question, the service Q&A bank is exhausted (exhausted: true, no unstarted slot left),
+  // and exhausted remains true even after the 7-day cooldown expires:
   const second = await createAnswer(f);
   assert.equal(second.questionId, unchosen.id);
   await f.req(`/voice/sessions/${second.id}/answer`, spoken("S3"));
@@ -325,6 +326,10 @@ test("completions summary never leaks unattempted question bank titles or IDs an
   const qaAfter = after.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
   assert.equal(qaAfter.length, 2);
   assert.ok(qaAfter.every(a => a.completed && a.onCooldown && a.exhausted === true));
+  f.advance(7 * 86400);
+  const postCooldown = (await f.req("/voice/completions")).data;
+  const qaPost = postCooldown.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
+  assert.ok(qaPost.every(a => a.completed && !a.onCooldown && a.exhausted === true));
 });
 
 test("Q&A mobile transfer shares question, keeps rubric private and accepts short spoken answers", async () => {
