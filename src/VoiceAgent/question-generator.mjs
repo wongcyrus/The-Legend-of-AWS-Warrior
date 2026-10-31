@@ -2,6 +2,198 @@ import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-r
 import { Agent, BedrockModel, Graph, McpClient, TextBlock, tool } from "@strands-agents/sdk";
 import { createAgent as createGraderAgent } from "./agent.mjs";
 
+let telemetryInitialized = false;
+
+export async function enableStrandsTelemetry({
+  otlp = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT || process.env.LANGFUSE_BASE_URL),
+  console: consoleExporter = process.env.STRANDS_TRACE_CONSOLE === "1",
+} = {}) {
+  if (telemetryInitialized) return true;
+  if (!otlp && !consoleExporter) return false;
+  const telemetry = await import("@strands-agents/sdk/telemetry");
+  telemetry.setupTracer({ exporters: { otlp, console: consoleExporter } });
+  telemetry.setupMeter({ exporters: { otlp, console: consoleExporter } });
+  telemetryInitialized = true;
+  return true;
+}
+
+export function extractGraphTopology(graph, { steps = [], handoffs = [] } = {}) {
+  const visitCounts = new Map();
+  const durationByNode = new Map();
+  const toolsByNode = new Map();
+  for (const step of steps) {
+    visitCounts.set(step.nodeId, (visitCounts.get(step.nodeId) ?? 0) + 1);
+    durationByNode.set(step.nodeId, (durationByNode.get(step.nodeId) ?? 0) + (step.duration ?? 0));
+    if (!toolsByNode.has(step.nodeId)) toolsByNode.set(step.nodeId, new Set());
+    for (const tc of step.toolCalls ?? []) {
+      if (tc?.name) toolsByNode.get(step.nodeId).add(tc.name);
+    }
+  }
+  const handoffCounts = new Map();
+  for (const h of handoffs) {
+    for (const target of h.targets ?? []) {
+      const key = `${h.source}->${target}`;
+      handoffCounts.set(key, (handoffCounts.get(key) ?? 0) + 1);
+    }
+  }
+
+  const nodes = [...graph.nodes.values()].map(node => ({
+    id: node.id,
+    type: node.type,
+    description: node.config?.description ?? "",
+    preserveContext: Boolean(node.preserveContext),
+    visits: visitCounts.get(node.id) ?? 0,
+    totalDurationMs: durationByNode.get(node.id) ?? 0,
+    toolsUsed: [...(toolsByNode.get(node.id) ?? [])],
+  }));
+
+  const edges = graph.edges.map(edge => {
+    const key = `${edge.source}->${edge.target}`;
+    return {
+      source: edge.source,
+      target: edge.target,
+      conditional: typeof edge.handler === "function",
+      traversals: handoffCounts.get(key) ?? 0,
+    };
+  });
+
+  const mermaidLines = ["flowchart LR"];
+  for (const node of nodes) {
+    const stats = node.visits > 0 ? `<br/>(${node.visits}x · ${node.totalDurationMs}ms)` : "";
+    const tools = node.toolsUsed.length > 0 ? `<br/>🔧 ${node.toolsUsed.join(", ")}` : "";
+    mermaidLines.push(`  ${node.id}["<b>${node.id}</b>${stats}${tools}"]`);
+  }
+  for (const edge of edges) {
+    const countLabel = edge.traversals > 0 ? ` (${edge.traversals}x)` : "";
+    if (edge.conditional) {
+      mermaidLines.push(`  ${edge.source} -. "conditional loop${countLabel}" .-> ${edge.target}`);
+    } else {
+      mermaidLines.push(`  ${edge.source} -->|"handoff${countLabel}"| ${edge.target}`);
+    }
+  }
+
+  return {
+    graphId: graph.id,
+    nodes,
+    edges,
+    mermaid: mermaidLines.join("\n"),
+  };
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function renderStrandsTraceReportHtml(traces = [], { title = "AWS Strands Multi-Agent Graph & Runtime Trace Report" } = {}) {
+  const traceList = Array.isArray(traces) ? traces : [traces];
+  const cardsHtml = traceList.map((trace, idx) => {
+    const totalDuration = Math.max(1, trace.duration ?? 1);
+    const baseStart = trace.steps?.[0]?.startTime ?? 0;
+    const stepsRows = (trace.steps ?? []).map(step => {
+      const offsetPct = baseStart > 0 && step.startTime >= baseStart
+        ? Math.min(95, Math.max(0, ((step.startTime - baseStart) / totalDuration) * 100))
+        : 0;
+      const widthPct = Math.max(4, Math.min(100 - offsetPct, ((step.duration ?? 0) / totalDuration) * 100));
+      const toolBadges = (step.toolCalls ?? [])
+        .map(tc => `<span class="badge tool">🔧 ${escapeHtml(tc.name)} (${escapeHtml(tc.status)})</span>`)
+        .join(" ");
+      const innerCycles = (step.agentTraces ?? [])
+        .map(at => {
+          const children = (at.children ?? []).map(c => `${escapeHtml(c.name)} (${c.duration ?? 0}ms)`).join(" → ");
+          return `<div class="inner-trace">↻ <b>${escapeHtml(at.name)}</b> (${at.duration ?? 0}ms)${children ? `: ${children}` : ""}</div>`;
+        })
+        .join("");
+      return `
+        <tr>
+          <td>#${step.stepIndex}</td>
+          <td><code>${escapeHtml(step.nodeId)}</code></td>
+          <td><span class="badge status-${escapeHtml(String(step.status).toLowerCase())}">${escapeHtml(step.status)}</span></td>
+          <td>${step.duration ?? 0} ms</td>
+          <td>${step.usage?.totalTokens ?? 0} (${step.usage?.inputTokens ?? 0} in / ${step.usage?.outputTokens ?? 0} out)</td>
+          <td>
+            <div class="waterfall-track">
+              <div class="waterfall-bar" style="left:${offsetPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%"></div>
+            </div>
+            ${toolBadges ? `<div class="tools-row">${toolBadges}</div>` : ""}
+            ${innerCycles}
+          </td>
+        </tr>`;
+    }).join("");
+
+    const handoffBadges = (trace.handoffs ?? [])
+      .map(h => `<span class="badge ${h.isLoopBack ? "loopback" : "handoff"}">${escapeHtml(h.source)} ──► ${escapeHtml((h.targets ?? []).join(", "))}${h.isLoopBack ? " (Cyclic Retry)" : ""}</span>`)
+      .join(" ");
+
+    return `
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2>Run #${idx + 1}: <code>${escapeHtml(trace.serviceId)}</code> · Question <code>${escapeHtml(trace.questionId ?? "pending")}</code></h2>
+            <p class="meta">Graph ID: <code>${escapeHtml(trace.graphId)}</code> · Mode: <b>${escapeHtml(trace.mode)}</b> · Slot: <b>#${escapeHtml(trace.slotIndex)}</b> · Status: <b>${escapeHtml(trace.status)}</b> · Duration: <b>${trace.duration ?? 0} ms</b> · Total Tokens: <b>${trace.usage?.totalTokens ?? 0}</b></p>
+          </div>
+          ${trace.calibration ? `<div class="calibration">goodEn: <b>${trace.calibration.goodEnScore}%</b> · goodZhHk: <b>${trace.calibration.goodZhHkScore}%</b> · wrongOutdated: <b>${trace.calibration.wrongOutdatedScore}%</b></div>` : ""}
+        </div>
+        <div class="mermaid">${escapeHtml(trace.topology?.mermaid ?? "flowchart LR\n  interview_miner --> aws_docs_fact_checker --> trilingual_localizer --> calibration_critic")}</div>
+        ${handoffBadges ? `<div class="handoffs"><strong>Edge Handoffs:</strong> ${handoffBadges}</div>` : ""}
+        <table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th>Strands Node</th>
+              <th>Status</th>
+              <th>Duration</th>
+              <th>Tokens</th>
+              <th>Runtime Waterfall &amp; Inner Agent Loop Traces</th>
+            </tr>
+          </thead>
+          <tbody>${stepsRows}</tbody>
+        </table>
+      </section>`;
+  }).join("\n");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)}</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0d1117; color: #e6edf3; margin: 0; padding: 24px; }
+    h1 { color: #ff9900; margin-top: 0; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; margin-bottom: 24px; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+    .meta { color: #8b949e; font-size: 14px; margin: 4px 0 12px; }
+    .calibration { background: #1f2937; border: 1px solid #374151; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+    .mermaid { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 16px; margin: 12px 0; overflow-x: auto; }
+    .handoffs { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    th, td { border-top: 1px solid #21262d; padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { color: #8b949e; font-weight: 600; }
+    .waterfall-track { position: relative; height: 10px; background: #21262d; border-radius: 5px; overflow: hidden; margin-bottom: 6px; }
+    .waterfall-bar { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #ff9900, #38bdf8); border-radius: 5px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .badge.tool { background: #1e3a5f; color: #7dd3fc; }
+    .badge.handoff { background: #1f2937; color: #d1d5db; border: 1px solid #374151; }
+    .badge.loopback { background: #451a03; color: #fdba74; border: 1px solid #f97316; }
+    .badge.status-completed { background: #064e3b; color: #6ee7b7; }
+    .inner-trace { color: #9ca3af; font-size: 12px; margin-top: 4px; }
+    code { color: #79c0ff; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  ${cardsHtml}
+</body>
+</html>`;
+}
+
 const defaultClient = new BedrockRuntimeClient({ maxAttempts: 3, retryMode: "adaptive" });
 const cantoneseOnlyChars = /[嘅喺唔畀佢哋乜啲揀嚟]/u;
 const forbiddenVoiceClaim = /\b(?:pronunciat\w*|mispronounc\w*|your\s+voice|voice\s+(?:is|was|quality|tone|clarity|inaccurate|accurate)|accent|intonation|enunciat\w*)\b|發音|讀音|咬字|聲線|語調|口音|发音|读音/iu;
@@ -170,7 +362,7 @@ export async function loadAwsKnowledgeMcpTools({
   };
 }
 
-function createStrandsNodeAgent({ id, description, systemPrompt, tools = [], send, modelId, maxTokens = 2200 }) {
+function createStrandsNodeAgent({ id, description, systemPrompt, tools = [], send, modelId, maxTokens = 2200, traceAttributes }) {
   const model = new BedrockModel({ modelId, maxTokens, temperature: 0, stream: false });
   model._client.send = async command => {
     const response = await send(command);
@@ -195,6 +387,7 @@ function createStrandsNodeAgent({ id, description, systemPrompt, tools = [], sen
     tools,
     printer: false,
     retryStrategy: null,
+    ...(traceAttributes ? { traceAttributes } : {}),
   });
 }
 
@@ -208,9 +401,15 @@ export function createQuestionGenerator({
   gradeAnswer,
   grader = createGraderAgent({ send, modelId }),
   maxAttempts = 3,
+  otel = false,
+  traceConsole = false,
+  onTraceEvent = null,
 } = {}) {
   if (typeof validateQuestion !== "function" || typeof gradeAnswer !== "function") {
     throw new Error("validateQuestion and gradeAnswer functions are required");
+  }
+  if (otel || traceConsole || process.env.STRANDS_OTEL_ENABLED === "1" || process.env.STRANDS_TRACE_CONSOLE === "1") {
+    enableStrandsTelemetry({ otlp: Boolean(otel || process.env.STRANDS_OTEL_ENABLED === "1"), console: Boolean(traceConsole || process.env.STRANDS_TRACE_CONSOLE === "1") });
   }
 
   const verifyAndCalibrate = async (candidate, targetMeta) => {
@@ -359,13 +558,14 @@ export function createQuestionGenerator({
     },
   });
 
-  const buildGraph = (activeDocTools, invocationState) => {
+  const buildGraph = (activeDocTools, invocationState, traceAttributes) => {
     const interviewMiner = createStrandsNodeAgent({
       id: "interview_miner",
       description: "Mines the most common real-world AWS interview questions using Amazon Nova web grounding.",
       modelId,
       send,
       tools: webSearchTool ? [webSearchTool] : [],
+      traceAttributes,
       systemPrompt: `You are Agent 1 (InterviewQuestionMinerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 Your job is to find the most common, practical cloud engineering interview question for the requested AWS service (or audit an existing question if supplied).
 1. Always call the nova_web_search tool first to search for the most frequently asked interview questions and typical candidate answers for the target AWS service.
@@ -390,6 +590,7 @@ Your job is to find the most common, practical cloud engineering interview quest
       modelId,
       send,
       tools: activeDocTools,
+      traceAttributes,
       systemPrompt: `You are Agent 2 (AwsDocsFactCheckerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the mined interview question from [node: interview_miner].
 Your job is to verify BOTH the question premise and the answer against official AWS documentation using your documentation search tools (such as aws___search_documentation).
@@ -423,6 +624,7 @@ Your job is to verify BOTH the question premise and the answer against official 
       modelId,
       send,
       tools: [],
+      traceAttributes,
       systemPrompt: `You are Agent 3 (TrilingualLocalizationAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the AWS-documentation-verified question and rubric from [node: aws_docs_fact_checker].
 Your job is to produce the complete trilingual question object with prompts in "en-US", "zh-HK", and "zh-CN".
@@ -460,6 +662,7 @@ Rules:
       modelId,
       send,
       tools: [calibrationTool],
+      traceAttributes,
       systemPrompt: `You are Agent 4 (CalibrationCriticAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the localized trilingual question from [node: trilingual_localizer].
 Your job is to construct three realistic spoken student transcripts to test-grade the rubric, call the verify_and_calibrate_question tool to verify schema + live grading, and output the final JSON:
@@ -482,6 +685,7 @@ Return ONLY valid JSON:
     return new Graph({
       id: "aws-interview-question-pipeline",
       sources: ["interview_miner"],
+      ...(traceAttributes ? { traceAttributes } : {}),
       nodes: [
         { agent: interviewMiner, preserveContext: true },
         { agent: awsDocsFactChecker, preserveContext: true },
@@ -574,9 +778,16 @@ Return ONLY valid JSON:
         cycleCount: 0,
       };
 
-      const graph = buildGraph(activeDocTools, invocationState);
+      const mode = existingQuestion ? "refresh_existing_question" : "generate_new_question";
+      const traceAttributes = {
+        "aws.service.id": String(serviceId),
+        "strands.pipeline.mode": mode,
+        "strands.slot.index": Number(slotIndex),
+      };
+
+      const graph = buildGraph(activeDocTools, invocationState, traceAttributes);
       const taskPrompt = JSON.stringify({
-        mode: existingQuestion ? "refresh_existing_question" : "generate_new_question",
+        mode,
         serviceId,
         serviceLabel: label,
         baselineServicePassage: passage,
@@ -589,12 +800,100 @@ Return ONLY valid JSON:
         ...(existingQuestion ? { existingQuestion } : {}),
       });
 
-      const graphResult = await graph.invoke(taskPrompt, { invocationState });
+      const steps = [];
+      const handoffs = [];
+      const inFlightByNode = new Map();
+      let stepCounter = 0;
+
+      const streamGen = graph.stream(taskPrompt, { invocationState });
+      let next = await streamGen.next();
+      while (!next.done) {
+        const event = next.value;
+        if (typeof onTraceEvent === "function") {
+          onTraceEvent(event);
+        }
+        if (event.type === "beforeNodeCallEvent") {
+          stepCounter++;
+          inFlightByNode.set(event.nodeId, {
+            stepIndex: stepCounter,
+            nodeId: event.nodeId,
+            startTime: Date.now(),
+            toolCalls: [],
+            agentTraces: [],
+          });
+        } else if (event.type === "nodeStreamUpdateEvent" && event.inner?.source === "agent") {
+          const current = inFlightByNode.get(event.nodeId);
+          const agentEvent = event.inner.event;
+          if (current && agentEvent) {
+            if (agentEvent.type === "beforeToolCallEvent" && agentEvent.toolUse) {
+              current.toolCalls.push({
+                toolUseId: agentEvent.toolUse.toolUseId,
+                name: agentEvent.toolUse.name,
+                input: agentEvent.toolUse.input,
+                status: "running",
+              });
+            } else if (agentEvent.type === "afterToolCallEvent" && agentEvent.toolUse) {
+              const tc = [...current.toolCalls].reverse().find(item => item.toolUseId === agentEvent.toolUse.toolUseId);
+              if (tc) {
+                tc.status = agentEvent.result?.status ?? (agentEvent.error ? "error" : "success");
+              }
+            } else if (agentEvent.type === "agentResultEvent" && agentEvent.result) {
+              current.agentTraces = (agentEvent.result.traces ?? []).map(t => (typeof t.toJSON === "function" ? t.toJSON() : t));
+            }
+          }
+        } else if (event.type === "nodeResultEvent") {
+          const current = inFlightByNode.get(event.nodeId) ?? {
+            stepIndex: ++stepCounter,
+            nodeId: event.nodeId,
+            startTime: Date.now() - (event.result?.duration ?? 0),
+            toolCalls: [],
+            agentTraces: [],
+          };
+          inFlightByNode.delete(event.nodeId);
+          steps.push({
+            ...current,
+            nodeType: event.nodeType,
+            status: event.result?.status ?? "COMPLETED",
+            duration: event.result?.duration ?? 0,
+            usage: event.result?.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          });
+        } else if (event.type === "multiAgentHandoffEvent") {
+          handoffs.push({
+            source: event.source,
+            targets: [...(event.targets ?? [])],
+            timestamp: Date.now(),
+            isLoopBack: event.source === "calibration_critic" && (event.targets ?? []).includes("interview_miner"),
+          });
+        }
+        next = await streamGen.next();
+      }
+
+      const graphResult = next.value;
+      const topology = extractGraphTopology(graph, { steps, handoffs });
+      const trace = {
+        graphId: graph.id,
+        serviceId,
+        mode,
+        slotIndex,
+        questionId: invocationState.calibratedResult?.question?.id ?? null,
+        status: graphResult.status,
+        duration: graphResult.duration,
+        usage: graphResult.usage,
+        cycles: (invocationState.cycleCount ?? 0) + 1,
+        topology,
+        steps,
+        handoffs,
+        calibration: invocationState.calibratedResult?.calibration ?? null,
+      };
+
       if (graphResult.status !== "COMPLETED") {
         throw new Error(`Strands Graph ended with status ${graphResult.status}`);
       }
       if (invocationState.calibratedResult) {
-        return invocationState.calibratedResult;
+        return {
+          ...invocationState.calibratedResult,
+          trace,
+        };
       }
       throw new Error(
         `Failed to generate & calibrate question for ${serviceId} after ${maxAttempts} attempts: ${invocationState.lastCritique ?? "Unknown calibration error"}`

@@ -9,6 +9,7 @@ import {
   createQuestionGenerator,
   extractNovaGroundingResult,
   findDuplicateOrOverlappingQuestion,
+  renderStrandsTraceReportHtml,
   runQuestionBatchJob,
 } from "../../src/VoicePractice/question-generator.mjs";
 
@@ -285,6 +286,21 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
   assert.equal(result.calibration.goodEnScore, 100);
   assert.equal(result.calibration.goodZhHkScore, 100);
   assert.equal(result.calibration.wrongOutdatedScore, 0);
+  assert.equal(result.trace.graphId, "aws-interview-question-pipeline");
+  assert.equal(result.trace.steps.length, 4);
+  assert.deepEqual(
+    result.trace.steps.map(s => s.nodeId),
+    ["interview_miner", "aws_docs_fact_checker", "trilingual_localizer", "calibration_critic"]
+  );
+  assert.equal(result.trace.steps[0].toolCalls[0].name, "nova_web_search");
+  assert.equal(result.trace.steps[1].toolCalls[0].name, "aws___search_documentation");
+  assert.equal(result.trace.steps[3].toolCalls[0].name, "verify_and_calibrate_question");
+  assert.ok(result.trace.steps[0].agentTraces.length >= 2);
+  assert.match(result.trace.topology.mermaid, /flowchart LR/);
+  assert.match(result.trace.topology.mermaid, /conditional loop/);
+  const html = renderStrandsTraceReportHtml([result.trace]);
+  assert.match(html, /aws-interview-question-pipeline/);
+  assert.match(html, /verify_and_calibrate_question/);
 });
 
 test("CalibrationCriticAgent retries when first attempt has Cantonese in zh-CN or fails synthetic calibration", async () => {
@@ -347,6 +363,9 @@ test("CalibrationCriticAgent retries when first attempt has Cantonese in zh-CN o
   });
   assert.equal(attemptCount, 2);
   assert.equal(result.question.id, "multi-az-failover");
+  assert.equal(result.trace.cycles, 2);
+  assert.equal(result.trace.steps.length, 8);
+  assert.equal(result.trace.handoffs.some(h => h.source === "calibration_critic" && h.isLoopBack), true);
 });
 
 test("runQuestionBatchJob checkpoints per service, skips completed services on resume, and refreshes existing revisions", async () => {

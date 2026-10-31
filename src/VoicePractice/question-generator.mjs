@@ -5,19 +5,25 @@ import { createQuestionAdmin, validateQuestionBatch } from "./question-bank.mjs"
 import {
   createNovaWebSearchTool,
   createQuestionGenerator as createAgentQuestionGenerator,
+  enableStrandsTelemetry,
+  extractGraphTopology,
   extractNovaGroundingResult,
   findDuplicateOrOverlappingQuestion,
   loadAwsKnowledgeMcpTools,
   parseJsonFromText,
+  renderStrandsTraceReportHtml,
   summarizeExistingQuestion,
 } from "../VoiceAgent/question-generator.mjs";
 
 export {
   createNovaWebSearchTool,
+  enableStrandsTelemetry,
+  extractGraphTopology,
   extractNovaGroundingResult,
   findDuplicateOrOverlappingQuestion,
   loadAwsKnowledgeMcpTools,
   parseJsonFromText,
+  renderStrandsTraceReportHtml,
   summarizeExistingQuestion,
 };
 
@@ -63,6 +69,8 @@ export async function runQuestionBatchJob({
   countPerService = 2,
   status = "approved",
   checkpointFile = null,
+  traceFile = null,
+  traceHtmlFile = null,
   force = false,
   publish = false,
   includeBaselineQuestions = true,
@@ -85,6 +93,7 @@ export async function runQuestionBatchJob({
     skippedServices: [],
     publishedCount: 0,
     questions: [],
+    traces: [],
   };
 
   for (const serviceId of services) {
@@ -118,7 +127,7 @@ export async function runQuestionBatchJob({
       for (let i = 0; i < targets.length; i++) {
         const existingQuestion = targets[i];
         const avoidQuestions = [...existingQuestionsById.values()].filter(q => q.id !== existingQuestion.id);
-        const { question } = await generator.generateOrRefreshQuestion({
+        const { question, trace } = await generator.generateOrRefreshQuestion({
           serviceId,
           label: meta.label,
           passage: meta.passage,
@@ -130,12 +139,13 @@ export async function runQuestionBatchJob({
         });
         existingQuestionsById.set(question.id, question);
         generatedForService.push(question);
+        if (trace) summary.traces.push(trace);
         byKey.set(`${serviceId}:${question.id}`, question);
       }
     } else {
       for (let i = 0; i < countPerService; i++) {
         const avoidQuestions = [...existingQuestionsById.values()];
-        const { question } = await generator.generateOrRefreshQuestion({
+        const { question, trace } = await generator.generateOrRefreshQuestion({
           serviceId,
           label: meta.label,
           passage: meta.passage,
@@ -148,6 +158,7 @@ export async function runQuestionBatchJob({
         existingIds.add(question.id);
         existingQuestionsById.set(question.id, question);
         generatedForService.push(question);
+        if (trace) summary.traces.push(trace);
         byKey.set(`${serviceId}:${question.id}`, question);
       }
     }
@@ -155,6 +166,12 @@ export async function runQuestionBatchJob({
     validateQuestionBatch(generatedForService, status);
     const allSaved = [...byKey.values()];
     saveCheckpointFile(checkpointFile, allSaved);
+    if (traceFile && summary.traces.length) {
+      writeFileSync(traceFile, JSON.stringify(summary.traces, null, 2) + "\n", { mode: 0o600 });
+    }
+    if (traceHtmlFile && summary.traces.length) {
+      writeFileSync(traceHtmlFile, renderStrandsTraceReportHtml(summary.traces), { mode: 0o600 });
+    }
 
     if (publish && admin) {
       if (status === "approved") {
