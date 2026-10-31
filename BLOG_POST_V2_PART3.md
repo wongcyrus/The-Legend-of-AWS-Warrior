@@ -47,7 +47,7 @@ In modern AI systems engineering, **Loop Engineering** is the third foundational
 
 Our question generator (`createQuestionGenerator`) implements **two nested levels** of native Strands loops—with zero imperative `for`/`while` retry loops around the graph:
 
-![AWS Strands Multi-Agent Question Generator and Dual-Level Loop Engineering](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/aws_warrior_v2_strands_question_generator_diagram.png)
+> **[INSERT IMAGE: docs/aws_warrior_v2_strands_question_generator_diagram.png — AWS Strands Multi-Agent Question Generator and Dual-Level Loop Engineering]**
 
 ```mermaid
 graph TD
@@ -282,11 +282,11 @@ node src/VoicePractice/question-bank.mjs generate \
 
 Opening `http://localhost:16686` in the browser reveals the complete **41-span trace hierarchy** (`traceId: ca1e8feaead2c97eb97c5f3380747da7`, total duration `34.29s`, `35,711` total tokens across `us.amazon.nova-2-lite-v1:0`):
 
-![Live Strands OpenTelemetry 41-Span Trace Waterfall in Jaeger UI](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/strands_otel_jaeger_trace_s3.png)
+> **[INSERT IMAGE: docs/strands_otel_jaeger_trace_s3.png — Live Strands OpenTelemetry 41-Span Trace Waterfall in Jaeger UI]**
 
 Clicking into the root `invoke_graph aws-interview-question-pipeline` span (or any child `node`, `invoke_agent`, `chat`, or `execute_tool` span) in Jaeger displays Strands' native GenAI OpenTelemetry tags (`aws.service.id: s3`, `gen_ai.agent.execution_time: 34287`, `gen_ai.agent.input` with `avoidQuestions`, `service.namespace: strands`, and token usage):
 
-![Expanded Strands GenAI Span Attributes in Jaeger UI](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/strands_otel_jaeger_spans_detail_s3.png)
+> **[INSERT IMAGE: docs/strands_otel_jaeger_spans_detail_s3.png — Expanded Strands GenAI Span Attributes in Jaeger UI]**
 
 ```
 invoke_graph aws-interview-question-pipeline (34,286.7ms | 35,711 tokens)

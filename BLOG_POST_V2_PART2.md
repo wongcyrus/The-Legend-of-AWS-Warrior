@@ -29,7 +29,7 @@ AWS Warrior V2 is 100% serverless, provisioned with **AWS SAM ([template.yaml](h
 1. **The Core Lab Grader (.NET 8 Lambda + NUnitLite + DynamoDB)**: Evaluates live AWS resources inside student AWS Academy Learner Lab accounts.
 2. **The Generative AI Voice Practice and RPG Progression Engine (Node.js 22 Lambda + Amazon Bedrock AgentCore + Strands Harness + Amazon Nova 2 Lite)**: Evaluates spoken architectural explanations, manages cross-device QR sessions, persists V2 checkpoints, and drives the authoritative MP combat economy.
 
-![The Legend of AWS Warrior V2 Architecture Diagram](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/aws_warrior_v2_architecture_diagram.png)
+> **[INSERT IMAGE: docs/aws_warrior_v2_architecture_diagram.png — The Legend of AWS Warrior V2 Architecture Diagram]**
 
 ```mermaid
 graph TD
@@ -55,7 +55,7 @@ When architects inspect our voice practice pipeline (`API Gateway -> VoicePracti
 
 In our design, **`VoicePracticeFunction` (Lambda) is the Trusted Referee (Control Plane)** while **`VoiceAgentRuntime` (AgentCore) is an Untrusted AI Sandbox (Data Plane)**.
 
-![Zero-Trust Referee Pattern Diagram](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/aws_warrior_v2_zero_trust_referee_diagram.png)
+> **[INSERT IMAGE: docs/aws_warrior_v2_zero_trust_referee_diagram.png — Zero-Trust Referee Pattern Diagram]**
 
 ```mermaid
 graph LR
@@ -80,7 +80,7 @@ Five concrete engineering requirements drive this separation:
 
 Inside the sandbox, **Amazon Bedrock AgentCore** (`AWS::BedrockAgentCore::Runtime`) runs a custom Node.js 22 HTTP service ([src/VoiceAgent/server.js](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/server.js) and [src/VoiceAgent/agent.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/agent.mjs)) powered by **`@strands-agents/harness` (`createHarness`)** and **`@strands-agents/sdk` (`BedrockModel`)**.
 
-![Amazon Bedrock AgentCore Runtime and Anti-Hallucination Engine Diagram](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/aws_warrior_v2_agentcore_runtime_diagram.png)
+> **[INSERT IMAGE: docs/aws_warrior_v2_agentcore_runtime_diagram.png — Amazon Bedrock AgentCore Runtime and Anti-Hallucination Engine Diagram]**
 
 ### 4.1 Hardened Single-Turn Strands Harness Grader (`src/VoiceAgent/agent.mjs`)
 

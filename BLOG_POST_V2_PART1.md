@@ -15,7 +15,7 @@ By coupling a browser-based RPG with a serverless .NET automatic grading backend
 
 <Youtube id="60bc3f0d_74" />
 
-![The Legend of AWS Warrior V2 Title Screen](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/v2_screen_1_title.png)
+> **[INSERT IMAGE: docs/v2_screen_1_title.png — The Legend of AWS Warrior V2 Title Screen]**
 
 ### The Pedagogical Gap: Why We Replaced Text Boxes with Spoken Answers
 
@@ -37,11 +37,11 @@ Enter **The Legend of AWS Warrior V2**—a complete generational leap into a **f
 
 Across the four open-world realms (`96` in Cloudlands Village, `76` in Frostpeak Highlands, `62` in Sunspire Desert, and `68` across the nine chambers of the Forgotten Vault), every one of the **302 official AWS services** features an interactive 3D service plaque with official AWS architecture icons and live task-availability indicators.
 
-![Cloudlands Village 3D Gameplay and AWS ServicePlaques](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/v2_screen_2_gameplay.png)
+> **[INSERT IMAGE: docs/v2_screen_2_gameplay.png — Cloudlands Village 3D Gameplay and AWS ServicePlaques]**
 
 Clicking any service plaque within `24 units` opens the **AWS Service Discovery Dialog**:
 
-![AWS Service Discovery Dialog and Voice Practice](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/v2_screen_3_dialog.png)
+> **[INSERT IMAGE: docs/v2_screen_3_dialog.png — AWS Service Discovery Dialog and Voice Practice]**
 
 ### 2.2 Dual Voice Practice Modes: Graded Read-Aloud vs. Architectural Q&A
 
@@ -71,7 +71,7 @@ In a physical computer lab, 40 students sit side-by-side at institutional deskto
 
 We solved this with an **Ephemeral Capability-Token QR Handoff** ([src/VoicePractice/domain.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoicePractice/domain.mjs)):
 
-![Seamless Cross-Device Mobile QR Handoff Diagram](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/aws_warrior_v2_qr_handoff_diagram.png)
+> **[INSERT IMAGE: docs/aws_warrior_v2_qr_handoff_diagram.png — Seamless Cross-Device Mobile QR Handoff Diagram]**
 
 ```mermaid
 graph TD
@@ -110,7 +110,7 @@ Every `75 seconds`, a dynamic **AZ Outage Alert** highlights a degraded perimete
 
 Players can switch seamlessly across **15 melee weapon styles** (`C` or `Shift + Scroll`) and **5 shield styles** (`V`):
 
-![Equipment Panel with 15 Weapons and 5 Shields](https://raw.githubusercontent.com/wongcyrus/The-Legend-of-AWS-Warrior/main/docs/v2_screen_4_equipment.png)
+> **[INSERT IMAGE: docs/v2_screen_4_equipment.png — Equipment Panel with 15 Weapons and 5 Shields]**
 
 - **Timed Perfect Parry (Press `R` within 0.25s of impact)**: Holding `R` raises your shield to block frontal melee hits and cactus spikes within 60 degrees. Pressing `R` within **0.25 seconds** before impact executes a **Timed Perfect Parry**: negating **100% of damage** (even from heavy boss strikes) without guard break, reflecting ranged spikes back at the attacker for **2x damage**, and staggering melee attackers for `2.5s` (`+25%` bonus counterattack damage).
 - **Close-Range 360-Degree and Standoff Melee Target Acquisition ([web-game/v2/main.js](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/web-game/v2/main.js))**: In 3D action RPGs, two frustrating edge cases can happen if melee hit detection uses a naive fixed-length forward cone: (1) a fast enemy steps inside your character collision radius where the angle dot product drops below the cone threshold, or (2) a large boss/monster has an `attackRange` (`4.8-5.8` units) longer than a short weapon's reach (`3.7-4.6` units), allowing the monster to hit you while your swings miss. Our `findAttackTarget()` resolver eliminates both blind spots:
