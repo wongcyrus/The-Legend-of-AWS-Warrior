@@ -153,6 +153,7 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
 
   let minerCalledTool = false;
   let checkerCalledTool = false;
+  let criticCalledTool = false;
   const q = sampleGeneratedQuestion("rds", "multi-az-failover", 1, null);
 
   const send = async command => {
@@ -212,6 +213,24 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
       };
     }
     if (sys.includes("CalibrationCriticAgent")) {
+      if (!criticCalledTool) {
+        criticCalledTool = true;
+        return {
+          stopReason: "tool_use",
+          output: {
+            message: {
+              role: "assistant",
+              content: [{
+                toolUse: {
+                  toolUseId: "cal-1",
+                  name: "verify_and_calibrate_question",
+                  input: { question: q, syntheticTranscripts: sampleSyntheticTranscripts },
+                },
+              }],
+            },
+          },
+        };
+      }
       return {
         stopReason: "end_turn",
         output: {
@@ -259,6 +278,7 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
 
   assert.equal(minerCalledTool, true);
   assert.equal(checkerCalledTool, true);
+  assert.equal(criticCalledTool, true);
   assert.equal(docCalls.length, 1);
   assert.equal(result.question.id, "multi-az-failover");
   assert.equal(result.question.status, "approved");
@@ -465,9 +485,11 @@ test("semantic deduplication blocks repeated topics with different IDs and passe
   let receivedCritique = "";
   const send = async command => {
     const sys = command.input.system?.[0]?.text ?? "";
-    const userText = command.input.messages?.[0]?.content?.[0]?.text ?? "";
-    if (userText.includes("previousAttemptCritique")) {
-      receivedCritique = userText;
+    const latestMessageText = (command.input.messages?.at(-1)?.content ?? [])
+      .map(block => block?.text ?? "")
+      .join("\n");
+    if (latestMessageText.includes("previousAttemptCritique")) {
+      receivedCritique = latestMessageText;
     }
     if (sys.includes("CalibrationCriticAgent")) {
       attempt++;
