@@ -292,8 +292,10 @@ test("completions summary never leaks unattempted question bank titles or IDs an
   const bank = approvedQuestions();
   const f = fixture({ graded: true, questions: bank });
 
-  // 1. Before any Q&A is attempted, /voice/completions collapses the 2 S3 bank questions into 1 service-level slot without leaking title/questionId:
+  // 1. Before any Q&A is attempted, /voice/completions collapses the 2 S3 bank questions into 1 service-level slot without leaking title/questionId, and reports Speech (read_aloud) 2/2 counts:
   const before = (await f.req("/voice/completions")).data;
+  const readBefore = before.activities.filter(a => a.type === "read_aloud" && a.serviceId === "s3");
+  assert.ok(readBefore.every(a => a.availableCount === 2 && a.completedCount === 0 && a.totalCount === 2 && a.exhausted === false));
   const qaBefore = before.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
   assert.equal(qaBefore.length, 1);
   assert.equal(qaBefore[0].activityId, "qa:s3");

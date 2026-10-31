@@ -20,32 +20,46 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
   const checkAvailability = async id => {
     if (!voice.getAvailability) return;
     const epoch = ++availabilityEpoch, button = get("service-explain");
-    const qaButton = get("service-start-qa"), qaBadge = get("service-qa-badge");
+    const speechButton = get("service-start-speech"), qaButton = get("service-start-qa"), qaBadge = get("service-qa-badge");
     button.disabled = true;
     button.textContent = "Checking voice tasks...";
+    if (speechButton) { speechButton.hidden = true; speechButton.disabled = true; }
     if (qaButton) { qaButton.hidden = true; qaButton.disabled = true; }
     if (qaBadge) qaBadge.hidden = true;
     try {
       const activities = await voice.getAvailability(id);
       if (epoch !== availabilityEpoch || selected !== id) return;
-      const reading = activities.some(activity => activity.type === "read_aloud" && !activity.onCooldown);
+      const readActivities = activities.filter(activity => activity.type === "read_aloud");
+      const unlockedRead = readActivities.filter(activity => !activity.onCooldown);
+      const reading = unlockedRead.length > 0;
+      const readAvailable = readActivities[0]?.availableCount ?? unlockedRead.length;
+      const readTotal = readActivities[0]?.totalCount ?? readActivities.length;
       const qaActivities = activities.filter(activity => activity.type === "question_answer" &&
         activity.available === true && activity.languages?.length);
       const unlockedQa = qaActivities.filter(activity => !activity.onCooldown);
       const qa = unlockedQa.length > 0;
       const qaAvailable = qaActivities[0]?.availableCount ?? unlockedQa.length;
       const qaTotal = qaActivities[0]?.totalCount ?? qaActivities.length;
-      const hasCount = qaActivities.some(activity => Number.isInteger(activity.availableCount));
-      const qaLabel = hasCount ? `Q&A (${qaAvailable}/${qaTotal})` : "Q&A";
-      button.textContent = reading && qa ? `Available: Read aloud / ${qaLabel}`
-        : reading ? "Available: Read aloud" : qa ? `Available: ${qaLabel}` : "No voice tasks available";
+      const hasReadCount = readActivities.some(activity => Number.isInteger(activity.availableCount));
+      const hasQaCount = qaActivities.some(activity => Number.isInteger(activity.availableCount));
+      const readLabel = hasReadCount ? `Read aloud (${readAvailable}/${readTotal})` : "Read aloud";
+      const qaLabel = hasQaCount ? `Q&A (${qaAvailable}/${qaTotal})` : "Q&A";
+      button.textContent = reading && qa ? `Available: ${readLabel} / ${qaLabel}`
+        : reading ? `Available: ${readLabel}` : qa ? `Available: ${qaLabel}` : "No voice tasks available";
       button.disabled = false;
-      if (qaBadge && qaTotal > 0) {
-        qaBadge.textContent = `Q&A: ${qaAvailable}/${qaTotal} available`;
+      if (qaBadge && (readTotal > 0 || qaTotal > 0)) {
+        qaBadge.textContent = qaTotal > 0
+          ? `Speech: ${readAvailable}/${readTotal} · Q&A: ${qaAvailable}/${qaTotal} available`
+          : `Speech: ${readAvailable}/${readTotal} available`;
         qaBadge.hidden = false;
       }
+      if (speechButton) {
+        speechButton.textContent = `Start Speech (${readAvailable}/${readTotal} available)`;
+        speechButton.hidden = !reading;
+        speechButton.disabled = !reading;
+      }
       if (qaButton) {
-        qaButton.textContent = `Start Q&A (${qaAvailable} available)`;
+        qaButton.textContent = `Start Q&A (${qaAvailable}/${qaTotal} available)`;
         qaButton.hidden = !qa;
         qaButton.disabled = !qa;
       }
@@ -115,6 +129,9 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
   }
   get("service-close").onclick = () => dialog.close();
   get("service-explain").onclick = () => voice.open(selected);
+  if (get("service-start-speech")) {
+    get("service-start-speech").onclick = () => voice.open(selected, { type: "read_aloud", autoStart: true });
+  }
   if (get("service-start-qa")) {
     get("service-start-qa").onclick = () => voice.open(selected, { type: "question_answer", autoStart: true });
   }
@@ -158,7 +175,9 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     const container = document.getElementById("container");
     if (container) container.style.cursor = cursor;
     const summary = object?.userData?.voiceSummary;
-    const summaryText = summary?.qaTotal > 0 ? ` (${summary.qaAvailable}/${summary.qaTotal} Q&A available)` : "";
+    const summaryText = summary
+      ? ` (Speech ${summary.readAvailableCount ?? (summary.readAvailable ? 2 : 0)}/${summary.readTotal ?? 2}${summary.qaTotal > 0 ? ` · Q&A ${summary.qaAvailable}/${summary.qaTotal}` : ""})`
+      : "";
     const title = object?.userData?.awsService && AWS_SERVICES[object.userData.awsService]
       ? `${AWS_SERVICES[object.userData.awsService].label}${summaryText}: Click to learn` : "";
     canvas.title = title;

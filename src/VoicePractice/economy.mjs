@@ -56,6 +56,27 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
       qaByService.set(activity.serviceId, group);
     }
     const catalog = [...activities];
+    const readByService = new Map();
+    for (const activity of activities) {
+      if ((activity.type ?? "read_aloud") !== "read_aloud") continue;
+      const list = readByService.get(activity.serviceId) ?? [];
+      list.push(activity);
+      readByService.set(activity.serviceId, list);
+    }
+    const readCounts = new Map();
+    for (const [serviceId, list] of readByService) {
+      const totalCount = list.length;
+      const completedCount = list.filter(a => rows.get(a.activityId)?.completed === true).length;
+      const locked = (readingLocks.get(serviceId) ?? 0) > now();
+      const uncompletedCount = totalCount - completedCount;
+      const availableCount = locked ? 0 : (uncompletedCount > 0 ? uncompletedCount : totalCount);
+      readCounts.set(serviceId, {
+        availableCount,
+        completedCount,
+        totalCount,
+        exhausted: totalCount > 0 && completedCount === totalCount,
+      });
+    }
     const qaCounts = new Map();
     for (const [serviceId, group] of qaByService) {
       const hasInProgress = group.attempted.some(a => !rows.get(a.activityId)?.completed);
@@ -97,6 +118,7 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
       const saved = rows.get(activity.activityId);
       const availableAt = activity.type === "question_answer" ? taskAvailableAt(saved)
         : readingLocks.get(activity.serviceId) ?? 0;
+      const rCounts = readCounts.get(activity.serviceId);
       return { activityId: activity.activityId, serviceId: activity.serviceId, label: activity.label,
         type: activity.type ?? "read_aloud",
         ...(activity.type === "question_answer" ? {
@@ -107,6 +129,11 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
           completedCount: activity.completedCount ?? (saved?.completed ? 1 : 0),
           totalCount: activity.totalCount ?? 1,
           exhausted: Boolean(activity.exhausted),
+        } : rCounts ? {
+          availableCount: rCounts.availableCount,
+          completedCount: rCounts.completedCount,
+          totalCount: rCounts.totalCount,
+          exhausted: rCounts.exhausted,
         } : {}),
         round: activity.round, completed: saved?.completed === true,
         bestScore: saved?.bestScore ?? null, latestScore: saved?.latestScore ?? null,

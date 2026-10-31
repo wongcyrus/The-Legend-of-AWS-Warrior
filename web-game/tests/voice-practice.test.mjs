@@ -1205,12 +1205,14 @@ test('1-click Q&A launch auto-starts Q&A session and syncs multi-question counts
     app.controller.open('s3', { type: 'question_answer', autoStart: true });
     await tick();
     await tick();
-    // 1. 3D plaque receives exact multi-question availability summary from GET /voice/completions:
+    // 1. 3D plaque receives exact Speech and multi-question Q&A availability summary from GET /voice/completions:
     assert.equal(plaqueSummaries.length, 1);
     assert.deepEqual(plaqueSummaries[0], {
-      qaAvailable: 5, qaCompleted: 1, qaTotal: 5, readAvailable: true,
+      readAvailableCount: 1, readCompleted: 0, readTotal: 1, readAvailable: true,
+      qaAvailable: 5, qaCompleted: 1, qaTotal: 5,
     });
-    // 2. Availability text shows 1 of 5 completed and 5 available now:
+    // 2. Availability text shows both Speech and Q&A counts (1 of 5 completed and 5 available now):
+    assert.match(app.elements.get('voice-question-availability').textContent, /Read aloud: Available \(0 of 1 completed, 1 available now\)/);
     assert.match(app.elements.get('voice-question-availability').textContent, /1 of 5 approved questions completed\. 5 available now/);
     // 3. Auto-start immediately created the Q&A session without requiring dropdown selection or a second Start click:
     const created = app.requests.filter(request => request.url.endsWith('/voice/sessions')).at(-1);

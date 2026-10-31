@@ -87,17 +87,18 @@ export function servicePlaque(world, parent, id, { x, y, z, width = 8, rotation 
     ctx.fillStyle = "#182635";
     ctx.fillRect(174, 10, 322, 36);
     if (summary) {
+      const readAvailableCount = Number(summary.readAvailableCount ?? (summary.readAvailable ? 2 : 0));
+      const readTotal = Number(summary.readTotal ?? 2);
       const qaAvailable = Number(summary.qaAvailable ?? 0);
       const qaTotal = Number(summary.qaTotal ?? 0);
-      const readAvailable = Boolean(summary.readAvailable);
-      const hasAvailable = qaAvailable > 0 || readAvailable;
+      const hasAvailable = qaAvailable > 0 || readAvailableCount > 0 || Boolean(summary.readAvailable);
       ctx.fillStyle = hasAvailable ? "#1f3b2c" : "#3a2a1d";
       ctx.fillRect(176, 12, 316, 30);
       ctx.fillStyle = hasAvailable ? "#9ed6b5" : "#ffb454";
       ctx.font = "bold 17px sans-serif";
       const text = qaTotal > 0
-        ? `Q&A: ${qaAvailable}/${qaTotal} available · ${readAvailable ? "Read ready" : "Read locked"}`
-        : `Read aloud: ${readAvailable ? "Available" : "Cooldown"}`;
+        ? `Speech: ${readAvailableCount}/${readTotal} · Q&A: ${qaAvailable}/${qaTotal} available`
+        : `Speech: ${readAvailableCount}/${readTotal} available`;
       ctx.fillText(text, 186, 33, 296);
     }
     plaque.userData.voiceSummary = summary || null;

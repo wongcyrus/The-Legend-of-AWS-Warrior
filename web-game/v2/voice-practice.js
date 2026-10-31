@@ -230,6 +230,17 @@ export function bindVoicePractice(game) {
   let generation = 0;
   let starting = false;
 
+  const readingCounts = (items = readingActivities) => {
+    const unlocked = items.filter(activity => !activity.onCooldown);
+    const first = items[0];
+    return {
+      available: Number.isInteger(first?.availableCount) ? first.availableCount : unlocked.length,
+      completed: Number.isInteger(first?.completedCount)
+        ? first.completedCount
+        : items.filter(activity => activity.completed).length,
+      total: Number.isInteger(first?.totalCount) ? first.totalCount : items.length,
+    };
+  };
   const questionCounts = (items = questionActivities) => {
     const unlocked = items.filter(activity => !activity.onCooldown);
     const first = items[0];
@@ -252,12 +263,16 @@ export function bindVoicePractice(game) {
       const readings = serviceItems.filter(a => a.type === "read_aloud");
       const questions = serviceItems.filter(a =>
         a.type === "question_answer" && a.available === true && Array.isArray(a.languages) && a.languages.length);
-      const counts = questionCounts(questions);
+      const rCounts = readingCounts(readings);
+      const qCounts = questionCounts(questions);
       summaryMap.set(serviceId, {
-        qaAvailable: counts.available,
-        qaCompleted: counts.completed,
-        qaTotal: counts.total,
-        readAvailable: readings.some(a => !a.onCooldown),
+        readAvailableCount: rCounts.available,
+        readCompleted: rCounts.completed,
+        readTotal: rCounts.total,
+        readAvailable: rCounts.available > 0 && readings.some(a => !a.onCooldown),
+        qaAvailable: qCounts.available,
+        qaCompleted: qCounts.completed,
+        qaTotal: qCounts.total,
       });
     }
     for (const plaque of game.world?.servicePlaques || []) {
@@ -268,14 +283,16 @@ export function bindVoicePractice(game) {
     for (const badge of badges?.children || []) {
       const id = badge.dataset?.awsService;
       const summary = id ? summaryMap.get(id) : null;
-      if (!summary || summary.qaTotal <= 0) continue;
+      if (!summary || (summary.readTotal <= 0 && summary.qaTotal <= 0)) continue;
       let countBadge = badge.children?.[2];
       if (!countBadge) {
         countBadge = document.createElement("span");
         countBadge.className = "service-badge-count";
         badge.appendChild?.(countBadge);
       }
-      countBadge.textContent = `Q&A ${summary.qaAvailable}/${summary.qaTotal}`;
+      countBadge.textContent = summary.qaTotal > 0
+        ? `Speech ${summary.readAvailableCount}/${summary.readTotal} · Q&A ${summary.qaAvailable}/${summary.qaTotal}`
+        : `Speech ${summary.readAvailableCount}/${summary.readTotal}`;
     }
   };
 
@@ -337,10 +354,13 @@ export function bindVoicePractice(game) {
       start.disabled ||= !taskAvailable("question_answer");
     }
     if (taskPills) {
+      const rCounts = readingCounts();
       const counts = questionCounts();
       const pills = [
         { type: "read_aloud", disabled: readingOption.disabled,
-          label: readingOption.disabled ? "Read aloud (locked)" : "Read aloud (5-15 MP)" },
+          label: readingOption.disabled
+            ? `Speech (${rCounts.total ? `0/${rCounts.total} available` : "locked"})`
+            : `Speech (${rCounts.available}/${rCounts.total || rCounts.available} available · 5-15 MP)` },
         { type: "question_answer", disabled: questionOption.disabled,
           label: questionOption.disabled
             ? `Q&A (${counts.total ? `0/${counts.total} available` : "locked"})`
@@ -404,15 +424,20 @@ export function bindVoicePractice(game) {
         activity.type === "question_answer" && activity.serviceId === serviceId && activity.available === true &&
         Array.isArray(activity.languages) && activity.languages.length);
       const unlocked = questionActivities.filter(activity => !activity.onCooldown);
+      const rCounts = readingCounts();
       const counts = questionCounts();
-      readingOption.disabled = !taskAvailable("read_aloud");
+      readingOption.disabled = !taskAvailable("read_aloud") || rCounts.available <= 0;
       questionOption.disabled = !unlocked.length || counts.available <= 0;
       const unlock = Math.max(0, ...readingActivities.map(activity => activity.availableAt || 0));
       const readingText = readingOption.disabled
-        ? unlock > Date.now() / 1000 ? `Read aloud: Locked until ${new Date(unlock * 1000).toLocaleString()}.`
+        ? unlock > Date.now() / 1000 ? `Read aloud: Locked until ${new Date(unlock * 1000).toLocaleString()} (${rCounts.completed} of ${rCounts.total} completed).`
           : "Read aloud: Unavailable."
-        : "Read aloud: Available.";
-      readingOption.textContent = readingOption.disabled ? "Read aloud (locked)" : "Read aloud (5-15 MP)";
+        : `Read aloud: Available (${rCounts.completed} of ${rCounts.total} completed, ${rCounts.available} available now).`;
+      readingOption.textContent = readingOption.disabled
+        ? "Read aloud (locked)"
+        : Number.isInteger(readingActivities[0]?.availableCount)
+          ? `Read aloud (${rCounts.available}/${rCounts.total} available · 5-15 MP)`
+          : "Read aloud (5-15 MP)";
       questionOption.textContent = questionOption.disabled
         ? "Answer a question (locked)"
         : Number.isInteger(questionActivities[0]?.availableCount)
@@ -516,17 +541,26 @@ export function bindVoicePractice(game) {
     }
     game.readServices?.add(data.serviceId);
     for (const activity of readingActivities) {
+      if (activity.activityId === data.activityId || readingActivities.length === 1) {
+        activity.completed = true;
+      }
+      if (Number.isInteger(activity.totalCount)) {
+        activity.completedCount = Math.min(activity.totalCount, (activity.completedCount ?? 0) + 1);
+        activity.availableCount = 0;
+      }
       activity.onCooldown = true;
       activity.availableAt = Math.floor(Date.now() / 1000) + 7 * 86400;
     }
+    const rCounts = readingCounts();
     readingOption.disabled = true;
     readingOption.textContent = "Read aloud (locked)";
-    availability.textContent = "Read aloud: Passed and locked for one week. Q&A questions are separate.";
+    availability.textContent = `Read aloud: ${rCounts.completed} of ${rCounts.total} completed (0 available now, locked for one week). Q&A questions are separate.`;
     try { localStorage.setItem("aws-warrior:v2:read-services", JSON.stringify([...game.readServices])); }
     catch { /* Discovery state is cosmetic, never a source of MP. */ }
     for (const plaque of game.world?.servicePlaques || []) {
       if (plaque.userData.awsService === data.serviceId) plaque.userData.setRead(true);
     }
+    syncWorldVoiceSummary([...readingActivities, ...questionActivities]);
     game.refreshServiceReader?.();
   };
   const speech = bindMobileVoicePractice({

@@ -1958,10 +1958,12 @@ class Game {
       label.textContent = service.label;
       badge.append(icon, label);
       const summary = this.serviceVoiceSummary?.get?.(id);
-      if (summary?.qaTotal > 0) {
+      if (summary && (summary.readTotal > 0 || summary.qaTotal > 0)) {
         const count = document.createElement("span");
         count.className = "service-badge-count";
-        count.textContent = `Q&A ${summary.qaAvailable}/${summary.qaTotal}`;
+        count.textContent = summary.qaTotal > 0
+          ? `Speech ${summary.readAvailableCount ?? 0}/${summary.readTotal ?? 2} · Q&A ${summary.qaAvailable}/${summary.qaTotal}`
+          : `Speech ${summary.readAvailableCount ?? 0}/${summary.readTotal ?? 2}`;
         badge.appendChild(count);
       }
       badges.appendChild(badge);
