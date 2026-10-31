@@ -13,11 +13,11 @@
 
 In **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)** and **[Part 2 - The AWS Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md)**, we established why **Architectural Q&A** in **The Legend of AWS Warrior V2** never improvises questions at runtime:
 
-- Every Q&A session is backed by an approved question in DynamoDB (`PK = QUESTION_BANK`) with trilingual prompts (`en-US`, `zh-HK`, `zh-CN`), 2-3 atomic concepts whose integer weights sum to `100`, misconceptions, acceptable answers, and a reference answer.
+- Every Q&A session is backed by an approved question in DynamoDB (`PK = QUESTION_BANK`) with trilingual prompts (`en-US`, `zh-HK`, `zh-CN`), 2-3 atomic concepts whose weights sum to `100`, misconceptions, acceptable answers, and a reference answer.
 - Scaling and refreshing questions across **302 AWS service landmarks** faces three major hurdles:
-  1. **Community Interview Questions Go Stale**: Popular online AWS interview questions often repeat outdated claims (such as claiming S3 is eventually consistent for new objects or unencrypted by default, when AWS enabled strong read-after-write consistency and default SSE-S3 / Block Public Access years ago).
-  2. **Ungrounded Rubrics Fail Live Student Grading**: A rubric that looks reasonable on paper might be phrased too narrowly for our Two-Phase `NFKC` substring verifier (`gradeAnswer`), causing a good spoken English or Hong Kong Cantonese code-switched answer to score below `80%`, or allowing a misconception answer to pass (`>= 60%`).
-  3. **Multi-Slot Topic Duplication**: Asking an LLM for multiple questions on Amazon S3 or RDS naturally gravitates toward the same headline topic unless a deterministic semantic deduplicator forces it onto an orthogonal scenario.
+  1. **Community Questions Go Stale**: Online AWS interview questions often repeat outdated claims (e.g., S3 eventual consistency or unencrypted defaults, when AWS enabled strong read-after-write consistency and default SSE-S3 / Block Public Access years ago).
+  2. **Ungrounded Rubrics Fail Live Grading**: A rubric that looks reasonable on paper might be phrased too narrowly for our Two-Phase `NFKC` substring verifier (`gradeAnswer`), causing a good spoken English or Cantonese code-switched answer to score `< 80%`, or letting a misconception pass (`>= 60%`).
+  3. **Multi-Slot Topic Duplication**: Asking an LLM for multiple questions on S3 or RDS naturally gravitates toward the same headline topic unless a deterministic semantic deduplicator forces an orthogonal scenario.
 
 To solve all three autonomously, we built a self-calibrating **4-Agent Question Generator and Refresher** ([src/VoiceAgent/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/question-generator.mjs) and [src/VoicePractice/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoicePractice/question-generator.mjs)) powered by **Loop Engineering**, **`@strands-agents/harness` (`^0.3.3`)**, **`@strands-agents/sdk` (`^1.23.0`)**, **Amazon Nova Web Grounding (`nova_grounding`)**, the **AWS Knowledge MCP Server (`https://knowledge-mcp.global.api.aws`)**, and **Native Strands OpenTelemetry (`@strands-agents/sdk/telemetry`)**.
 
@@ -36,29 +36,25 @@ for (let attempt = 0; attempt < 3; attempt++) {
 ```
 
 Why does this anti-pattern fail in production?
-1. **Stateless Amnesia**: When an attempt fails on localization or rubric weights, a blind `for` loop discards the entire conversation state and forces the model to re-run expensive web searches and AWS documentation reads from scratch.
-2. **No Fault Isolation**: A single monolithic prompt cannot cleanly separate live web discovery, official documentation fact-checking, trilingual localization, and adversarial rubric calibration.
-3. **Self-Grading by "Vibes"**: Asking the same LLM that wrote a question *"Is your question good?"* produces rubber-stamp approvals rather than deterministic verification against the actual production grading engine.
+1. **Stateless Amnesia**: When an attempt fails on localization or rubric weights, a blind `for` loop discards conversation state and re-runs expensive web searches and AWS documentation reads from scratch.
+2. **No Fault Isolation**: One monolithic prompt cannot cleanly separate live web discovery, official documentation fact-checking, trilingual localization, and adversarial rubric calibration.
+3. **Self-Grading by "Vibes"**: Asking the same LLM that wrote a question *"Is your question good?"* produces rubber-stamp approvals rather than deterministic verification against the production grading engine.
 
 ### The Three Layers of Modern AI Systems Engineering
-
-In modern AI systems engineering, **Loop Engineering** sits above **Prompt Engineering** and **Context Engineering**:
 
 | Engineering Layer | Core Question | Primary Focus | Strands Implementation in Our Pipeline |
 | - | - | - | - |
 | **1. Prompt Engineering** | *"What should we say to the model?"* | Role definitions, rules, and JSON schemas for a single turn. | Specialist `systemPrompt` per node (`interview_miner`, `aws_docs_fact_checker`, `trilingual_localizer`, `calibration_critic`). |
-| **2. Context Engineering** | *"What does the model need to know and access?"* | Curating workspace state, tools, prior questions, and context limits. | `invocationState` (`targetMeta`, `avoidQuestions`), `McpClient`, `ContextOffloader` (`maxResultTokens: 2500`), and `preserveContext: true`. |
+| **2. Context Engineering** | *"What does the model need to know and access?"* | Workspace state, tools, prior questions, and context limits. | `invocationState` (`targetMeta`, `avoidQuestions`), `McpClient`, `ContextOffloader` (`maxResultTokens: 2500`), and `preserveContext: true`. |
 | **3. Loop Engineering** | *"How does the system perceive, act, verify, route feedback, and terminate?"* | Closed-loop control (**Perceive -> Reason -> Act -> Observe -> Verify -> Targeted Self-Correction**) with deterministic verifiers and turn caps. | Inner agent ReAct + `GoalLoop` (`@strands-agents/sdk/vended-plugins/goal`) nested inside an outer cyclic Strands `Graph` with conditional back-edges. |
 
 ### How Loop Engineering Maps to `@strands-agents/harness` and `@strands-agents/sdk`
 
-Our implementation realizes **five core Loop Engineering principles** using native Strands primitives:
-
 1. **Autonomous Tool-Calling Loops (`tool()` + `McpClient`)**: Specialist agents autonomously query `nova_web_search` and `aws___search_documentation` / `aws___read_documentation`, inspect live citations, and synthesize grounded outputs.
 2. **Intra-Node Self-Correction (`GoalLoop` + `ContextOffloader`)**: Every specialist agent runs inside `createHarness()` with a vended `GoalLoop` plugin (`AfterInvocationEvent`). If an agent outputs invalid JSON, `GoalLoop` feeds the parse error back into the preserved node context and resumes immediately without triggering an outer graph cycle.
-3. **Deterministic Closed-Loop Verifiers (`verifyAndCalibrate`)**: Candidates must pass 5 deterministic verifiers, including stopword-filtered Jaccard semantic anti-duplication (`findDuplicateOrOverlappingQuestion`) and 3x parallel live grading (`Promise.all` over `goodEn`, `goodZhHk`, and `wrongOutdated`) using our production Strands grader (`createGraderAgent` + `gradeAnswer`).
-4. **Fault-Isolated Graph Routing (`Graph` Conditional Back-Edges + `preserveContext: true`)**: When verification fails, `classifyFailureStage` classifies the defect as `"localization"`, `"rubric"`, or `"topic"`. The Strands `Graph` routes a structured `TextBlock` critique back to the **exact responsible node** (`trilingual_localizer`, `aws_docs_fact_checker`, or `interview_miner`), which repairs its output in-place.
-5. **Defense-in-Depth Turn Governance**: Hard turn caps at four independent layers (`limits: { turns: 1 }` on the grader, `maxAttempts: 2` on `GoalLoop`, `maxTurnsPerNode = 4` via `BeforeModelCallEvent`, and `maxAttempts = 3` / `maxSteps = 12` on `Graph`) guarantee termination.
+3. **Deterministic Closed-Loop Verifiers (`verifyAndCalibrate`)**: Candidates must pass 5 deterministic verifiers, including Jaccard semantic anti-duplication (`findDuplicateOrOverlappingQuestion`) and 3x parallel live grading (`Promise.all` over `goodEn`, `goodZhHk`, and `wrongOutdated`) using our production Strands grader (`createGraderAgent` + `gradeAnswer`).
+4. **Fault-Isolated Graph Routing (`Graph` Conditional Back-Edges + `preserveContext: true`)**: When verification fails, `classifyFailureStage` classifies the defect as `"localization"`, `"rubric"`, or `"topic"`, routing a structured `TextBlock` critique back to the **exact responsible node**, which repairs its output in-place.
+5. **Defense-in-Depth Turn Governance**: Hard turn caps at four layers (`limits: { turns: 1 }` on the grader, `maxAttempts: 2` on `GoalLoop`, `maxTurnsPerNode = 4` via `BeforeModelCallEvent`, and `maxAttempts = 3` / `maxSteps = 12` on `Graph`) guarantee termination.
 
 ---
 
@@ -285,7 +281,7 @@ const calibrationCritic = await createStrandsNodeAgent({
 
 The heart of **Loop Engineering** is replacing subjective LLM self-review with deterministic verification. When `calibration_critic` calls `verify_and_calibrate_question`, Strands passes `toolContext.invocationState` into the tool callback, running **five deterministic gates** in `verifyAndCalibrate()`:
 
-1. **Gate 1 (`validateQuestion`)**: Enforces trilingual prompts, 2-3 concepts whose integer weights sum strictly to `100`, non-empty `misconceptions`, `acceptableAnswers`, and `referenceAnswer`.
+1. **Gate 1 (`validateQuestion`)**: Enforces trilingual prompts, 2-3 concepts summing to `100`, `misconceptions`, `acceptableAnswers`, and `referenceAnswer`.
 2. **Gate 2 (`findDuplicateOrOverlappingQuestion`)**: Computes stopword-filtered **Jaccard token similarity** against `avoidQuestions`, rejecting `overlapping_prompt` (`>= 0.55`) and `overlapping_concepts` (`>= 0.60`).
 3. **Gate 3 (`cantoneseOnlyChars`)**: Rejects `zh-CN` prompts containing Cantonese-only characters (`/[嘅喺唔畀佢哋乜啲揀嚟]/u`).
 4. **Gate 4 (`forbiddenVoiceClaim`)**: Ensures no field mentions pronunciation, voice tone, or accent.
@@ -296,17 +292,17 @@ The heart of **Loop Engineering** is replacing subjective LLM self-review with d
 export function findDuplicateOrOverlappingQuestion(question, avoidQuestions = [], avoidIds = []) {
   const blockedIds = new Set(avoidIds.map(id => String(id).trim()).filter(Boolean));
   if (blockedIds.has(question.id)) return { reason: "duplicate_id", matchId: question.id };
-  const candidatePromptTokens = tokenizeTopicText(`${question.title ?? ""} ${question.prompts?.["en-US"] ?? ""}`, question.serviceId);
-  const candidateConceptTokens = tokenizeTopicText((question.concepts ?? []).map(c => `${c.id} ${c.description}`).join(" "), question.serviceId);
+  const promptTokens = tokenizeTopicText(`${question.title ?? ""} ${question.prompts?.["en-US"] ?? ""}`, question.serviceId);
+  const conceptTokens = tokenizeTopicText((question.concepts ?? []).map(c => `${c.id} ${c.description}`).join(" "), question.serviceId);
 
   for (const rawExisting of avoidQuestions) {
     const existing = summarizeExistingQuestion(rawExisting);
     if (!existing) continue;
     if (existing.id === question.id) return { reason: "duplicate_id", matchId: existing.id, matchTitle: existing.title };
-    const promptSim = jaccardSimilarity(candidatePromptTokens, tokenizeTopicText(`${existing.title} ${existing.enPrompt}`, question.serviceId));
-    if (promptSim >= 0.55) return { reason: "overlapping_prompt", similarity: promptSim, matchId: existing.id, matchTitle: existing.title };
-    const conceptSim = jaccardSimilarity(candidateConceptTokens, tokenizeTopicText(existing.concepts.join(" "), question.serviceId));
-    if (conceptSim >= 0.6) return { reason: "overlapping_concepts", similarity: conceptSim, matchId: existing.id, matchTitle: existing.title };
+    const promptSim = jaccardSimilarity(promptTokens, tokenizeTopicText(`${existing.title} ${existing.enPrompt}`, question.serviceId));
+    if (promptSim >= 0.55) return { reason: "overlapping_prompt", similarity: promptSim, matchId: existing.id };
+    const conceptSim = jaccardSimilarity(conceptTokens, tokenizeTopicText(existing.concepts.join(" "), question.serviceId));
+    if (conceptSim >= 0.6) return { reason: "overlapping_concepts", similarity: conceptSim, matchId: existing.id };
   }
   return null;
 }
@@ -367,10 +363,10 @@ const calibrationTool = tool({
 
 ### 3.5 Level 2 (Outer Loop): Cyclic Strands `Graph` Engineering and Targeted Feedback Routing
 
-Building a **cyclic multi-agent graph** in `@strands-agents/sdk` where `calibration_critic` conditionally routes execution back to `trilingual_localizer`, `aws_docs_fact_checker`, or `interview_miner` uses three techniques in `buildGraph()`:
+Building a **cyclic multi-agent graph** in `@strands-agents/sdk` where `calibration_critic` conditionally routes execution back to `trilingual_localizer`, `aws_docs_fact_checker`, or `interview_miner` uses three techniques:
 
 1. **Enabling Forward Progress (`BeforeMultiAgentInvocationEvent`)**: Marks `calibration_critic.status = Status.COMPLETED` when `results.length === 0` so forward edges fire on Cycle 1, while conditional back-edges check `lastNodeId === "calibration_critic"` and `invocationState.lastFailureStage`.
-2. **Injecting Structured Critique into Stateful Node Memory (`evaluateCriticOutcome` + `TextBlock`)**: Appends a `new TextBlock(critiqueMessage)` (`{ previousAttemptCritique, failureStage, targetNode, cycle }`) to `lastCriticResult.content`. With `preserveContext: true` on every node, the target specialist node receives this critique on top of its prior conversation history.
+2. **Injecting Structured Critique into Stateful Node Memory (`evaluateCriticOutcome` + `TextBlock`)**: Appends a `new TextBlock(critiqueMessage)` (`{ previousAttemptCritique, failureStage, targetNode, cycle }`) to `lastCriticResult.content`. With `preserveContext: true`, the target node receives this critique on top of its prior conversation history.
 3. **Ephemeral Critique Cleanup (`BeforeNodeCallEvent`)**: Clears `lastCriticResult.content = []` once delivered so downstream nodes never receive stale critiques.
 
 ```javascript
@@ -400,13 +396,20 @@ const evaluateCriticOutcome = async state => {
   invocationState.shouldRetry = invocationState.cycleCount < boundedMaxAttempts;
 
   const targetByStage = { localization: "trilingual_localizer", rubric: "aws_docs_fact_checker", topic: "interview_miner" };
-  const lastCriticResult = criticResults[criticResults.length - 1];
-  lastCriticResult?.content?.push(new TextBlock(JSON.stringify({
+  criticResults.at(-1)?.content?.push(new TextBlock(JSON.stringify({
     previousAttemptCritique: invocationState.lastCritique,
     failureStage: invocationState.lastFailureStage,
     targetNode: targetByStage[invocationState.lastFailureStage] ?? "interview_miner",
     cycle: invocationState.cycleCount,
   })));
+};
+
+const routeBackFor = (stage, forwardParent = null) => async state => {
+  const lastNodeId = state.results.at(-1)?.nodeId;
+  if (forwardParent && lastNodeId === forwardParent) return true;
+  if (lastNodeId !== "calibration_critic") return false;
+  await evaluateCriticOutcome(state);
+  return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === stage);
 };
 
 const graph = new Graph({
@@ -423,37 +426,9 @@ const graph = new Graph({
     ["interview_miner", "aws_docs_fact_checker"],
     ["aws_docs_fact_checker", "trilingual_localizer"],
     ["trilingual_localizer", "calibration_critic"],
-    {
-      source: "calibration_critic",
-      target: "trilingual_localizer",
-      handler: async state => {
-        const lastNodeId = state.results.at(-1)?.nodeId;
-        if (lastNodeId === "aws_docs_fact_checker") return true;
-        if (lastNodeId !== "calibration_critic") return false;
-        await evaluateCriticOutcome(state);
-        return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === "localization");
-      },
-    },
-    {
-      source: "calibration_critic",
-      target: "aws_docs_fact_checker",
-      handler: async state => {
-        const lastNodeId = state.results.at(-1)?.nodeId;
-        if (lastNodeId === "interview_miner") return true;
-        if (lastNodeId !== "calibration_critic") return false;
-        await evaluateCriticOutcome(state);
-        return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === "rubric");
-      },
-    },
-    {
-      source: "calibration_critic",
-      target: "interview_miner",
-      handler: async state => {
-        if (state.results.at(-1)?.nodeId !== "calibration_critic") return false;
-        await evaluateCriticOutcome(state);
-        return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === "topic");
-      },
-    },
+    { source: "calibration_critic", target: "trilingual_localizer", handler: routeBackFor("localization", "aws_docs_fact_checker") },
+    { source: "calibration_critic", target: "aws_docs_fact_checker", handler: routeBackFor("rubric", "interview_miner") },
+    { source: "calibration_critic", target: "interview_miner", handler: routeBackFor("topic") },
   ],
   maxConcurrency: 1,
   maxSteps: boundedMaxSteps,
