@@ -99,7 +99,11 @@ async function main(args) {
   }
   if (["generate", "refresh"].includes(action) && target && id) {
     const flags = args.slice(3);
-    const serviceList = id.split(",").map(s => s.trim()).filter(Boolean);
+    const serviceList = id === "all"
+      ? [...services]
+      : id === "core"
+        ? ["s3", "ec2", "iam", "vpc", "lambda", "dynamodb"]
+        : id.split(",").map(s => s.trim()).filter(Boolean);
     const countFlag = flags.find(f => f.startsWith("--count="));
     const countPerService = countFlag ? Number(countFlag.split("=")[1]) : 2;
     const traceJsonFlag = flags.find(f => f.startsWith("--trace-json="));

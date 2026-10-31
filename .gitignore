@@ -426,3 +426,6 @@ admin/marks.csv
 src/ProjectTestsLib/T10_ApiGateway.cs
 admin/api_keys_*.csv
 admin/email.txt
+admin/private-questions/
+**/*-questions.json
+**/*-trace.json

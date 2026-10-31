@@ -84,7 +84,11 @@ def main():
     package_root = root / "src/VoicePractice"
     with ZipFile(package, "w", ZIP_DEFLATED) as archive:
         for path in sorted(package_root.rglob("*")):
-            if path.is_file() and not path.name.endswith(".test.mjs"):
+            if (path.is_file()
+                    and not path.name.endswith(".test.mjs")
+                    and path.name != "questions.json"
+                    and not path.name.endswith("-questions.json")
+                    and not path.name.endswith("-trace.json")):
                 archive.write(path, path.relative_to(package_root))
     backend_hash = hashlib.sha256(package.read_bytes()).hexdigest()
     backend_key = f"voice-api/{backend_hash}.zip"
