@@ -213,6 +213,7 @@ export function bindVoicePractice(game) {
   const pcContent = document.getElementById("pc-practice-content");
   const result = document.getElementById("pc-voice-result");
   const taskType = document.getElementById("voice-task-type");
+  const taskPills = document.getElementById("voice-task-pills");
   const readingOption = document.getElementById("voice-reading-option");
   const questionOption = document.getElementById("voice-question-option");
   const availability = document.getElementById("voice-question-availability");
@@ -228,6 +229,55 @@ export function bindVoicePractice(game) {
   let sessionError = null;
   let generation = 0;
   let starting = false;
+
+  const questionCounts = (items = questionActivities) => {
+    const unlocked = items.filter(activity => !activity.onCooldown);
+    const first = items[0];
+    return {
+      available: Number.isInteger(first?.availableCount) ? first.availableCount : unlocked.length,
+      completed: Number.isInteger(first?.completedCount)
+        ? first.completedCount
+        : items.filter(activity => activity.completed).length,
+      total: Number.isInteger(first?.totalCount) ? first.totalCount : items.length,
+    };
+  };
+  const syncWorldVoiceSummary = allActivities => {
+    if (!Array.isArray(allActivities) || !game) return;
+    const summaryMap = game.serviceVoiceSummary instanceof Map ? game.serviceVoiceSummary : new Map();
+    game.serviceVoiceSummary = summaryMap;
+    if (game.world) game.world.serviceVoiceSummary = summaryMap;
+    for (const serviceId of SERVICE_SET) {
+      const serviceItems = allActivities.filter(a => a.serviceId === serviceId);
+      if (!serviceItems.length) continue;
+      const readings = serviceItems.filter(a => a.type === "read_aloud");
+      const questions = serviceItems.filter(a =>
+        a.type === "question_answer" && a.available === true && Array.isArray(a.languages) && a.languages.length);
+      const counts = questionCounts(questions);
+      summaryMap.set(serviceId, {
+        qaAvailable: counts.available,
+        qaCompleted: counts.completed,
+        qaTotal: counts.total,
+        readAvailable: readings.some(a => !a.onCooldown),
+      });
+    }
+    for (const plaque of game.world?.servicePlaques || []) {
+      const id = plaque.userData?.awsService;
+      if (id && summaryMap.has(id)) plaque.userData.setVoiceSummary?.(summaryMap.get(id));
+    }
+    const badges = document.getElementById("mission-services");
+    for (const badge of badges?.children || []) {
+      const id = badge.dataset?.awsService;
+      const summary = id ? summaryMap.get(id) : null;
+      if (!summary || summary.qaTotal <= 0) continue;
+      let countBadge = badge.children?.[2];
+      if (!countBadge) {
+        countBadge = document.createElement("span");
+        countBadge.className = "service-badge-count";
+        badge.appendChild?.(countBadge);
+      }
+      countBadge.textContent = `Q&A ${summary.qaAvailable}/${summary.qaTotal}`;
+    }
+  };
 
   const readOwner = () => {
     const key = localStorage.getItem("api_key")?.trim() || "";
@@ -260,8 +310,9 @@ export function bindVoicePractice(game) {
     return current;
   };
   const canStartTask = () => !state || ["failed", "expired", "cancelled"].includes(state.status);
-  const taskAvailable = type => (type === "question_answer" ? questionActivities : readingActivities)
-    .some(activity => !activity.onCooldown);
+  const taskAvailable = type => type === "question_answer"
+    ? questionCounts().available > 0 && questionActivities.some(activity => !activity.onCooldown)
+    : readingActivities.some(activity => !activity.onCooldown);
   const updateButtons = () => {
     start.hidden = !canStartTask();
     start.disabled = start.hidden || starting || checkingAvailability || speech.isBusy() ||
@@ -283,7 +334,36 @@ export function bindVoicePractice(game) {
     taskType.value = selectedType;
     if (!state && selectedType === "question_answer") {
       start.textContent = "Start Q&A";
-      start.disabled ||= !questionActivities.some(activity => !activity.onCooldown);
+      start.disabled ||= !taskAvailable("question_answer");
+    }
+    if (taskPills) {
+      const counts = questionCounts();
+      const pills = [
+        { type: "read_aloud", disabled: readingOption.disabled,
+          label: readingOption.disabled ? "Read aloud (locked)" : "Read aloud (5-15 MP)" },
+        { type: "question_answer", disabled: questionOption.disabled,
+          label: questionOption.disabled
+            ? `Q&A (${counts.total ? `0/${counts.total} available` : "locked"})`
+            : `Q&A (${counts.available}/${counts.total || counts.available} available · 10-30 MP)` },
+      ];
+      taskPills.replaceChildren(...pills.map(item => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `voice-pill${selectedType === item.type ? " active" : ""}`;
+        btn.disabled = item.disabled || taskType.disabled;
+        btn.setAttribute?.("aria-pressed", String(selectedType === item.type));
+        btn.textContent = item.label;
+        btn.onclick = async () => {
+          if (btn.disabled) return;
+          if (selectedType !== item.type) {
+            taskType.value = item.type;
+            taskType.dispatchEvent?.(new Event("change"));
+          }
+          if (canStartTask() && !start.disabled) await start.onclick();
+        };
+        return btn;
+      }));
+      taskPills.hidden = availableOptions.length === 0;
     }
   };
   const getAvailability = async serviceId => {
@@ -291,6 +371,7 @@ export function bindVoicePractice(game) {
     if (!current.key) throw new Error("Set your API key to check available tasks.");
     const data = await jsonRequest("voice/completions", { apiKey: current.key });
     if (current.fingerprint !== readOwner().fingerprint) throw new Error("The API key changed.");
+    syncWorldVoiceSummary(data.activities ?? []);
     return (data.activities ?? []).filter(activity => activity.serviceId === serviceId);
   };
   const showTaskChoices = () => {
@@ -323,16 +404,22 @@ export function bindVoicePractice(game) {
         activity.type === "question_answer" && activity.serviceId === serviceId && activity.available === true &&
         Array.isArray(activity.languages) && activity.languages.length);
       const unlocked = questionActivities.filter(activity => !activity.onCooldown);
+      const counts = questionCounts();
       readingOption.disabled = !taskAvailable("read_aloud");
-      questionOption.disabled = !unlocked.length;
+      questionOption.disabled = !unlocked.length || counts.available <= 0;
       const unlock = Math.max(0, ...readingActivities.map(activity => activity.availableAt || 0));
       const readingText = readingOption.disabled
         ? unlock > Date.now() / 1000 ? `Read aloud: Locked until ${new Date(unlock * 1000).toLocaleString()}.`
           : "Read aloud: Unavailable."
         : "Read aloud: Available.";
       readingOption.textContent = readingOption.disabled ? "Read aloud (locked)" : "Read aloud (5-15 MP)";
+      questionOption.textContent = questionOption.disabled
+        ? "Answer a question (locked)"
+        : Number.isInteger(questionActivities[0]?.availableCount)
+          ? `Answer a question (${counts.available}/${counts.total} available · 10-30 MP)`
+          : "Answer a question (10-30 MP)";
       availability.textContent = `${readingText} ` + (questionActivities.length
-        ? `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed. ${unlocked.length} available now. Passed tasks unlock again after one week.${!unlocked.length ? ` Next unlock: ${new Date(Math.min(...questionActivities.map(activity => activity.availableAt)) * 1000).toLocaleString()}.` : ""}`
+        ? `Q&A: ${counts.completed} of ${counts.total} approved questions completed. ${counts.available} available now. Passed tasks unlock again after one week.${!unlocked.length ? ` Next unlock: ${new Date(Math.min(...questionActivities.map(activity => activity.availableAt)) * 1000).toLocaleString()}.` : ""}`
         : "Q&A: Questions coming soon.");
       if (state?.status === "ready" && (state.mode === "graded_read_aloud" && readingOption.disabled ||
           isQuestionAnswer(state) && questionActivities.some(a => a.activityId === state.activityId && a.onCooldown))) {
@@ -404,13 +491,27 @@ export function bindVoicePractice(game) {
     if (isQuestionAnswer(data)) {
       const activity = questionActivities.find(activity => activity.activityId === data.activityId) ??
         questionActivities.find(activity => !activity.completed && !activity.onCooldown);
-      if (activity) {
+      const hasServerCounts = questionActivities.some(item => Number.isInteger(item.totalCount));
+      if (hasServerCounts) {
+        for (const item of questionActivities) {
+          item.completedCount = Math.min(item.totalCount, (item.completedCount ?? 0) + 1);
+          item.availableCount = Math.max(0, (item.availableCount ?? 1) - 1);
+        }
+        if (activity && (activity.activityId === data.activityId || (activity.availableCount ?? 0) === 0)) {
+          activity.completed = true;
+          activity.onCooldown = true;
+          activity.availableAt = Math.floor(Date.now() / 1000) + 7 * 86400;
+        }
+      } else if (activity) {
         activity.completed = true;
         activity.onCooldown = true;
         activity.availableAt = Math.floor(Date.now() / 1000) + 7 * 86400;
       }
-      questionOption.disabled = !questionActivities.some(activity => !activity.onCooldown);
-      availability.textContent = `Q&A: ${questionActivities.filter(activity => activity.completed).length} of ${questionActivities.length} approved questions completed. Passed questions are locked for one week.`;
+      const counts = questionCounts();
+      questionOption.disabled = counts.available <= 0 || !questionActivities.some(activity => !activity.onCooldown);
+      availability.textContent = `Q&A: ${counts.completed} of ${counts.total} approved questions completed. Passed questions are locked for one week.`;
+      syncWorldVoiceSummary([...readingActivities, ...questionActivities]);
+      game.refreshServiceReader?.();
       return;
     }
     game.readServices?.add(data.serviceId);
@@ -453,10 +554,10 @@ export function bindVoicePractice(game) {
       await recoverExpiredTask();
     },
   });
-  const open = serviceId => {
+  const open = (serviceId, options = {}) => {
     if (!SERVICE_SET.has(serviceId)) return;
     selectedService = serviceId;
-    selectedType = "read_aloud";
+    selectedType = options.type === "question_answer" ? "question_answer" : "read_aloud";
     questionActivities = [];
     readingActivities = [];
     generation++;
@@ -467,7 +568,9 @@ export function bindVoicePractice(game) {
     const current = readOwner();
     owner = current.fingerprint || null;
     state = current.fingerprint ? readDesktopState(sessionStorage, current.fingerprint, serviceId) : null;
-    if (isQuestionAnswer(state)) {
+    if (options.type === "question_answer" && state && !isQuestionAnswer(state)) {
+      state = null;
+    } else if (isQuestionAnswer(state)) {
       selectedType = "question_answer";
     }
     if (state?.status === "completed") state = null;
@@ -490,6 +593,9 @@ export function bindVoicePractice(game) {
       if (!dialog.open || epoch !== generation || current.fingerprint !== readOwner().fingerprint || !availabilityChecked) return;
       if (state?.status === "expired" && current.key) recoverExpiredTask(Promise.resolve());
       else if (state && current.key) { render(); checkStatus(); }
+      else if (options.autoStart && current.key && canStartTask() && taskAvailable(selectedType)) {
+        startSession();
+      }
     });
   };
   const recoverExpiredTask = async (availabilityReady) => {
@@ -694,6 +800,7 @@ export function bindMobileVoicePractice({
   const submitStatus = status;
   const refreshButton = get("mobile-refresh");
   const languageSelect = get("mobile-voice-language");
+  const languagePills = get("mobile-voice-language-pills");
   const attempts = get("mobile-voice-attempts");
   const practiceContent = get("mobile-practice-content");
   const params = new URLSearchParams(windowRef.location.hash.replace(/^#/, ""));
@@ -836,6 +943,29 @@ export function bindMobileVoicePractice({
       return element;
     }));
     languageSelect.value = language || "";
+    if (languagePills) {
+      languagePills.replaceChildren(...languageOptions.map(option => {
+        const btn = documentRef.createElement("button");
+        btn.type = "button";
+        btn.className = `voice-pill${option.id === language ? " active" : ""}`;
+        if (btn.dataset) btn.dataset.language = option.id;
+        btn.disabled = isBusy();
+        btn.setAttribute?.("aria-pressed", String(option.id === language));
+        btn.textContent = option.label;
+        btn.onclick = () => {
+          if (isBusy() || option.id === language) return;
+          languageSelect.value = option.id;
+          languageSelect.events?.get("change")?.({ currentTarget: languageSelect });
+          languageSelect.dispatchEvent?.(new Event("change"));
+          for (const child of languagePills.children || []) {
+            const active = child === btn;
+            child.className = `voice-pill${active ? " active" : ""}`;
+            child.setAttribute?.("aria-pressed", String(active));
+          }
+        };
+        return btn;
+      }));
+    }
     if (pendingTurn && ["ready", "completed", "failed", "expired", "cancelled"].includes(data.status)) pendingTurn = null;
     const legacy = !isSupported();
     const passedCompletion = data.status === "completed" && voiceResultPassed(data);

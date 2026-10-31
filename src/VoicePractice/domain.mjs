@@ -339,15 +339,26 @@ export function createService(deps) {
     }
     if (method === "GET" && path === "/voice/completions") {
       const owner = await ownerFor(event);
-      const services = await Promise.all(Object.entries(lessons).map(async ([serviceId, lesson]) => {
-        const saved = await store.get(completionKey(owner, serviceId));
+      const [savedCompletions, wallet, extraActivities, savedActivities] = await Promise.all([
+        store.listCompletions
+          ? store.listCompletions(owner)
+          : Promise.all(Object.keys(lessons).map(serviceId => store.get(completionKey(owner, serviceId)))),
+        economy.wallet(owner),
+        questions.activities(),
+        store.listActivities ? store.listActivities(owner) : undefined,
+      ]);
+      const completionByService = new Map(
+        savedCompletions.filter(Boolean).map(row => [row.serviceId ?? row.SK?.replace(/^COMPLETION#/, ""), row])
+      );
+      const services = Object.entries(lessons).map(([serviceId, lesson]) => {
+        const saved = completionByService.get(serviceId);
         const completed = saved?.verified === true;
         return { serviceId, label: lesson.label, completed, completedAt: completed ? saved.completedAt : null,
           ...(saved?.mode === "graded_read_aloud" ? { bestScore: saved.bestScore, latestScore: saved.latestScore,
             feedback: saved.feedback, mpAwarded: saved.mpAwarded } : {}) };
-      }));
+      });
       return { services, completed: services.filter(service => service.completed).length, total: services.length,
-        wallet: await economy.wallet(owner), activities: await economy.summaries(owner, await questions.activities()) };
+        wallet, activities: await economy.summaries(owner, extraActivities, savedActivities) };
     }
     if (method === "GET" && path === "/voice/wallet") return economy.wallet(await ownerFor(event));
     if (method === "POST" && path === "/voice/casts") return economy.cast(await ownerFor(event), body);

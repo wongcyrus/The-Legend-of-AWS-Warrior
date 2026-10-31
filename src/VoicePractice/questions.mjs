@@ -85,12 +85,21 @@ export function createQuestions({ store, config, services, fail, now }) {
     languages: Object.keys(question.prompts),
   }));
   const choose = async (owner, serviceId, language) => {
-    const options = (await approved(serviceId)).filter(question =>
+    const [approvedForService, savedRows] = await Promise.all([
+      approved(serviceId),
+      store.listActivities ? store.listActivities(owner, `qa:${serviceId}:`) : null,
+    ]);
+    const options = approvedForService.filter(question =>
       question.serviceId === serviceId && Object.hasOwn(question.prompts, language));
     if (!options.length) fail(409, "No approved questions are available for this service and language.");
-    const progress = await Promise.all(options.map(question => store.get({
-      PK: `PLAYER#${owner}`, SK: `ACTIVITY#${questionActivityId(serviceId, question.id)}`,
-    })));
+    const byActivity = savedRows
+      ? new Map(savedRows.filter(Boolean).map(row => [row.activityId ?? row.SK?.replace(/^ACTIVITY#/, ""), row]))
+      : null;
+    const progress = byActivity
+      ? options.map(question => byActivity.get(questionActivityId(serviceId, question.id)))
+      : await Promise.all(options.map(question => store.get({
+        PK: `PLAYER#${owner}`, SK: `ACTIVITY#${questionActivityId(serviceId, question.id)}`,
+      })));
     const eligible = options.filter((_, index) => taskAvailableAt(progress[index]) <= now());
     if (!eligible.length) fail(409, `All Q&A questions for this service are on a one-week cooldown. Available again ${new Date(Math.min(...progress.map(taskAvailableAt)) * 1000).toISOString()}. Return to the game to discover another service.`);
     const compareForOwner = (a, b) =>

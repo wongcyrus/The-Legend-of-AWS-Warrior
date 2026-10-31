@@ -108,7 +108,7 @@
     </form>
   </dialog>
   <dialog id="service-dialog" class="v2-ui service-dialog" aria-labelledby="service-title">
-    <div class="card-heading"><span id="service-category" class="eyebrow"></span><span id="service-read-state"></span></div>
+    <div class="card-heading"><span id="service-category" class="eyebrow"></span><span id="service-qa-badge" class="service-qa-badge" hidden></span><span id="service-read-state"></span></div>
     <section id="service-content" class="service-detail" tabindex="0" aria-label="Service introduction and example">
       <img id="service-icon" alt="" width="96" height="96">
       <h2 id="service-title"></h2>
@@ -121,12 +121,13 @@
       <p>Reading earns no MP. Open Voice practice for graded reading or approved Q&amp;A questions.</p>
       <a id="service-source" target="_blank" rel="noopener noreferrer">Learn more on AWS</a>
     </section>
-    <div class="dialog-actions"><button id="service-close" type="button">Back to game</button><button id="service-explain" type="button" hidden>Voice practice</button></div>
+    <div class="dialog-actions"><button id="service-close" type="button">Back to game</button><button id="service-start-qa" type="button" hidden>Start Q&amp;A</button><button id="service-explain" type="button" hidden>Voice practice</button></div>
   </dialog>
   <dialog id="voice-desktop-dialog" class="v2-ui voice-dialog" aria-labelledby="voice-desktop-title">
     <span class="eyebrow">VOICE PRACTICE</span>
     <h2 id="voice-desktop-title">Read this AWS service aloud</h2>
     <p id="voice-desktop-intro">Pass at 60/100 to earn MP once per activity. Grades assess recognised content, not pronunciation or comprehension. Use your computer's microphone, or transfer the activity to your phone.</p>
+    <div id="voice-task-pills" class="voice-pill-group" role="group" aria-label="Quick task selection" hidden></div>
     <label class="voice-language" for="voice-task-type">Task
       <select id="voice-task-type">
         <option id="voice-reading-option" value="read_aloud" disabled>Read aloud (5-15 MP)</option>
@@ -139,6 +140,7 @@
       <h3 id="pc-question-heading">Text to read aloud</h3>
       <p id="pc-voice-question" class="voice-mobile-question"></p>
       <p id="pc-voice-attempts"></p>
+      <div id="pc-voice-language-pills" class="voice-pill-group" role="group" aria-label="Speaking language"></div>
       <label class="voice-language" for="pc-voice-language">Speaking language
         <select id="pc-voice-language" disabled></select>
       </label>

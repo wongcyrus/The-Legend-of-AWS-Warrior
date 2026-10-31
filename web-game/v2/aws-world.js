@@ -83,7 +83,30 @@ export function servicePlaque(world, parent, id, { x, y, z, width = 8, rotation 
     plaque.userData.serviceRead = read;
     texture.needsUpdate = true;
   };
+  plaque.userData.setVoiceSummary = summary => {
+    ctx.fillStyle = "#182635";
+    ctx.fillRect(174, 10, 322, 36);
+    if (summary) {
+      const qaAvailable = Number(summary.qaAvailable ?? 0);
+      const qaTotal = Number(summary.qaTotal ?? 0);
+      const readAvailable = Boolean(summary.readAvailable);
+      const hasAvailable = qaAvailable > 0 || readAvailable;
+      ctx.fillStyle = hasAvailable ? "#1f3b2c" : "#3a2a1d";
+      ctx.fillRect(176, 12, 316, 30);
+      ctx.fillStyle = hasAvailable ? "#9ed6b5" : "#ffb454";
+      ctx.font = "bold 17px sans-serif";
+      const text = qaTotal > 0
+        ? `Q&A: ${qaAvailable}/${qaTotal} available · ${readAvailable ? "Read ready" : "Read locked"}`
+        : `Read aloud: ${readAvailable ? "Available" : "Cooldown"}`;
+      ctx.fillText(text, 186, 33, 296);
+    }
+    plaque.userData.voiceSummary = summary || null;
+    texture.needsUpdate = true;
+  };
   plaque.userData.setRead(Boolean(world.readServices?.has(id)));
+  if (world.serviceVoiceSummary?.has?.(id)) {
+    plaque.userData.setVoiceSummary(world.serviceVoiceSummary.get(id));
+  }
   world.servicePlaques?.push(plaque);
   return plaque;
 }

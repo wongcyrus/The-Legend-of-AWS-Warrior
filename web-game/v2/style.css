@@ -60,6 +60,11 @@ nav select { padding: 4px 6px; border-radius: 4px; font-size: 11px; }
 #mission-services { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .service-badge { display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px 3px 4px; border: 1px solid #71869b77; border-radius: 5px; background: #161e2d; font-size: 10px; color: #ecf1f8; }
 .service-badge img { display: block; flex-shrink: 0; }
+.service-badge-count, .service-qa-badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 9.5px; font-weight: 700; color: #9ed6b5; background: #1a352fcc; border: 1px solid #9ed6b555; white-space: nowrap; }
+.voice-pill-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.voice-pill { padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #12262bed; border: 1px solid #74938b; color: #e8dec8; cursor: pointer; }
+.voice-pill.active, .voice-pill[aria-pressed="true"] { border-color: #ff9900; background: linear-gradient(180deg, #354b5e, #243646); color: #fff; box-shadow: 0 0 10px #ff990033; }
+.voice-pill:disabled { opacity: 0.45; cursor: not-allowed; }
 .card-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 #quest-state { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; color: #9ed6b5; padding: 2px 6px; border-radius: 4px; background: #1a352f99; border: 1px solid #9ed6b544; }
 .quest-card h2 { font: normal 18px Georgia, serif; margin: 10px 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

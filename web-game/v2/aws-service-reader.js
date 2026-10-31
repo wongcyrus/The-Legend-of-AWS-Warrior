@@ -20,17 +20,35 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
   const checkAvailability = async id => {
     if (!voice.getAvailability) return;
     const epoch = ++availabilityEpoch, button = get("service-explain");
+    const qaButton = get("service-start-qa"), qaBadge = get("service-qa-badge");
     button.disabled = true;
     button.textContent = "Checking voice tasks...";
+    if (qaButton) { qaButton.hidden = true; qaButton.disabled = true; }
+    if (qaBadge) qaBadge.hidden = true;
     try {
       const activities = await voice.getAvailability(id);
       if (epoch !== availabilityEpoch || selected !== id) return;
       const reading = activities.some(activity => activity.type === "read_aloud" && !activity.onCooldown);
-      const qa = activities.some(activity => activity.type === "question_answer" &&
-        activity.available === true && activity.languages?.length && !activity.onCooldown);
-      button.textContent = reading && qa ? "Available: Read aloud / Q&A"
-        : reading ? "Available: Read aloud" : qa ? "Available: Q&A" : "No voice tasks available";
+      const qaActivities = activities.filter(activity => activity.type === "question_answer" &&
+        activity.available === true && activity.languages?.length);
+      const unlockedQa = qaActivities.filter(activity => !activity.onCooldown);
+      const qa = unlockedQa.length > 0;
+      const qaAvailable = qaActivities[0]?.availableCount ?? unlockedQa.length;
+      const qaTotal = qaActivities[0]?.totalCount ?? qaActivities.length;
+      const hasCount = qaActivities.some(activity => Number.isInteger(activity.availableCount));
+      const qaLabel = hasCount ? `Q&A (${qaAvailable}/${qaTotal})` : "Q&A";
+      button.textContent = reading && qa ? `Available: Read aloud / ${qaLabel}`
+        : reading ? "Available: Read aloud" : qa ? `Available: ${qaLabel}` : "No voice tasks available";
       button.disabled = false;
+      if (qaBadge && qaTotal > 0) {
+        qaBadge.textContent = `Q&A: ${qaAvailable}/${qaTotal} available`;
+        qaBadge.hidden = false;
+      }
+      if (qaButton) {
+        qaButton.textContent = `Start Q&A (${qaAvailable} available)`;
+        qaButton.hidden = !qa;
+        qaButton.disabled = !qa;
+      }
     } catch {
       if (epoch !== availabilityEpoch || selected !== id) return;
       button.textContent = "Check voice task availability";
@@ -97,6 +115,9 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
   }
   get("service-close").onclick = () => dialog.close();
   get("service-explain").onclick = () => voice.open(selected);
+  if (get("service-start-qa")) {
+    get("service-start-qa").onclick = () => voice.open(selected, { type: "question_answer", autoStart: true });
+  }
   dialog.addEventListener("close", () => {
     game.readingService = Boolean(get("voice-desktop-dialog").open);
     game.refreshServiceReader();
@@ -136,8 +157,10 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     canvas.style.cursor = cursor;
     const container = document.getElementById("container");
     if (container) container.style.cursor = cursor;
+    const summary = object?.userData?.voiceSummary;
+    const summaryText = summary?.qaTotal > 0 ? ` (${summary.qaAvailable}/${summary.qaTotal} Q&A available)` : "";
     const title = object?.userData?.awsService && AWS_SERVICES[object.userData.awsService]
-      ? `${AWS_SERVICES[object.userData.awsService].label}: Click to learn` : "";
+      ? `${AWS_SERVICES[object.userData.awsService].label}${summaryText}: Click to learn` : "";
     canvas.title = title;
     if (container) container.title = title;
   });

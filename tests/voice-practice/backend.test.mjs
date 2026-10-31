@@ -42,8 +42,11 @@ function fixture({ readAloud = false, graded = false, catalog, languages, questi
         return structuredClone([...rows.values()].filter(row => row.PK === "QUESTION_BANK" &&
           (!serviceId || row.serviceId === serviceId)));
       },
-      async listActivities(owner) {
-        return structuredClone([...rows.values()].filter(row => row.PK === `PLAYER#${owner}` && row.SK.startsWith("ACTIVITY#")));
+      async listActivities(owner, prefix = "") {
+        return structuredClone([...rows.values()].filter(row => row.PK === `PLAYER#${owner}` && row.SK.startsWith(`ACTIVITY#${prefix}`)));
+      },
+      async listCompletions(owner) {
+        return structuredClone([...rows.values()].filter(row => row.PK === `PLAYER#${owner}` && row.SK.startsWith("COMPLETION#")));
       },
       isConflict: e => Boolean(e.conflict),
       async atomic(writes) {
@@ -296,6 +299,9 @@ test("completions summary never leaks unattempted question bank titles or IDs an
   assert.equal(qaBefore[0].activityId, "qa:s3");
   assert.equal(qaBefore[0].title, undefined);
   assert.equal(qaBefore[0].questionId, undefined);
+  assert.equal(qaBefore[0].availableCount, 2);
+  assert.equal(qaBefore[0].completedCount, 0);
+  assert.equal(qaBefore[0].totalCount, 2);
   assert.equal(qaBefore[0].exhausted, false);
   const rawBefore = JSON.stringify(before);
   for (const q of bank) {
@@ -311,7 +317,7 @@ test("completions summary never leaks unattempted question bank titles or IDs an
   const mid = (await f.req("/voice/completions")).data;
   const qaMid = mid.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
   assert.equal(qaMid.length, 2);
-  assert.ok(qaMid.every(a => a.exhausted === false));
+  assert.ok(qaMid.every(a => a.exhausted === false && a.availableCount === 1 && a.completedCount === 1 && a.totalCount === 2));
   const rawMid = JSON.stringify(mid);
   assert.equal(rawMid.includes(unchosen.title), false, "Remaining unattempted question title must not leak");
   assert.equal(rawMid.includes(unchosen.id), false, "Remaining unattempted question ID must not leak");
@@ -325,11 +331,11 @@ test("completions summary never leaks unattempted question bank titles or IDs an
   const after = (await f.req("/voice/completions")).data;
   const qaAfter = after.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
   assert.equal(qaAfter.length, 2);
-  assert.ok(qaAfter.every(a => a.completed && a.onCooldown && a.exhausted === true));
+  assert.ok(qaAfter.every(a => a.completed && a.onCooldown && a.exhausted === true && a.availableCount === 0 && a.completedCount === 2 && a.totalCount === 2));
   f.advance(7 * 86400);
   const postCooldown = (await f.req("/voice/completions")).data;
   const qaPost = postCooldown.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
-  assert.ok(qaPost.every(a => a.completed && !a.onCooldown && a.exhausted === true));
+  assert.ok(qaPost.every(a => a.completed && !a.onCooldown && a.exhausted === true && a.availableCount === 2 && a.completedCount === 2 && a.totalCount === 2));
 });
 
 test("Q&A mobile transfer shares question, keeps rubric private and accepts short spoken answers", async () => {
@@ -1053,6 +1059,13 @@ test("catalog progress queries only the authenticated player's activity prefix a
   assert.equal(requests[0].ConsistentRead, true);
   assert.deepEqual(requests[0].ExpressionAttributeValues, { ":owner": "PLAYER#owner", ":prefix": "ACTIVITY#" });
   assert.deepEqual(requests[1].ExclusiveStartKey, { PK: "PLAYER#owner", SK: "ACTIVITY#next" });
+
+  // Scoped activity prefix and completions prefix queries avoid N+1 GetItem calls:
+  requests.length = 0;
+  await deps.store.listActivities("owner", "qa:s3:");
+  assert.deepEqual(requests[0].ExpressionAttributeValues, { ":owner": "PLAYER#owner", ":prefix": "ACTIVITY#qa:s3:" });
+  await deps.store.listCompletions("owner");
+  assert.deepEqual(requests.at(-1).ExpressionAttributeValues, { ":owner": "PLAYER#owner", ":prefix": "COMPLETION#" });
 });
 
 test("read-aloud completes for any meaningful speech without matching text, calling AI or leaking transcripts", async () => {

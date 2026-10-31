@@ -22,8 +22,12 @@ const uuid = value => typeof value === "string" &&
 
 export function createEconomy({ store, now, fail, completionKey, sessionKey, attemptKey, activities = authoredActivities }) {
   const wallet = async owner => walletView(await store.get(walletKey(owner)));
-  const savedActivities = owner => store.listActivities ? store.listActivities(owner) :
-    Promise.all(activities.map(activity => store.get(activityKey(owner, activity.activityId))));
+  const servicePrefix = serviceId =>
+    activities.filter(a => a.serviceId === serviceId).every(a => a.activityId.startsWith(`${serviceId}-`))
+      ? `${serviceId}-` : "";
+  const savedActivities = (owner, prefix = "") => store.listActivities ? store.listActivities(owner, prefix) :
+    Promise.all(activities.filter(a => !prefix || a.activityId.startsWith(prefix))
+      .map(activity => store.get(activityKey(owner, activity.activityId))));
   const readingCooldowns = rows => {
     const cooldowns = new Map();
     for (const row of rows.filter(Boolean)) {
@@ -33,11 +37,11 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     return cooldowns;
   };
   const readingAvailableAt = async (owner, serviceId) =>
-    readingCooldowns(await savedActivities(owner)).get(serviceId) ?? 0;
-  const summaries = async (owner, extraActivities = []) => {
+    readingCooldowns(await savedActivities(owner, servicePrefix(serviceId))).get(serviceId) ?? 0;
+  const summaries = async (owner, extraActivities = [], preloadedRows) => {
     const probes = [...activities, ...extraActivities];
-    const savedRows = store.listActivities ? await store.listActivities(owner) :
-      await Promise.all(probes.map(activity => store.get(activityKey(owner, activity.activityId))));
+    const savedRows = preloadedRows ?? (store.listActivities ? await store.listActivities(owner) :
+      await Promise.all(probes.map(activity => store.get(activityKey(owner, activity.activityId)))));
     const rows = new Map(savedRows.filter(Boolean).map(row => [row.activityId, row]));
     const readingLocks = readingCooldowns(savedRows);
     const qaByService = new Map();
@@ -52,12 +56,17 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
       qaByService.set(activity.serviceId, group);
     }
     const catalog = [...activities];
+    const qaCounts = new Map();
     for (const [serviceId, group] of qaByService) {
       const hasInProgress = group.attempted.some(a => !rows.get(a.activityId)?.completed);
-      const exhausted = group.approved.length > 0 && group.unattempted.length === 0 &&
-        group.approved.every(a => rows.get(a.activityId)?.completed === true);
+      const totalCount = group.approved.length;
+      const completedCount = group.approved.filter(a => rows.get(a.activityId)?.completed === true).length;
+      const availableCount = group.unattempted.length +
+        group.attempted.filter(a => taskAvailableAt(rows.get(a.activityId)) <= now()).length;
+      const exhausted = totalCount > 0 && group.unattempted.length === 0 && completedCount === totalCount;
+      qaCounts.set(serviceId, { availableCount, completedCount, totalCount, exhausted });
       for (const activity of group.attempted) {
-        catalog.push({ ...activity, exhausted });
+        catalog.push({ ...activity, availableCount, completedCount, totalCount, exhausted });
       }
       if (group.unattempted.length > 0 && !hasInProgress) {
         catalog.push({
@@ -67,6 +76,9 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
           type: "question_answer",
           languages: [...new Set(group.unattempted.flatMap(a => a.languages ?? []))],
           available: true,
+          availableCount,
+          completedCount,
+          totalCount,
           exhausted: false,
           round: 1,
         });
@@ -75,12 +87,10 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     const ids = new Set(catalog.map(activity => activity.activityId));
     for (const row of rows.values()) {
       if (row.type === "question_answer" && !ids.has(row.activityId)) {
-        const group = qaByService.get(row.serviceId);
-        const exhausted = group
-          ? group.approved.length > 0 && group.unattempted.length === 0 &&
-            group.approved.every(a => rows.get(a.activityId)?.completed === true)
-          : row.completed === true;
-        catalog.push({ ...row, available: false, exhausted });
+        const counts = qaCounts.get(row.serviceId) ?? {
+          availableCount: 0, completedCount: row.completed ? 1 : 0, totalCount: 1, exhausted: row.completed === true,
+        };
+        catalog.push({ ...row, available: false, ...counts });
       }
     }
     return catalog.map(activity => {
@@ -93,6 +103,9 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
           ...(activity.title !== undefined ? { title: activity.title } : {}),
           ...(activity.questionId !== undefined ? { questionId: activity.questionId } : {}),
           languages: activity.languages ?? [], available: activity.available !== false,
+          availableCount: activity.availableCount ?? 0,
+          completedCount: activity.completedCount ?? (saved?.completed ? 1 : 0),
+          totalCount: activity.totalCount ?? 1,
           exhausted: Boolean(activity.exhausted),
         } : {}),
         round: activity.round, completed: saved?.completed === true,
@@ -103,9 +116,12 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
     });
   };
   const choose = async (owner, requested) => {
-    const serviceTasks = (await summaries(owner)).filter(a => a.type === "read_aloud" && a.serviceId === requested);
-    const unfinished = serviceTasks.filter(a => !a.onCooldown);
-    if (!unfinished.length) fail(409, `All reading tasks for this service are on a one-week cooldown. Available again ${new Date(Math.min(...serviceTasks.map(a => a.availableAt)) * 1000).toISOString()}. Return to the game to discover another service.`);
+    const savedRows = await savedActivities(owner, servicePrefix(requested));
+    const readingUnlockAt = readingCooldowns(savedRows).get(requested) ?? 0;
+    const serviceTasks = activities.filter(a => (a.type ?? "read_aloud") === "read_aloud" && a.serviceId === requested);
+    if (!serviceTasks.length || readingUnlockAt > now()) fail(409, `All reading tasks for this service are on a one-week cooldown. Available again ${new Date(readingUnlockAt * 1000).toISOString()}. Return to the game to discover another service.`);
+    const rows = new Map(savedRows.filter(Boolean).map(row => [row.activityId, row]));
+    const unfinished = serviceTasks.map(a => ({ ...a, completed: rows.get(a.activityId)?.completed === true }));
     unfinished.sort((a, b) => Number(a.completed) - Number(b.completed));
     const pending = unfinished.filter(a => a.completed === unfinished[0].completed);
     const round = Math.min(...pending.map(a => a.round));

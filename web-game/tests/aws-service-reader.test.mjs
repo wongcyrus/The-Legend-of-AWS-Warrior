@@ -109,6 +109,10 @@ test('icon clicks check current voice availability without marking completion fr
     assert.deepEqual(availabilityRequests, ['ecs']);
     assert.equal(get('service-explain').textContent, 'Available: Read aloud / Q&A');
     assert.equal(get('service-explain').disabled, false);
+    assert.equal(get('service-qa-badge').textContent, 'Q&A: 1/1 available');
+    assert.equal(get('service-qa-badge').hidden, false);
+    assert.equal(get('service-start-qa').textContent, 'Start Q&A (1 available)');
+    assert.equal(get('service-start-qa').hidden, false);
     get('service-explain').onclick();
     assert.deepEqual(voiceRequests, ['ecs']);
     voiceRequests.length = 0;

@@ -53,11 +53,20 @@ export function awsDependencies(env = process.env, clients = {}) {
   const database = clients.dynamo ?? dynamo;
   const store = {
     async get(Key) { return (await database.send(new GetCommand({ TableName, Key, ConsistentRead: true }))).Item; },
-    async listActivities(owner) {
+    async listActivities(owner, prefix = "") {
       const rows = [];
       for await (const page of paginateQuery({ client: database }, {
         TableName, KeyConditionExpression: "PK = :owner AND begins_with(SK, :prefix)",
-        ExpressionAttributeValues: { ":owner": `PLAYER#${owner}`, ":prefix": "ACTIVITY#" },
+        ExpressionAttributeValues: { ":owner": `PLAYER#${owner}`, ":prefix": `ACTIVITY#${prefix}` },
+        ConsistentRead: true,
+      })) rows.push(...(page.Items ?? []));
+      return rows;
+    },
+    async listCompletions(owner) {
+      const rows = [];
+      for await (const page of paginateQuery({ client: database }, {
+        TableName, KeyConditionExpression: "PK = :owner AND begins_with(SK, :prefix)",
+        ExpressionAttributeValues: { ":owner": `PLAYER#${owner}`, ":prefix": "COMPLETION#" },
         ConsistentRead: true,
       })) rows.push(...(page.Items ?? []));
       return rows;

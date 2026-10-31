@@ -1190,6 +1190,42 @@ test('desktop enables Q&A only from approved database availability and submits a
   } finally { app.restore(); }
 });
 
+test('1-click Q&A launch auto-starts Q&A session and syncs multi-question counts to 3D plaques without covering icons', async () => {
+  const multiQuestionSlot = {
+    activityId: 'qa:s3', serviceId: 's3', type: 'question_answer',
+    available: true, availableCount: 5, completedCount: 1, totalCount: 5,
+    completed: false, onCooldown: false, languages: ['en-US', 'zh-HK', 'zh-CN'],
+  };
+  const app = desktopFixture({ questions: [multiQuestionSlot] });
+  const plaqueSummaries = [];
+  app.game.world.servicePlaques.push({
+    userData: { awsService: 's3', setVoiceSummary: s => plaqueSummaries.push(s) },
+  });
+  try {
+    app.controller.open('s3', { type: 'question_answer', autoStart: true });
+    await tick();
+    await tick();
+    // 1. 3D plaque receives exact multi-question availability summary from GET /voice/completions:
+    assert.equal(plaqueSummaries.length, 1);
+    assert.deepEqual(plaqueSummaries[0], {
+      qaAvailable: 5, qaCompleted: 1, qaTotal: 5, readAvailable: true,
+    });
+    // 2. Availability text shows 1 of 5 completed and 5 available now:
+    assert.match(app.elements.get('voice-question-availability').textContent, /1 of 5 approved questions completed\. 5 available now/);
+    // 3. Auto-start immediately created the Q&A session without requiring dropdown selection or a second Start click:
+    const created = app.requests.filter(request => request.url.endsWith('/voice/sessions')).at(-1);
+    assert.ok(created, 'Expected POST /voice/sessions to be called automatically');
+    assert.deepEqual(JSON.parse(created.options.body), { serviceId: 's3', type: 'question_answer', language: 'en-US' });
+    assert.equal(app.elements.get('pc-voice-question').textContent, 'How do you store private screenshots?');
+    // 4. 1-click language pills switch language directly without opening the select dropdown:
+    const langPills = app.elements.get('pc-voice-language-pills').children;
+    assert.equal(langPills.length, 3);
+    langPills[1].onclick();
+    assert.equal(app.elements.get('pc-voice-language').value, 'zh-HK');
+    assert.equal(app.elements.get('pc-voice-question').textContent, '你會點樣儲存私人截圖？');
+  } finally { app.restore(); }
+});
+
 test('missing, retired or other-service questions cannot enable Q&A, and stale availability ignores account changes', async () => {
   const app = desktopFixture({ questions: [{ ...approvedQuestion, available: false },
     { ...approvedQuestion, serviceId: 'ec2' }] });

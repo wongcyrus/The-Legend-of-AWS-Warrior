@@ -1957,6 +1957,13 @@ class Game {
       const label = document.createElement("span");
       label.textContent = service.label;
       badge.append(icon, label);
+      const summary = this.serviceVoiceSummary?.get?.(id);
+      if (summary?.qaTotal > 0) {
+        const count = document.createElement("span");
+        count.className = "service-badge-count";
+        count.textContent = `Q&A ${summary.qaAvailable}/${summary.qaTotal}`;
+        badge.appendChild(count);
+      }
       badges.appendChild(badge);
     }
     badges.hidden = !badges.childElementCount;
