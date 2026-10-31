@@ -394,6 +394,15 @@ export function bindVoicePractice(game) {
     syncWorldVoiceSummary(data.activities ?? []);
     return (data.activities ?? []).filter(activity => activity.serviceId === serviceId);
   };
+  const refreshWorldAvailability = async () => {
+    const current = readOwner();
+    if (!current.key) return;
+    try {
+      const data = await jsonRequest("voice/completions", { apiKey: current.key });
+      if (current.fingerprint !== readOwner().fingerprint) return;
+      syncWorldVoiceSummary(data.activities ?? []);
+    } catch { /* Non-blocking world plaque/badge summary refresh. */ }
+  };
   const showTaskChoices = () => {
     document.getElementById("voice-desktop-title").textContent =
       `${AWS_SERVICES[selectedService]?.label || "AWS"} - Available voice tasks`;
@@ -774,7 +783,7 @@ export function bindVoicePractice(game) {
     clearOwnedState();
     if (dialog.open) showError("The API key changed. Start a voice activity for this account.");
   });
-  return { open, speech, getAvailability };
+  return { open, speech, getAvailability, refreshWorldAvailability };
 }
 
 function mobileStatus(status) {

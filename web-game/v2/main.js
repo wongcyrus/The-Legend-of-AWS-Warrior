@@ -17,7 +17,7 @@ import { baseUrl } from "../src/constant.js";
 import { Assets } from "./assets.js?v=20261027-maps-1";
 import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js?v=20261029-ajax-collision-1";
 import { GameSave, initialGameSave } from "./game-save.js?v=20261029-save-1";
-import { World } from "./world.js?v=20261029-ajax-collision-1";
+import { World } from "./world.js?v=20261031-voice-counts-1";
 import { MAPS, isSafePosition, nearbyGate, isMagicWaveClear } from "./maps.js?v=20261029-monster-density-1";
 import { sharedResources, disposeMap, cleanupExpiredEffects } from "./map-lifecycle.js?v=20261029-v2-features-1";
 import { drawMinimap } from "./minimap.js?v=20261029-v2-features-1";
@@ -35,8 +35,8 @@ import { MonsterModels } from "./monster-models.js?v=20261028-magic-1";
 import { SHIELDS, ShieldGuard } from "./shields.js?v=20261029-v2-features-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 import { AWS_SERVICES, AWS_LANDMARKS, BUILDING_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
-import { loadServiceImages } from "./aws-world.js?v=20261029-sign-post-1";
-import { bindServiceReader } from "./aws-service-reader.js?v=20261030-click-fix-1";
+import { loadServiceImages } from "./aws-world.js?v=20261031-voice-counts-1";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261031-voice-counts-1";
 import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-recovery-hp-1";
 import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-6";
 
@@ -885,7 +885,10 @@ class Game {
     });
   }
 
-  refreshVoiceWallet() { return this.voiceWallet.refresh(); }
+  refreshVoiceWallet() {
+    this.refreshVoiceAvailability?.();
+    return this.voiceWallet.refresh();
+  }
 
   magicStatus(message) {
     document.getElementById("magic-cast").title = message;
@@ -1607,7 +1610,8 @@ class Game {
     this.shared = sharedResources(this.models);
     this.worldRoot = new THREE.Group();
     this.scene.add(this.worldRoot);
-    this.world = new World(this.worldRoot, this.models, this.map, this.readServices);
+    this.world = new World(this.worldRoot, this.models, this.map, this.readServices, this.serviceVoiceSummary);
+    this.refreshVoiceAvailability?.();
     this.cameraBoxes = BUILDINGS.map(b => new THREE.Box3(
       new THREE.Vector3(b.x - 8.5, 0, b.z - 8.5),
       new THREE.Vector3(b.x + 8.5, 16, b.z + 8.5)));
@@ -1831,7 +1835,7 @@ class Game {
     const root = new THREE.Group();
     let world;
     try {
-      world = new World(root, this.models, map, this.readServices);
+      world = new World(root, this.models, map, this.readServices, this.serviceVoiceSummary);
     } catch (error) {
       disposeMap(root, this.shared);
       this.traveling = false;

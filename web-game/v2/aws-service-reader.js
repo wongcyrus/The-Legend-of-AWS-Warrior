@@ -1,5 +1,5 @@
 import { AWS_SERVICES } from "./aws-theme.js?v=20261028-voice-1";
-import { bindVoicePractice } from "./voice-practice.js?v=20261029-mandarin-door-1";
+import { bindVoicePractice } from "./voice-practice.js?v=20261031-voice-counts-1";
 
 export const READ_SERVICES_KEY = "aws-warrior:v2:read-services";
 
@@ -74,6 +74,7 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     get("service-read-state").textContent = game.readServices.has(selected) ? "Read" : "New discovery";
     checkAvailability(selected);
   };
+  game.refreshVoiceAvailability = () => voice.refreshWorldAvailability?.();
   const serviceAliases = {
     bedrock: "amazon-bedrock",
     stepfunctions: "aws-step-functions",

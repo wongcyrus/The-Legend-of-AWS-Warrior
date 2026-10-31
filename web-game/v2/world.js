@@ -3,15 +3,16 @@ import { instances, normalized } from "./assets.js?v=20261027-maps-1";
 import { BUILDINGS, LAKE, RUIN_WALLS, CHESTS, BOSS, SECRET_PATH, createScenery, isWalkable, seededRandom } from "./layout.js";
 import { MAPS, isMapWalkable } from "./maps.js?v=20261027-maps-1";
 import { buildExpedition, buildGates } from "./map-world.js?v=20261029-ajax-collision-1";
-import { servicePlaque, buildServiceLandmarks } from "./aws-world.js?v=20261029-sign-post-1";
+import { servicePlaque, buildServiceLandmarks } from "./aws-world.js?v=20261031-voice-counts-1";
 import { BUILDING_SERVICES, AWS_LANDMARKS, plaqueObscuresPlayer } from "./aws-theme.js?v=20261028-voice-1";
 
 export class World {
-  constructor(scene, models, map = MAPS.village, readServices = new Set()) {
+  constructor(scene, models, map = MAPS.village, readServices = new Set(), serviceVoiceSummary = null) {
     this.scene = scene;
     this.models = models;
     this.map = map;
     this.readServices = readServices;
+    this.serviceVoiceSummary = serviceVoiceSummary;
     this.scenery = map.id === "village" ? createScenery() : { trees: [] };
     for (const kind of Object.keys(this.scenery)) {
       this.scenery[kind] = this.scenery[kind].filter(point =>
