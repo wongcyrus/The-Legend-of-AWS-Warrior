@@ -118,17 +118,15 @@ async function main(args) {
     const generator = createQuestionGenerator({
       otel,
       traceConsole,
-      onTraceEvent: traceConsole
-        ? event => {
-            if (event.type === "beforeNodeCallEvent") {
-              console.log(`  [Strands Graph] ▶ Node started: ${event.nodeId}`);
-            } else if (event.type === "nodeResultEvent") {
-              console.log(`  [Strands Graph] ✔ Node finished: ${event.nodeId} (${event.result?.status}, ${event.result?.duration ?? 0}ms)`);
-            } else if (event.type === "multiAgentHandoffEvent") {
-              console.log(`  [Strands Graph] ──► Handoff: ${event.source} -> ${(event.targets ?? []).join(", ")}`);
-            }
-          }
-        : null,
+      onTraceEvent: event => {
+        if (event.type === "beforeNodeCallEvent") {
+          console.log(`  [Strands Graph] ▶ Node started: ${event.nodeId}`);
+        } else if (event.type === "nodeResultEvent") {
+          console.log(`  [Strands Graph] ✔ Node finished: ${event.nodeId} (${event.result?.status}, ${event.result?.duration ?? 0}ms)`);
+        } else if (event.type === "multiAgentHandoffEvent") {
+          console.log(`  [Strands Graph] ──► Handoff: ${event.source} -> ${(event.targets ?? []).join(", ")}`);
+        }
+      },
     });
     const summary = await runQuestionBatchJob({
       mode: action,

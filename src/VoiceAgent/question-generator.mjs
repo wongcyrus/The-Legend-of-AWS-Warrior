@@ -289,10 +289,10 @@ async function createStrandsNodeAgent({
   send,
   modelId,
   maxTokens = 2200,
-  maxTurns = 4,
+  maxTurns = 6,
   traceAttributes,
 }) {
-  const boundedMaxTurns = Math.min(10, Math.max(1, Math.trunc(Number(maxTurns) || 4)));
+  const boundedMaxTurns = Math.min(10, Math.max(1, Math.trunc(Number(maxTurns) || 6)));
   const model = new BedrockModel({
     modelId,
     maxTokens,
@@ -403,7 +403,7 @@ export function createQuestionGenerator({
   gradeAnswer,
   grader = createGraderAgent({ send, modelId }),
   maxAttempts = 3,
-  maxTurnsPerNode = 4,
+  maxTurnsPerNode = 6,
   maxSteps,
   otel = false,
   traceConsole = false,
@@ -413,7 +413,7 @@ export function createQuestionGenerator({
     throw new Error("validateQuestion and gradeAnswer functions are required");
   }
   const boundedMaxAttempts = Math.min(10, Math.max(1, Math.trunc(Number(maxAttempts) || 3)));
-  const boundedMaxTurnsPerNode = Math.min(10, Math.max(1, Math.trunc(Number(maxTurnsPerNode) || 4)));
+  const boundedMaxTurnsPerNode = Math.min(10, Math.max(1, Math.trunc(Number(maxTurnsPerNode) || 6)));
   const boundedMaxSteps = Math.min(40, Math.max(4, Math.trunc(Number(maxSteps) || boundedMaxAttempts * 4)));
   if (otel || traceConsole || process.env.STRANDS_OTEL_ENABLED === "1" || process.env.STRANDS_TRACE_CONSOLE === "1") {
     enableStrandsTelemetry({ otlp: Boolean(otel || process.env.STRANDS_OTEL_ENABLED === "1"), console: Boolean(traceConsole || process.env.STRANDS_TRACE_CONSOLE === "1") });
@@ -606,7 +606,7 @@ Your job is to find the most common, practical cloud engineering interview quest
       systemPrompt: `You are Agent 2 (AwsDocsFactCheckerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the mined interview question from [node: interview_miner] (and, if a rubric calibration retry occurred, a targeted previousAttemptCritique from [node: calibration_critic]).
 Your job is to verify BOTH the question premise and the answer against official AWS documentation using your documentation search tools (such as aws___search_documentation).
-1. Call aws___search_documentation to verify current AWS behavior, security defaults, and best practices for this service and topic.
+1. Call aws___search_documentation once (and at most 1 aws___read_documentation call if needed) to verify current AWS behavior, security defaults, and best practices for this service and topic, then immediately return your final JSON without extra tool calls.
 2. If [node: calibration_critic] reported a rubric or grading calibration critique, fix the concepts[], weights, misconceptions[], or prompt clarity to resolve that exact critique.
 3. If the mined interview question premise or traditional answer is outdated, rewrite the question and rubric so they are 100% accurate according to current official AWS documentation.
 4. Ensure the id, title, enPrompt, and concepts[] do NOT duplicate or overlap with any existing question listed in avoidQuestions or avoidQuestionIds.
