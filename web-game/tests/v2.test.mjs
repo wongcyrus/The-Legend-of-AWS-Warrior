@@ -156,15 +156,15 @@ test('V2 ignores mouse picking and only a non-repeated E outside a dialog reques
   const press = (code, { repeat = false, closest = () => null } = {}) => input._onKeyDown({
     code, repeat, target: { closest }, preventDefault: () => { prevented++; },
   });
-  press('KeyE');
+  press('KeyG');
   assert.equal(interactions, 1);
   assert.equal(prevented, 1);
-  press('KeyE', { repeat: true });
+  press('KeyG', { repeat: true });
   for (const tag of ['input', 'select', 'dialog']) {
-    press('KeyE', { closest: selector => selector.includes(tag) ? {} : null });
+    press('KeyG', { closest: selector => selector.includes(tag) ? {} : null });
   }
   assert.equal(interactions, 1);
-  press('KeyE', { closest: selector => selector.includes('button') ? {} : null });
+  press('KeyG', { closest: selector => selector.includes('button') ? {} : null });
   assert.equal(interactions, 2);
   press('KeyW');
   press('Space');
@@ -732,7 +732,8 @@ test('both entry points stay separate and V2 assets include their licenses', () 
   assert.match(beta, /id="task-instructions"[^>]*role="region"/);
   assert.doesNotMatch(beta, /id="grade-button"|Retry quest grading/);
   assert.doesNotMatch(beta, /id="talk-button"/);
-  assert.match(beta, /<kbd>E<\/kbd> Get task/);
+  assert.match(beta, /<kbd>G<\/kbd> Get task/);
+  assert.doesNotMatch(beta, /Open chest/);
   assert.doesNotMatch(beta, /click them/i);
   const models = fileURLToPath(new URL('../v2/assets/kenney/', import.meta.url));
   const files = readdirSync(models).filter(name => name.endsWith('.glb'));

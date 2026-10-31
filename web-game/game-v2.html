@@ -48,7 +48,7 @@
     <div class="card-heading"><span class="eyebrow">AWS MISSION</span><span id="quest-state">EXPLORE</span></div>
     <div id="mission-services" aria-label="Mission services" hidden></div>
     <h2 id="quest-title">A world worth saving</h2>
-    <p id="quest-description">Press E near a character with a golden marker to receive an AWS task.</p>
+    <p id="quest-description">Press G near a character with a golden marker to receive an AWS task.</p>
     <div class="quest-actions">
       <button id="instructions-button" type="button" aria-haspopup="dialog" hidden>Mission details</button>
       <button id="conversation-button" type="button" aria-haspopup="dialog" hidden>Read conversation</button>
@@ -79,7 +79,7 @@
       <button id="magic-cast" type="button" disabled>Cast X</button>
     </div>
   </div>
-  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span data-control-action="attack" role="button" tabindex="0" title="Click or press Space to attack"><kbd>Space</kbd> Attack</span><span data-control-action="magic" role="button" tabindex="0" title="Click or press X to cast selected Cloud Arts"><kbd>X</kbd> Magic</span><span><kbd>3-7</kbd> Arts</span><span><kbd>R</kbd> Block</span><span data-control-action="dodge" role="button" tabindex="0" title="Click or press Q to dodge"><kbd>Q</kbd> Dodge</span><span data-control-action="task" role="button" tabindex="0" title="Click or press E near a guide to get a task"><kbd>E</kbd> Get task</span><span data-control-action="chest" role="button" tabindex="0" title="Click or press F near a chest to open it"><kbd>F</kbd> Open chest</span><span data-control-action="weapon" role="button" tabindex="0" title="Click or press C / V to cycle weapons and shields"><kbd>C / V</kbd> Cycle gear</span><span><kbd>Scroll</kbd> Zoom &middot; <kbd>Shift + scroll</kbd> Weapon</span></footer>
+  <footer class="v2-ui controls"><span><kbd>W A S D</kbd> Move &amp; turn</span><span><kbd>Shift</kbd> Run</span><span data-control-action="attack" role="button" tabindex="0" title="Click or press Space to attack"><kbd>Space</kbd> Attack</span><span data-control-action="magic" role="button" tabindex="0" title="Click or press X to cast selected Cloud Arts"><kbd>X</kbd> Magic</span><span><kbd>3-7</kbd> Arts</span><span><kbd>R</kbd> Block</span><span data-control-action="dodge" role="button" tabindex="0" title="Click or press Q to dodge"><kbd>Q</kbd> Dodge</span><span data-control-action="task" role="button" tabindex="0" title="Click or press G near a guide to get a task"><kbd>G</kbd> Get task</span><span data-control-action="weapon" role="button" tabindex="0" title="Click or press C / V to cycle weapons and shields"><kbd>C / V</kbd> Cycle gear</span><span><kbd>Scroll</kbd> Zoom &middot; <kbd>Shift + scroll</kbd> Weapon</span></footer>
   <div class="v2-ui credits">Town: <a href="https://kenney.nl/assets/fantasy-town-kit" target="_blank" rel="noopener noreferrer">Kenney / CC0</a> &middot; Nature &amp; creatures: Quaternius &middot; <a href="./v2/assets/aws/NOTICE.txt" title="Independent educational game; not endorsed by AWS">AWS icons / notice</a> &middot; <a href="./v2/assets/sources.json">Sources</a></div>
   <section id="loading" class="loading" aria-label="Loading the enhanced world">
     <div class="brand-logos loading-logos">
@@ -166,9 +166,9 @@
     <div id="manual-content" class="combat-manual-content" tabindex="0" role="region" aria-label="Combat instructions and power tables">
       <p>The game pauses while this manual is open. Complete AWS tasks in your account, then defeat a monster to grade your work. Magic kills use the same grading rules as melee kills.</p>
       <h3>How to play &amp; quest loop</h3>
-      <p>1. Set your API key using Set Key in the top bar (or explore freely without a key). 2. Approach any guide with a golden marker (Cloudhaven Keeper, Highland Knight, Sunspire Guardian, or Vault Construct) and press E to receive an AWS task. 3. Build the requested AWS resources in your AWS account, then defeat any monster to trigger automated grading. Each passed mission restores a village building and unlocks cosmetic weapon finishes.</p>
+      <p>1. Set your API key using Set Key in the top bar (or explore freely without a key). 2. Approach any guide with a golden marker (Cloudhaven Keeper, Highland Knight, Sunspire Guardian, or Vault Construct) and press G to receive an AWS task. 3. Build the requested AWS resources in your AWS account, then defeat any monster to trigger automated grading. Each passed mission restores a village building and unlocks cosmetic weapon finishes.</p>
       <h3>Controls</h3>
-      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: unleash your selected cloud art. 3-7: toggle cloud arts. Each art has a fixed MP cost; there are no power levels. R: hold to block (press just before impact for a Perfect Parry). Q: dodge. Scroll: zoom. Shift + scroll or C / V: cycle weapons and shields. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. E near a guide: get a task. Walk into a glowing gate at a road end to travel automatically. F near a chest: open it. You can also click the interactive action chips in the bottom control bar.</p>
+      <p>WASD: move and turn. Shift: run. Space: melee attack. X or Cast: unleash your selected cloud art. 3-7: toggle cloud arts. Each art has a fixed MP cost; there are no power levels. R: hold to block (press just before impact for a Perfect Parry). Q: dodge. Scroll: zoom. Shift + scroll or C / V: cycle weapons and shields. Click weapon or shield icons to equip; 1 / 2 / 0 select Sword / Axe / Unarmed. G near a guide: get a task. Walk into a glowing gate at a road end to travel automatically. You can also click the interactive action chips in the bottom control bar.</p>
       <h3>All weapons</h3>
       <p id="manual-strength"></p>
       <p>Unarmed uses your full Power because no weapon is equipped; weapon multipliers apply only to equipped items.</p>
@@ -212,6 +212,6 @@
     </div>
     <div class="dialog-actions"><button id="manual-close" type="button">Back to game</button></div>
   </dialog>
-  <script src="./v2/main.js?v=20261031-voice-counts-3" type="module"></script>
+  <script src="./v2/main.js?v=20261031-controls-1" type="module"></script>
 </body>
 </html>

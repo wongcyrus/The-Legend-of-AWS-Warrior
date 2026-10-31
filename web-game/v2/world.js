@@ -291,24 +291,6 @@ export class World {
   }
 
   buildAdventure() {
-    for (const chest of CHESTS) {
-      const group = new THREE.Group();
-      group.position.set(chest.x, 0, chest.z);
-      this.scene.add(group);
-      const wood = this.material(0x785034);
-      this.mesh(new THREE.BoxGeometry(2.4, 1.4, 1.6), wood, 0, 0.7, 0, group);
-      const lid = new THREE.Group();
-      lid.position.set(0, 1.4, -0.8);
-      group.add(lid);
-      this.mesh(new THREE.BoxGeometry(2.5, 0.3, 1.7), wood, 0, 0.15, 0.8, lid);
-      for (const x of [-0.8, 0.8]) {
-        this.mesh(new THREE.BoxGeometry(0.16, 1.45, 1.65), this.material(0xd9b661), x, 0.7, 0, group);
-      }
-      const glow = this.mesh(new THREE.OctahedronGeometry(0.35),
-        new THREE.MeshBasicMaterial({ color: 0xffdc83 }), 0, 2.4, 0, group);
-      this.chests.push({ ...chest, group, lid, glow });
-    }
-    this.sign(-72, -49, "SMUGGLER'S TRAIL");
     const arena = this.mesh(new THREE.RingGeometry(10.5, 11, 48),
       new THREE.MeshBasicMaterial({ color: 0x9d87cc, transparent: true, opacity: 0.65,
         side: THREE.DoubleSide }), BOSS.x, 0.06, BOSS.z);

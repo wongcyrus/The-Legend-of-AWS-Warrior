@@ -223,13 +223,13 @@ test('map transitions reject invalid, premature or busy travel without altering 
   assert.equal(game.api.quest, quest);
 });
 
-test('T is a separate gate action and E remains the guide interaction', () => {
+test('T is a separate gate action and G is the guide interaction', () => {
   const html = readFileSync(new URL('../game-v2.html', import.meta.url), 'utf8');
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(html, /travel-button|click Travel|Walk into gates to travel/);
   assert.doesNotMatch(main, /travel-button/);
   assert.match(main, /event.code === "KeyT"[\s\S]*?this._params.game.useGate\(\)/);
-  assert.match(main, /event.code === "KeyE"[\s\S]*?this._params.game.talkToGuide\(\)/);
+  assert.match(main, /event.code === "KeyG"[\s\S]*?this._params.game.talkToGuide\(\)/);
   for (const name of ['assets', 'world', 'spawning', 'maps', 'map-lifecycle']) {
     assert.match(main, new RegExp(`from "\\./${name}\\.js\\?v=[^"]+"`));
   }

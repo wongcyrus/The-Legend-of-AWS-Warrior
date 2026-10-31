@@ -140,7 +140,7 @@ test('equipment panel omits repeated controls and only shows active guard and do
   assert.match(css, /#cloud-art-title\s*\{[\s\S]*?top:\s*62px;[\s\S]*?left:\s*50%;[\s\S]*?transform:\s*translateX\(-50%\);[\s\S]*?width:\s*fit-content;/);
   const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(main, /block-button|blockButton/);
-  const source = main.match(/    document.getElementById\("shield-state"\).textContent[\s\S]*?(?=\n    const chest =)/)[0];
+  const source = main.match(/    document.getElementById\("shield-state"\).textContent[\s\S]*?(?=\n    const boss =)/)[0];
   const elements = { 'shield-state': {}, 'dodge-state': {} };
   const update = runInNewContext('(function () {' + source + '\n})', {
     document: { getElementById: id => elements[id] },
@@ -445,7 +445,6 @@ test('keyboard shortcuts 3-7 toggle cloud arts, C/V cycle gear, and control bar 
   assert.equal(game.triggerControlAction('dodge'), true);
   assert.equal(game.triggerControlAction('task'), true);
   assert.equal(game.talked, true);
-  assert.equal(game.triggerControlAction('chest'), true);
   assert.equal(game.triggerControlAction('gate'), true);
   assert.equal(game.triggerControlAction('weapon'), true);
   assert.equal(game.weapon, 'Axe');

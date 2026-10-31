@@ -15,9 +15,9 @@ import { spatial_hash_grid } from "../src/spatial-hash-grid.js";
 import { spatial_grid_controller } from "../src/spatial-grid-controller.js";
 import { baseUrl } from "../src/constant.js";
 import { Assets } from "./assets.js?v=20261027-maps-1";
-import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js?v=20261029-ajax-collision-1";
+import { GameApi, QUEST_KEY, MARKS_RESET_KEY } from "./api.js?v=20261031-controls-1";
 import { GameSave, initialGameSave } from "./game-save.js?v=20261029-save-1";
-import { World } from "./world.js?v=20261031-voice-counts-2";
+import { World } from "./world.js?v=20261031-controls-1";
 import { MAPS, isSafePosition, nearbyGate, isMagicWaveClear } from "./maps.js?v=20261029-monster-density-1";
 import { sharedResources, disposeMap, cleanupExpiredEffects } from "./map-lifecycle.js?v=20261029-v2-features-1";
 import { drawMinimap } from "./minimap.js?v=20261029-v2-features-1";
@@ -107,17 +107,16 @@ class BasicCharacterControllerInput extends player_input.BasicCharacterControlle
       this._params.game.useGate();
       return;
     }
-    if (event.code === "KeyE" && !event.repeat) {
+    if (event.code === "KeyG" && !event.repeat) {
       event.preventDefault();
       this._params.game.talkToGuide();
       return;
     }
-    if (!event.repeat && ["KeyQ", "KeyF", "Digit1", "Digit2", "Digit0"].includes(event.code)) {
+    if (!event.repeat && ["KeyQ", "Digit1", "Digit2", "Digit0"].includes(event.code)) {
       event.preventDefault();
       const game = this._params.game;
       if (game.progressChanging) return;
       if (event.code === "KeyQ") game.tryDodge();
-      else if (event.code === "KeyF") game.openNearbyChest();
       else game.selectWeapon({ Digit1: "Sword", Digit2: "Axe", Digit0: "Unarmed" }[event.code]);
       return;
     }
@@ -143,7 +142,7 @@ class BasicCharacterControllerInput extends player_input.BasicCharacterControlle
   }
 
   _onMouseUp() {
-    // Guide interaction stays on E; don't invoke Classic's picker.
+    // Guide interaction stays on G; don't invoke Classic's picker.
   }
 
   _onKeyUp(event) {
@@ -1203,7 +1202,6 @@ class Game {
     if (action === "magic") return Boolean(this.castMagic());
     if (action === "dodge") return this.tryDodge();
     if (action === "task") { this.talkToGuide(); return true; }
-    if (action === "chest") return this.openNearbyChest();
     if (action === "gate") return this.useGate();
     if (action === "weapon") return this.cycleWeapon(1);
     if (action === "shield") return this.cycleShield(1);
@@ -1251,28 +1249,6 @@ class Game {
     controller._velocity.set(0, 0, 0);
     controller._stateMachine.SetState("idle");
     this.sound.play("dodge");
-    return true;
-  }
-
-  nearbyChest() {
-    if (this.map.id !== "village") return null;
-    return CHESTS.filter(chest => !this.progress.data.chests.includes(chest.id) &&
-      Math.hypot(chest.x - this.player._position.x, chest.z - this.player._position.z) < 7)
-      .sort((a, b) => Math.hypot(a.x - this.player._position.x, a.z - this.player._position.z) -
-        Math.hypot(b.x - this.player._position.x, b.z - this.player._position.z))[0];
-  }
-
-  openNearbyChest() {
-    if (!this.ready || this.progressChanging || !this.player.GetComponent("HealthComponent").IsAlive()) return false;
-    const chest = this.nearbyChest();
-    if (!chest) { this.status("Find a glowing cache and press F nearby. Look for the smuggler's trail west of the forest watcher."); return false; }
-    const emerald = this.progress.unlocked("verdant");
-    if (!this.progress.openChest(chest.id)) return false;
-    if (!emerald && this.progress.data.finish === "plain") this.progress.selectFinish("verdant");
-    this.updateAdventure();
-    this.sound.play("chest");
-    this.status(`${chest.name} opened! Forest emerald weapon finish unlocked. Exploration rewards are cosmetic, not AWS marks.`);
-    this.saveCheckpoint();
     return true;
   }
 
@@ -1467,7 +1443,7 @@ class Game {
       window.dispatchEvent(new Event("voice-owner-changed"));
       this.syncProgress();
       closeDialog();
-      this.status("Key saved. Press E near a guide to receive a quest.");
+      this.status("Key saved. Press G near a guide to receive a quest.");
     };
     const taskDialog = document.getElementById("task-dialog");
     document.getElementById("instructions-button").onclick = () => this.showInstructions();
@@ -1519,7 +1495,7 @@ class Game {
       if (event.key === MARKS_RESET_KEY) {
         this.syncProgress();
         this.showQuest();
-        this.status("Your marks were reset. Press E near a guide to start again.");
+        this.status("Your marks were reset. Press G near a guide to start again.");
       } else if (event.key === "api_key" || event.key === null) {
         this.refreshVoiceWallet();
         sessionStorage.removeItem(QUEST_KEY);
@@ -1979,7 +1955,7 @@ class Game {
     document.getElementById("quest-description").textContent = quest
       ? "Complete the AWS task, then defeat a monster to check your work."
       : completed ? "Every available task has passed. Your marks are saved."
-        : "Press E near a character with a golden marker to receive an AWS task.";
+        : "Press G near a character with a golden marker to receive an AWS task.";
     document.getElementById("quest-state").textContent = quest ? "ACTIVE" : completed ? "COMPLETE" : "EXPLORE";
     document.getElementById("instructions-button").hidden = !quest;
     const dialog = document.getElementById("task-dialog");
@@ -2064,7 +2040,7 @@ class Game {
       return;
     }
     if (!quest && !guide) {
-      this.status("Move closer to a character with a golden marker or an AWS sign, then press E.");
+      this.status("Move closer to a character with a golden marker or an AWS sign, then press G.");
       return;
     }
     if (!localStorage.getItem("api_key")?.trim()) {
@@ -2110,7 +2086,7 @@ class Game {
     if (batch) batch.graded = true;
     const quest = this.api.quest;
     if (!quest) {
-      this.status("Press E near a guide to get an AWS task, complete its instructions, then defeat a monster to grade it.");
+      this.status("Press G near a guide to get an AWS task, complete its instructions, then defeat a monster to grade it.");
       return;
     }
     if (this.api.grading) return;
@@ -2382,7 +2358,6 @@ class Game {
     document.getElementById("dodge-state").textContent = this.dodge.active ? "Dodging: invulnerable" :
       this.dodge.cooldown > 0 ? `Dodge: ${this.dodge.cooldown.toFixed(1)}s` : "";
     document.getElementById("dodge-state").hidden = !this.dodge.active && this.dodge.cooldown <= 0;
-    const chest = this.nearbyChest();
     const boss = this.boss.GetComponent("HealthComponent"), gate = nearbyGate(this.map, position);
     const nearbyEnemy = this.enemies.filter(actor => actor.GetComponent("NPCController")._target?.visible &&
       actor.GetComponent("HealthComponent").IsAlive() && actor._position.distanceTo(position) < 30)
@@ -2397,10 +2372,9 @@ class Game {
     const lmCounts = lmSummary
       ? ` (Speech ${lmSummary.readAvailableCount ?? 0}/${lmSummary.readTotal ?? 2}${lmSummary.qaTotal > 0 ? ` · Q&A ${lmSummary.qaAvailable}/${lmSummary.qaTotal}` : ""} available)`
       : "";
-    const landmarkHint = landmark ? `${AWS_SERVICES[landmark.service]?.label || landmark.service.toUpperCase()}${lmCounts}: Press E or click sign to learn` : "";
+    const landmarkHint = landmark ? `${AWS_SERVICES[landmark.service]?.label || landmark.service.toUpperCase()}${lmCounts}: Press G or click sign to learn` : "";
     document.getElementById("explore-hint").textContent = gate ? MAPS[gate.to].name :
       nearbyEnemy ? `${nearbyEnemy.GetComponent("NPCController").profile.label}: ${Math.ceil(enemyHealth._health)} / ${enemyHealth._maxHealth} HP` :
-      chest ? chest.name :
       landmarkHint ? landmarkHint :
       this.boss._position.distanceTo(position) < 35 && boss.IsAlive()
         ? `Optional: ${BOSS.name} ${Math.ceil(boss._health)} / ${boss._maxHealth} HP`
