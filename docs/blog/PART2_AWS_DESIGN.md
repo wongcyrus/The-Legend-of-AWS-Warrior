@@ -1,5 +1,7 @@
 ## The Legend of AWS Warrior V2 (Part 2 - The AWS Design): Zero-Trust Serverless Referee, Amazon Bedrock AgentCore Runtime and Single-Table DynamoDB Architecture
 
+> **[INSERT COVER IMAGE: docs/images/aws_warrior_v2_blog_part2_cover.png — Blog Part 2 Cover Banner]**
+
 **By Cyrus Wong**
 *AWS AI Hero | AWS AI User Group Hong Kong Leader | Programme Leader of Higher Diploma in Cloud and Data Centre Administration (IT114115), Hong Kong Institute of Information Technology (HKIIT)*
 

@@ -1,5 +1,7 @@
 ## The Legend of AWS Warrior V2 (Part 1 - The Game): Gamifying Cloud Architecture, Oral Interview Prep and 19 Anime x AWS Cloud Arts in a 3D Action RPG
 
+> **[INSERT COVER IMAGE: docs/images/aws_warrior_v2_blog_part1_cover.png — Blog Part 1 Cover Banner]**
+
 **By Cyrus Wong**
 *AWS AI Hero | AWS AI User Group Hong Kong Leader | Programme Leader of Higher Diploma in Cloud and Data Centre Administration (IT114115), Hong Kong Institute of Information Technology (HKIIT)*
 

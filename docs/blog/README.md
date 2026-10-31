@@ -11,6 +11,7 @@ Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â
 
 ### 1. [Part 1 - The Game: Gamifying Cloud Architecture, Oral Interview Prep and 19 Anime x AWS Cloud Arts in a 3D Action RPG](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)
 
+- **Cover Image**: `docs/images/aws_warrior_v2_blog_part1_cover.png` (`1.64 MiB`, `< 2 MB`)
 - **Defeating the "Copy-to-AI, Paste-Back" Reflex**: Why students copy questions to AI and paste back answers without ever reading themâ€”and how requiring a **spoken answer** (with typing and pasting disabled) ensures students **read and vocalize the answer at least once**, while **fun gameplay** motivates voluntary practice.
 - Exploring **302 discoverable AWS service plaques** across 4 open-world realms (*Cloudlands Village*, *Frostpeak Highlands*, *Sunspire Desert*, and *The Forgotten Vault*), dynamic **AZ Outage Alerts**, and **Timed Perfect Parry** + **Close-Range 360-Degree and Standoff Melee Combat**.
 - Solving the "university lab PC has no microphone" bottleneck with **Ephemeral Mobile QR-Code Wireless Microphone Handoff** in English (`en-US`), Hong Kong Cantonese (`zh-HK`), and Simplified Chinese Mandarin (`zh-CN`).
@@ -18,12 +19,15 @@ Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â
 
 ### 2. [Part 2 - The AWS Design: Zero-Trust Serverless Referee, Amazon Bedrock AgentCore Runtime and Single-Table DynamoDB Architecture](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md)
 
+- **Cover Image**: `docs/images/aws_warrior_v2_blog_part2_cover.png` (`1.65 MiB`, `< 2 MB`)
 - Why our architecture places a **Trusted Referee Lambda (`VoicePracticeFunction`)** between API Gateway and an IAM-isolated **Untrusted AI Sandbox (`AWS::BedrockAgentCore::Runtime`)** with zero DynamoDB permissions.
 - Bypassing API Gateway's 29-second timeout with asynchronous self-invoking Lambda workers, dual authentication bridging (`x-api-key` + SHA-256 mobile capability tokens to IAM SigV4), and speech input quality gates.
 - Inside the single-turn Strands Harness grader (`createHarness` + `BedrockModel`, `temperature: 0`, `limits: { turns: 1 }`), **Operation-Dispatched Multi-Persona Grading (`grade_reading` vs. `grade_answer`)**, **Two-Phase `NFKC` Substring Evidence Verification**, and the **Two-Layer Anti-Voice-Claim Guardrail**.
 - Single-table DynamoDB schema (`VoicePracticeTable`), atomic `TransactWrite` MP wallet and cast receipts, **Per-Student Sticky Shuffle + Post-Cooldown LRU Rotation**, and Dual-Stack CloudFormation/SAM DevOps (`Game Mode` vs. `Exam Mode`).
 
 ### 3. [Part 3 - Gen Question: Autonomous AWS Question Bank Generation with Loop Engineering, Strands Multi-Agent Graphs, Harness Plugins and Live OpenTelemetry Tracing](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md)
+
+- **Cover Image**: `docs/images/aws_warrior_v2_blog_part3_cover.png` (`1.35 MiB`, `< 2 MB`)
 
 - **Loop Engineering vs. Prompt Engineering vs. Context Engineering**: The 5 pillars of building closed-loop, self-verifying agent systems.
 - **Dual-Level Loop Architecture**:
