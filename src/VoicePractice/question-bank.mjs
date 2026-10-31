@@ -156,7 +156,11 @@ async function main(args) {
     if (traceFile && summary.traces.length) {
       console.log(`Saved Strands Graph & Runtime Trace JSON to ${traceFile}`);
     }
-    console.log(`Finished ${action}: ${summary.completedServices.length} service(s) processed, ${summary.skippedServices.length} skipped from checkpoint, ${summary.failedServices.length} failed, ${summary.publishedCount} question(s) published.`);
+    const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = summary.usage ?? {};
+    const estCostUsd = ((inputTokens / 1_000_000) * 0.30 + (outputTokens / 1_000_000) * 2.50).toFixed(4);
+    console.log(
+      `Finished ${action}: ${summary.completedServices.length} service(s) processed, ${summary.skippedServices.length} skipped from checkpoint, ${summary.failedServices.length} failed, ${summary.publishedCount} question(s) published | Tokens: ${inputTokens.toLocaleString()} in + ${outputTokens.toLocaleString()} out = ${totalTokens.toLocaleString()} total (~$${estCostUsd} USD).`
+    );
     return;
   }
   throw new Error("Usage: node question-bank.mjs validate|publish|import FILE\n       node question-bank.mjs export FILE [SERVICE]\n       node question-bank.mjs approve|retire SERVICE QUESTION EXPECTED_REVISION\n       node question-bank.mjs generate|refresh FILE SERVICE[,SERVICE...] [--count=2] [--publish|--no-publish] [--force] [--trace-json=FILE] [--otel] [--trace-console]");

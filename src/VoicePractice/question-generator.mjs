@@ -63,6 +63,16 @@ function saveCheckpointFile(filePath, questions) {
   writeFileSync(filePath, JSON.stringify(questions, null, 2) + "\n", { mode: 0o600 });
 }
 
+function loadTraceFile(filePath) {
+  if (!filePath || !existsSync(filePath)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(filePath, "utf8"));
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function runQuestionBatchJob({
   mode = "generate",
   services = [],
@@ -90,13 +100,18 @@ export async function runQuestionBatchJob({
 
   const checkpoint = loadCheckpointFile(checkpointFile);
   const byKey = new Map(checkpoint.map(item => [`${item.serviceId}:${item.id}`, item]));
+  const existingTraces = loadTraceFile(traceFile);
+  const tracesByKey = new Map(
+    existingTraces.map(t => [`${t.serviceId}:${t.slotIndex ?? 1}`, t])
+  );
   const summary = {
     completedServices: [],
     skippedServices: [],
     failedServices: [],
     publishedCount: 0,
     questions: [],
-    traces: [],
+    traces: [...tracesByKey.values()],
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
   };
 
   const processOneService = async serviceId => {
@@ -142,7 +157,13 @@ export async function runQuestionBatchJob({
         });
         existingQuestionsById.set(question.id, question);
         generatedForService.push(question);
-        if (trace) summary.traces.push(trace);
+        if (trace) {
+          tracesByKey.set(`${serviceId}:${i + 1}`, trace);
+          summary.traces = [...tracesByKey.values()];
+          summary.usage.inputTokens += trace.usage?.inputTokens ?? 0;
+          summary.usage.outputTokens += trace.usage?.outputTokens ?? 0;
+          summary.usage.totalTokens += trace.usage?.totalTokens ?? 0;
+        }
         byKey.set(`${serviceId}:${question.id}`, question);
       }
     } else {
@@ -161,7 +182,13 @@ export async function runQuestionBatchJob({
         existingIds.add(question.id);
         existingQuestionsById.set(question.id, question);
         generatedForService.push(question);
-        if (trace) summary.traces.push(trace);
+        if (trace) {
+          tracesByKey.set(`${serviceId}:${i + 1}`, trace);
+          summary.traces = [...tracesByKey.values()];
+          summary.usage.inputTokens += trace.usage?.inputTokens ?? 0;
+          summary.usage.outputTokens += trace.usage?.outputTokens ?? 0;
+          summary.usage.totalTokens += trace.usage?.totalTokens ?? 0;
+        }
         byKey.set(`${serviceId}:${question.id}`, question);
       }
     }
