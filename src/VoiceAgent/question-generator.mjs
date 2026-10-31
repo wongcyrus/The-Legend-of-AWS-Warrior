@@ -1,5 +1,5 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
-import { Agent, BedrockModel, Graph, McpClient, TextBlock, tool } from "@strands-agents/sdk";
+import { Agent, BedrockModel, BeforeInvocationEvent, BeforeModelCallEvent, Graph, McpClient, TextBlock, tool } from "@strands-agents/sdk";
 import { BeforeMultiAgentInvocationEvent, BeforeNodeCallEvent, Status } from "@strands-agents/sdk/multiagent";
 import { createAgent as createGraderAgent } from "./agent.mjs";
 
@@ -389,7 +389,18 @@ export async function loadAwsKnowledgeMcpTools({
   };
 }
 
-function createStrandsNodeAgent({ id, description, systemPrompt, tools = [], send, modelId, maxTokens = 2200, traceAttributes }) {
+function createStrandsNodeAgent({
+  id,
+  description,
+  systemPrompt,
+  tools = [],
+  send,
+  modelId,
+  maxTokens = 2200,
+  maxTurns = 4,
+  traceAttributes,
+}) {
+  const boundedMaxTurns = Math.min(10, Math.max(1, Math.trunc(Number(maxTurns) || 4)));
   const model = new BedrockModel({ modelId, maxTokens, temperature: 0, stream: false });
   model._client.send = async command => {
     const response = await send(command);
@@ -405,7 +416,7 @@ function createStrandsNodeAgent({ id, description, systemPrompt, tools = [], sen
       usage: response.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
     };
   };
-  return new Agent({
+  const agent = new Agent({
     id,
     name: id,
     description,
@@ -416,6 +427,17 @@ function createStrandsNodeAgent({ id, description, systemPrompt, tools = [], sen
     retryStrategy: null,
     ...(traceAttributes ? { traceAttributes } : {}),
   });
+  let turnsInCurrentInvocation = 0;
+  agent.addHook(BeforeInvocationEvent, () => {
+    turnsInCurrentInvocation = 0;
+  });
+  agent.addHook(BeforeModelCallEvent, () => {
+    turnsInCurrentInvocation += 1;
+    if (turnsInCurrentInvocation > boundedMaxTurns) {
+      throw new Error(`Agent "${id}" exceeded maximum inner loop turns (${boundedMaxTurns})`);
+    }
+  });
+  return agent;
 }
 
 export function createQuestionGenerator({
@@ -428,6 +450,8 @@ export function createQuestionGenerator({
   gradeAnswer,
   grader = createGraderAgent({ send, modelId }),
   maxAttempts = 3,
+  maxTurnsPerNode = 4,
+  maxSteps,
   otel = false,
   traceConsole = false,
   onTraceEvent = null,
@@ -435,6 +459,9 @@ export function createQuestionGenerator({
   if (typeof validateQuestion !== "function" || typeof gradeAnswer !== "function") {
     throw new Error("validateQuestion and gradeAnswer functions are required");
   }
+  const boundedMaxAttempts = Math.min(10, Math.max(1, Math.trunc(Number(maxAttempts) || 3)));
+  const boundedMaxTurnsPerNode = Math.min(10, Math.max(1, Math.trunc(Number(maxTurnsPerNode) || 4)));
+  const boundedMaxSteps = Math.min(40, Math.max(4, Math.trunc(Number(maxSteps) || boundedMaxAttempts * 4)));
   if (otel || traceConsole || process.env.STRANDS_OTEL_ENABLED === "1" || process.env.STRANDS_TRACE_CONSOLE === "1") {
     enableStrandsTelemetry({ otlp: Boolean(otel || process.env.STRANDS_OTEL_ENABLED === "1"), console: Boolean(traceConsole || process.env.STRANDS_TRACE_CONSOLE === "1") });
   }
@@ -595,6 +622,7 @@ export function createQuestionGenerator({
       modelId,
       send,
       tools: webSearchTool ? [webSearchTool] : [],
+      maxTurns: boundedMaxTurnsPerNode,
       traceAttributes,
       systemPrompt: `You are Agent 1 (InterviewQuestionMinerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 Your job is to find the most common, practical cloud engineering interview question for the requested AWS service (or audit an existing question if supplied).
@@ -620,6 +648,7 @@ Your job is to find the most common, practical cloud engineering interview quest
       modelId,
       send,
       tools: activeDocTools,
+      maxTurns: boundedMaxTurnsPerNode,
       traceAttributes,
       systemPrompt: `You are Agent 2 (AwsDocsFactCheckerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the mined interview question from [node: interview_miner] (and, if a rubric calibration retry occurred, a targeted previousAttemptCritique from [node: calibration_critic]).
@@ -655,6 +684,7 @@ Your job is to verify BOTH the question premise and the answer against official 
       modelId,
       send,
       tools: [],
+      maxTurns: boundedMaxTurnsPerNode,
       traceAttributes,
       systemPrompt: `You are Agent 3 (TrilingualLocalizationAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the AWS-documentation-verified question and rubric from [node: aws_docs_fact_checker] (and, if a localization retry occurred, a targeted previousAttemptCritique from [node: calibration_critic]).
@@ -694,6 +724,7 @@ Rules:
       modelId,
       send,
       tools: [calibrationTool],
+      maxTurns: boundedMaxTurnsPerNode,
       traceAttributes,
       systemPrompt: `You are Agent 4 (CalibrationCriticAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the localized trilingual question from [node: trilingual_localizer].
@@ -743,7 +774,7 @@ Return ONLY valid JSON:
       }
       invocationState.cycleCount = (invocationState.cycleCount ?? 0) + 1;
       invocationState.lastFailureStage = invocationState.lastFailureStage ?? classifyFailureStage(invocationState.lastCritique);
-      invocationState.shouldRetry = invocationState.cycleCount < maxAttempts;
+      invocationState.shouldRetry = invocationState.cycleCount < boundedMaxAttempts;
       const targetByStage = {
         localization: "trilingual_localizer",
         rubric: "aws_docs_fact_checker",
@@ -809,7 +840,7 @@ Return ONLY valid JSON:
         },
       ],
       maxConcurrency: 1,
-      maxSteps: Math.max(4, maxAttempts * 4),
+      maxSteps: boundedMaxSteps,
     });
 
     graph.addHook(BeforeMultiAgentInvocationEvent, event => {
@@ -953,6 +984,7 @@ Return ONLY valid JSON:
             ...current,
             nodeType: event.nodeType,
             status: event.result?.status ?? "COMPLETED",
+            error: event.result?.error?.message ?? null,
             duration: event.result?.duration ?? 0,
             usage: event.result?.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
           });
@@ -988,7 +1020,10 @@ Return ONLY valid JSON:
       };
 
       if (graphResult.status !== "COMPLETED") {
-        throw new Error(`Strands Graph ended with status ${graphResult.status}`);
+        const failedStep = steps.find(s => s.error);
+        throw new Error(
+          `Strands Graph ended with status ${graphResult.status}${failedStep?.error ? `: ${failedStep.error}` : ""}`
+        );
       }
       if (invocationState.calibratedResult) {
         return {
@@ -997,7 +1032,7 @@ Return ONLY valid JSON:
         };
       }
       throw new Error(
-        `Failed to generate & calibrate question for ${serviceId} after ${maxAttempts} attempts: ${invocationState.lastCritique ?? "Unknown calibration error"}`
+        `Failed to generate & calibrate question for ${serviceId} after ${boundedMaxAttempts} attempts: ${invocationState.lastCritique ?? "Unknown calibration error"}`
       );
     } finally {
       if (mcpSession) await mcpSession.disconnect().catch(() => {});

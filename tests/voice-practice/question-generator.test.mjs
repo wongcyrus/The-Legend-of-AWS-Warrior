@@ -671,3 +671,52 @@ test("semantic deduplication blocks repeated topics with different IDs and passe
   // s3 has 2 baseline questions in questions.json -> slot 1 sees 2 avoidQuestions, slot 2 sees 3 avoidQuestions!
   assert.deepEqual(seenAvoidCounts, [2, 3]);
 });
+
+test("Inner Agent maxTurnsPerNode and Outer Graph maxAttempts prevent infinite loops", async () => {
+  const mockWebTool = tool({
+    name: "nova_web_search",
+    description: "Mock Nova web search",
+    inputSchema: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+    callback: async () => ({ answer: "Still searching...", citations: [] }),
+  });
+
+  let modelTurnCalls = 0;
+  const runawayToolGenerator = createQuestionGenerator({
+    webSearchTool: mockWebTool,
+    docTools: [],
+    maxTurnsPerNode: 3,
+    maxAttempts: 2,
+    send: async () => {
+      modelTurnCalls++;
+      return {
+        stopReason: "tool_use",
+        output: {
+          message: {
+            role: "assistant",
+            content: [{
+              toolUse: {
+                toolUseId: `loop-${modelTurnCalls}`,
+                name: "nova_web_search",
+                input: { query: `infinite loop turn ${modelTurnCalls}` },
+              },
+            }],
+          },
+        },
+      };
+    },
+  });
+
+  await assert.rejects(
+    () => runawayToolGenerator.generateOrRefreshQuestion({
+      serviceId: "s3",
+      label: "Amazon S3",
+      passage: "Amazon S3 stores objects.",
+    }),
+    /exceeded maximum inner loop turns \(3\)/
+  );
+  assert.equal(modelTurnCalls, 3);
+});

@@ -128,7 +128,7 @@ export function createAgent({ send = command => client.send(command), modelId = 
       printer: false,
       retryStrategy: null,
     });
-    const result = await strandsAgent.invoke(JSON.stringify(input));
+    const result = await strandsAgent.invoke(JSON.stringify(input), { limits: { turns: 1 } });
     const raw = result.toString();
     if (raw.length > 30000) throw new Error("Model response too large");
     const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(raw.trim());

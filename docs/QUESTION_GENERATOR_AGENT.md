@@ -26,7 +26,7 @@ In modern AI systems engineering, **Loop Engineering** is the system-level disci
 2. **Deterministic Verifiers & Guardrails (Closed-Loop Feedback)**: An agent never grades its own homework by "vibes." Every iteration is checked by deterministic domain verifiers (schema invariants, Jaccard semantic overlap checks, language script hygiene, and live 3-way synthetic student grading).
 3. **Structured Error Feedback Into Stateful Memory**: When a verifier rejects an output, the system does not blindly re-run the same prompt from scratch. It preserves the node conversation context (`preserveContext: true`) and feeds the structured critique back into the loop so the agents know *why* the previous candidate failed and *how* to fix it.
 4. **Verifiable Goal Termination**: The loop exits as soon as a verifiable goal state (`invocationState.calibratedResult !== null`) is reached—not after a fixed number of turns.
-5. **Bounded Governance & Observability**: Hard budget caps (`maxConcurrency: 1`, `maxSteps`, `maxAttempts`) prevent runaway token burn, while OpenTelemetry spans and event-stream waterfall traces make every inner tool cycle and outer handoff auditable.
+5. **Bounded Governance & Observability**: Hard budget caps across both loop levels (`maxTurnsPerNode = 4` on every inner Strands `Agent` via `BeforeModelCallEvent`, `limits: { turns: 1 }` on the live grader `Agent`, and `maxAttempts = 3` / `maxSteps = 12` on the outer Strands `Graph`) guarantee that no inner tool-calling loop or outer graph feedback cycle can ever run forever, while OpenTelemetry spans and event-stream waterfall traces make every inner tool cycle and outer handoff auditable.
 
 ---
 
@@ -87,7 +87,11 @@ When the question, rubric, or localization fails verification, the Assurance Pla
    - Triggered when [`findDuplicateOrOverlappingQuestion`](../src/VoiceAgent/question-generator.mjs#L241-L280) detects a duplicate ID (`duplicate_id`) or semantic Jaccard overlap (`overlapping_prompt >= 0.55`, `overlapping_concepts >= 0.60`) against `avoidQuestions`.
    - Routes all the way back to `interview_miner` to mine an orthogonal AWS interview scenario.
 4. **Targeted Critique Injection & Cleanup**:
-   - The failed turn packages `{ previousAttemptCritique, failureStage, targetNode, cycle }` into a native Strands [`TextBlock`](../src/VoiceAgent/question-generator.mjs#L756) and clears it via a `BeforeNodeCallEvent` hook once delivered to the target node so downstream nodes never receive stale critique blocks.
+   - The failed turn packages `{ previousAttemptCritique, failureStage, targetNode, cycle }` into a native Strands [`TextBlock`](../src/VoiceAgent/question-generator.mjs#L774) and clears it via a `BeforeNodeCallEvent` hook once delivered to the target node so downstream nodes never receive stale critique blocks.
+5. **Hard Multi-Layer Maximum Turn Limits (Zero Infinite Loops)**:
+   - **Inner Agent Loop Cap (`maxTurnsPerNode = 4`, clamped `1..10`)**: In [`createStrandsNodeAgent`](../src/VoiceAgent/question-generator.mjs#L381-L407), each specialist Strands `Agent` registers `BeforeInvocationEvent` and `BeforeModelCallEvent` hooks that count model turns within a node execution and throw `Agent "<id>" exceeded maximum inner loop turns (<boundedMaxTurns>)` if a tool-calling loop ever exceeds the turn budget.
+   - **Live Spoken Answer Grader Cap (`limits: { turns: 1 }`)**: In [`src/VoiceAgent/agent.mjs`](../src/VoiceAgent/agent.mjs#L131), `strandsAgent.invoke` passes `{ limits: { turns: 1 } }` so the live rubric grader never loops.
+   - **Outer Graph Loop Cap (`maxAttempts = 3` clamped `1..10`, `maxSteps = 12` clamped `4..40`)**: Conditional back-edges only fire while `attempt < boundedMaxAttempts`, and Strands `Graph` enforces `maxSteps: boundedMaxSteps` and `maxConcurrency: 1`.
 
 ---
 

@@ -288,6 +288,85 @@ test('melee excludes its attacker and actors beyond actual weapon reach', () => 
   assert.deepEqual(findMeleeTargets(grid, attacker).map(client => client.entity), [target]);
 });
 
+test('close-range monsters at collision or melee standoff distance are hit reliably and consecutive swings reset timing', () => {
+  const main = readFileSync(new URL('../v2/main.js', import.meta.url), 'utf8');
+  const source = main.match(/class SpatialGridController[\s\S]*?(?=\nclass QuestComponent)/)[0];
+  const { SpatialGridController, AttackController } = runInNewContext(
+    source + '\n({ SpatialGridController, AttackController });',
+    {
+      spatial_grid_controller: { SpatialGridController: class { FindNearbyEntities() { return []; } } },
+      attack_controller: { AttackController: class { constructor(p) { this._params = p; this._timeElapsed = 0; this._action = null; } } },
+      WEAPONS: { Sword: { damage: 1.2, speed: 1.35 } },
+      findMeleeTargets,
+      clearShot: () => true,
+      THREE: {
+        Vector3: class {
+          constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+          applyQuaternion() { return this; }
+          lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
+          normalize() { const l = Math.hypot(this.x, this.y, this.z) || 1; this.x /= l; this.y /= l; this.z /= l; return this; }
+        },
+      },
+    }
+  );
+
+  const grid = new spatial_hash_grid.SpatialHashGrid([[-200, -200], [200, 200]], [80, 80]);
+  const player = {
+    _position: { x: 0, z: 0 },
+    _rotation: {},
+    GetComponent(name) {
+      if (name === 'EquipWeapon') return { Name: 'Sword' };
+      if (name === 'BasicCharacterController') return { _params: { world: { canWalk: () => true } } };
+      return null;
+    },
+  };
+  const closeOffCenterMonster = {
+    _position: { x: 2.6, z: 2.2 }, // distance ~3.4, ~40 deg off-center (previously missed by dot >= 0.9!)
+    GetComponent(name) {
+      if (name === 'HealthComponent') return { IsAlive: () => true };
+      if (name === 'NPCController') return { profile: { range: 6, reach: 5.5 } };
+      return null;
+    },
+    Broadcast(msg) { hits.push({ target: 'close', value: msg.value }); },
+  };
+  const standoffYeti = {
+    _position: { x: 0, z: 7.2 }, // Yeti attacks from 7.0; player must be able to counter-hit it!
+    GetComponent(name) {
+      if (name === 'HealthComponent') return { IsAlive: () => true };
+      if (name === 'NPCController') return { profile: { range: 7, reach: 7 } };
+      return null;
+    },
+    Broadcast(msg) { hits.push({ target: 'yeti', value: msg.value }); },
+  };
+  for (const actor of [player, closeOffCenterMonster, standoffYeti]) {
+    grid.NewClient([actor._position.x, actor._position.z], [1, 1]).entity = actor;
+  }
+
+  const gridCtrl = new SpatialGridController();
+  gridCtrl._parent = player;
+  gridCtrl._grid = grid;
+
+  let hits = [];
+  const attackCtrl = new AttackController({ timing: 0.7 });
+  attackCtrl._parent = player;
+  attackCtrl.GetComponent = name => {
+    if (name === 'SpatialGridController') return gridCtrl;
+    if (name === 'HealthComponent') return { _params: { strength: 50 } };
+    return null;
+  };
+
+  // First swing crosses timing 0.7 -> hits both the close off-center monster and the standoff Yeti
+  attackCtrl._OnAnimAction({ action: 'attack', time: 0.2 });
+  attackCtrl._OnAnimAction({ action: 'attack', time: 0.75 });
+  assert.equal(hits.length, 2);
+
+  // Consecutive swing (holding Space or immediate re-swing where action stays 'attack' and time resets to 0.1)
+  hits = [];
+  attackCtrl._OnAnimAction({ action: 'attack', time: 0.1 });
+  attackCtrl._OnAnimAction({ action: 'attack', time: 0.75 });
+  assert.equal(hits.length, 2);
+});
+
 function context(extensions = {}) {
   return { getExtension: name => extensions[name] || null };
 }

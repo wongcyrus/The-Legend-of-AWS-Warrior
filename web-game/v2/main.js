@@ -56,6 +56,19 @@ class BasicCharacterController extends player_entity.BasicCharacterController {
     const shift = keys.shift, acceleration = this._acceleration.z;
     const equipped = this.GetComponent("EquipWeapon");
     if (game.guard.active || (game.weapon !== "Unarmed" && !equipped._target?.parent)) keys.space = false;
+    const stateName = this._stateMachine?._currentState?.Name;
+    if (keys.space && this._animations?.attack &&
+        (stateName === "idle" || stateName === "walk" || stateName === "run")) {
+      this._velocity?.set?.(0, 0, 0);
+      this._stateMachine.SetState("attack");
+    }
+    if (this._stateMachine?._currentState?.Name === "attack" && this._target && (keys.left || keys.right)) {
+      const turn = 4.0 * Math.PI * dt * (this._acceleration?.y ?? 0.125) * (keys.left ? 1 : -1);
+      this._target.quaternion.multiply(
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turn)
+      );
+      this._parent.SetQuaternion?.(this._target.quaternion);
+    }
     this._acceleration.z *= (game.worldEvents?.speedMultiplier || 1) * (this.frostSlow > 0 ? 0.7 : 1);
     if (game.guard.active) {
       keys.shift = false;
@@ -160,9 +173,68 @@ class SpatialGridController extends spatial_grid_controller.SpatialGridControlle
     if (range !== 2) return super.FindNearbyEntities(range);
     const weapon = this._parent.GetComponent("EquipWeapon");
     const controller = this._parent.GetComponent("BasicCharacterController");
-    return findMeleeTargets(this._grid, this._parent, WEAPONS[weapon?.Name]?.reach || 5)
-      .filter(({ entity: target }) => !controller ||
-        clearShot(this._parent._position, target._position, (x, z) => controller._params.world.canWalk(x, z)));
+    const baseReach = Math.max(WEAPONS[weapon?.Name]?.reach || 6.5, 6.5);
+    return findMeleeTargets(this._grid, this._parent, Math.max(baseReach, 9.5))
+      .filter(({ entity: target }) => {
+        const dist = Math.hypot(
+          target._position.x - this._parent._position.x,
+          target._position.z - this._parent._position.z
+        );
+        const npc = target.GetComponent?.("NPCController");
+        const monsterMeleeReach = npc?.profile && !npc.profile.ranged
+          ? Math.max(npc.profile.range || 0, npc.profile.reach || 0) + 0.5
+          : 0;
+        if (dist > Math.max(baseReach, monsterMeleeReach)) return false;
+        return !controller ||
+          clearShot(this._parent._position, target._position, (x, z) => controller._params.world.canWalk(x, z));
+      });
+  }
+}
+
+class AttackController extends attack_controller.AttackController {
+  _OnAnimAction(m) {
+    if (m.action !== this._action || m.time < this._timeElapsed) {
+      this._action = m.action;
+      this._timeElapsed = 0.0;
+    }
+    const oldTiming = this._timeElapsed;
+    this._timeElapsed = m.time;
+    if (m.action !== "attack" || !(oldTiming < this._params.timing && this._timeElapsed >= this._params.timing)) {
+      return;
+    }
+    const inventory = this.GetComponent("InventoryController");
+    const equip = this.GetComponent("EquipWeapon");
+    let item = null;
+    if (equip && inventory) {
+      item = inventory.GetItemByName(equip.Name);
+      if (item) item = item.GetComponent("InventoryItem");
+    }
+    const grid = this.GetComponent("SpatialGridController");
+    const nearby = grid.FindNearbyEntities(2);
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this._parent._rotation);
+    forward.y = 0;
+    if (forward.lengthSq() > 0) forward.normalize();
+    let baseDamage = this.GetComponent("HealthComponent")._params.strength;
+    if (item) baseDamage = Math.round(baseDamage * item.Params.damage);
+
+    for (const c of nearby) {
+      const target = c.entity;
+      if (target === this._parent) continue;
+      const h = target.GetComponent("HealthComponent");
+      if (!h || !h.IsAlive()) continue;
+      const dx = target._position.x - this._parent._position.x;
+      const dz = target._position.z - this._parent._position.z;
+      const dist = Math.hypot(dx, dz);
+      const dot = dist > 0.001 ? (forward.x * dx + forward.z * dz) / dist : 1;
+      const minDot = dist <= 3.2 ? -0.2 : dist <= 5.0 ? 0.15 : 0.45;
+      if (dot >= minDot) {
+        target.Broadcast({
+          topic: "health.damage",
+          value: baseDamage,
+          attacker: this._parent,
+        });
+      }
+    }
   }
 }
 
@@ -1656,7 +1728,7 @@ class Game {
     player.AddComponent(new InventoryController());
     player.AddComponent(new HealthComponent(this.stats(true)));
     player.AddComponent(new SpatialGridController({ grid: this.grid }));
-    player.AddComponent(new attack_controller.AttackController({ timing: 0.7 }));
+    player.AddComponent(new AttackController({ timing: 0.7 }));
     player.AddComponent(new SoundComponent(this.sound, () => this.weapon));
     player.SetPosition(new THREE.Vector3(PLAYER_SPAWN[0], 0, PLAYER_SPAWN[1]));
     player.SetQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
