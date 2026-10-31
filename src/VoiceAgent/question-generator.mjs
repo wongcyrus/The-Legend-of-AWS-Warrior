@@ -288,11 +288,11 @@ async function createStrandsNodeAgent({
   tools = [],
   send,
   modelId,
-  maxTokens = 2200,
-  maxTurns = 6,
+  maxTokens = 4096,
+  maxTurns = 8,
   traceAttributes,
 }) {
-  const boundedMaxTurns = Math.min(10, Math.max(1, Math.trunc(Number(maxTurns) || 6)));
+  const boundedMaxTurns = Math.min(12, Math.max(1, Math.trunc(Number(maxTurns) || 8)));
   const model = new BedrockModel({
     modelId,
     maxTokens,
@@ -403,7 +403,7 @@ export function createQuestionGenerator({
   gradeAnswer,
   grader = createGraderAgent({ send, modelId }),
   maxAttempts = 3,
-  maxTurnsPerNode = 6,
+  maxTurnsPerNode = 8,
   maxSteps,
   otel = false,
   traceConsole = false,
@@ -413,7 +413,7 @@ export function createQuestionGenerator({
     throw new Error("validateQuestion and gradeAnswer functions are required");
   }
   const boundedMaxAttempts = Math.min(10, Math.max(1, Math.trunc(Number(maxAttempts) || 3)));
-  const boundedMaxTurnsPerNode = Math.min(10, Math.max(1, Math.trunc(Number(maxTurnsPerNode) || 6)));
+  const boundedMaxTurnsPerNode = Math.min(12, Math.max(1, Math.trunc(Number(maxTurnsPerNode) || 8)));
   const boundedMaxSteps = Math.min(40, Math.max(4, Math.trunc(Number(maxSteps) || boundedMaxAttempts * 4)));
   if (otel || traceConsole || process.env.STRANDS_OTEL_ENABLED === "1" || process.env.STRANDS_TRACE_CONSOLE === "1") {
     enableStrandsTelemetry({ otlp: Boolean(otel || process.env.STRANDS_OTEL_ENABLED === "1"), console: Boolean(traceConsole || process.env.STRANDS_TRACE_CONSOLE === "1") });
@@ -579,7 +579,7 @@ export function createQuestionGenerator({
       traceAttributes,
       systemPrompt: `You are Agent 1 (InterviewQuestionMinerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 Your job is to find the most common, practical cloud engineering interview question for the requested AWS service (or audit an existing question if supplied).
-1. Always call the nova_web_search tool first to search for the most frequently asked interview questions and typical candidate answers for the target AWS service.
+1. Call the nova_web_search tool ONCE (or at most twice) to search for the most frequently asked interview questions and typical candidate answers for the target AWS service, then immediately return your final JSON without further searches.
 2. If avoidQuestions or avoidQuestionIds is non-empty, or if [node: calibration_critic] reported a previousAttemptCritique, you MUST pick a COMPLETELY DIFFERENT interview question topic, architectural scenario, and AWS capability/feature that does NOT overlap in prompt or grading concepts with any entry in avoidQuestions, and choose a unique candidateId not in avoidQuestionIds.
 3. Focus on practical, foundational scenario-based interview questions that a student can answer orally in 20-45 seconds (explaining WHY and HOW, not memorizing obscure quotas).
 4. Identify any parts of the popular interview question or traditional candidate answer that might be outdated due to AWS updates.

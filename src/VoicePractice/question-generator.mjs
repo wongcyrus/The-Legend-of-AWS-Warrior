@@ -182,7 +182,13 @@ export async function runQuestionBatchJob({
     }
     summary.completedServices.push(serviceId);
     if (typeof onServiceComplete === "function") {
-      await onServiceComplete({ serviceId, questions: generatedForService });
+      await onServiceComplete({
+        serviceId,
+        questions: generatedForService,
+        completedCount: summary.completedServices.length,
+        skippedCount: summary.skippedServices.length,
+        totalCount: services.length,
+      });
     }
   };
 

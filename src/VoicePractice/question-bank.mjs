@@ -146,8 +146,8 @@ async function main(args) {
       publish: shouldPublish,
       store,
       generator,
-      onServiceComplete: ({ serviceId, questions }) => {
-        console.log(`[${action}] (${summary.completedServices.length}/${serviceList.length}) Completed ${serviceId}: ${questions.length} calibrated approved question(s) saved to ${target}${shouldPublish ? " & published to DynamoDB" : ""}.`);
+      onServiceComplete: ({ serviceId, questions, completedCount, skippedCount, totalCount }) => {
+        console.log(`[${action}] (${(completedCount ?? 0) + (skippedCount ?? 0)}/${totalCount ?? serviceList.length}) Completed ${serviceId}: ${questions.length} calibrated approved question(s) saved to ${target}${shouldPublish ? " & published to DynamoDB" : ""}.`);
       },
       onServiceError: ({ serviceId, error }) => {
         console.warn(`[${action}] ⚠ Failed ${serviceId}: ${error.message}`);
