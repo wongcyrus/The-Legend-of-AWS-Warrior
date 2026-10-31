@@ -12,7 +12,7 @@ if [[ ! "$bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
   exit 2
 fi
 cd "$root"
-npm ci --prefix src/VoiceAgent --omit=dev --no-audit --no-fund
+npm ci --prefix src/VoiceAgent --omit=dev --cpu=arm64 --os=linux --ignore-scripts --no-audit --no-fund
 mkdir -p .aws-sam
 python3 - <<'PY'
 from pathlib import Path
