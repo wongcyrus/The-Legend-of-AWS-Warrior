@@ -121,9 +121,20 @@ export function bindVoiceMarks({ document = globalThis.document, storage = globa
           : activity.completed ? "Ungraded participation" : "Not graded";
         const reward = activity.mpAwarded != null && graded ? `${activity.mpAwarded} MP` :
           activity.completed && !graded ? "No graded reward recorded" : "-";
+        const isQa = activity.type === "question_answer";
+        const qaTitle = activity.title || activity.questionId;
+        const activityName = isQa
+          ? `${activity.label} - ${qaTitle ? `Q&A: ${qaTitle}` : "Q&A"}${activity.available === false ? " (unavailable)" : ""}`
+          : `${activity.label} - Read aloud`;
+        const statusText = activity.completed
+          ? isQa && activity.exhausted ? "Completed (service Q&A exhausted)"
+            : isQa && activity.exhausted === false ? "Completed (more Q&A available)"
+            : "Completed"
+          : graded ? "In progress"
+          : isQa ? "Not yet answered (Q&A available)" : "Not yet completed";
         const row = makeRow([
-          `${activity.label} - ${activity.type === "question_answer" ? `Q&A: ${activity.title || activity.questionId || activity.activityId}${activity.available === false ? " (unavailable)" : ""}` : "Read aloud"}`, String(activity.round),
-          activity.completed ? "Completed" : graded ? "In progress" : "Not yet completed",
+          activityName, String(activity.round),
+          statusText,
           grades, activity.feedback || "-", reward, activity.completed ? date(activity.completedAt) : "-",
         ], ["Activity", "Round", "Status", "Grade", "Feedback", "MP awarded", "Completed (Hong Kong)"]);
         return { activity, row };

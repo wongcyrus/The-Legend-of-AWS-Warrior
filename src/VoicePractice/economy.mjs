@@ -35,15 +35,53 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
   const readingAvailableAt = async (owner, serviceId) =>
     readingCooldowns(await savedActivities(owner)).get(serviceId) ?? 0;
   const summaries = async (owner, extraActivities = []) => {
-    const catalog = [...activities, ...extraActivities];
+    const probes = [...activities, ...extraActivities];
     const savedRows = store.listActivities ? await store.listActivities(owner) :
-      await Promise.all(catalog.map(activity => store.get(activityKey(owner, activity.activityId))));
+      await Promise.all(probes.map(activity => store.get(activityKey(owner, activity.activityId))));
     const rows = new Map(savedRows.filter(Boolean).map(row => [row.activityId, row]));
     const readingLocks = readingCooldowns(savedRows);
+    const qaByService = new Map();
+    for (const activity of extraActivities) {
+      if (activity.type !== "question_answer") continue;
+      const group = qaByService.get(activity.serviceId) ?? {
+        label: activity.label, approved: [], attempted: [], unattempted: [],
+      };
+      group.approved.push(activity);
+      if (rows.has(activity.activityId)) group.attempted.push(activity);
+      else group.unattempted.push(activity);
+      qaByService.set(activity.serviceId, group);
+    }
+    const catalog = [...activities];
+    for (const [serviceId, group] of qaByService) {
+      const hasInProgress = group.attempted.some(a => !rows.get(a.activityId)?.completed);
+      const hasUnlocked = group.unattempted.length > 0 ||
+        group.attempted.some(a => taskAvailableAt(rows.get(a.activityId)) <= now());
+      const exhausted = !hasUnlocked;
+      for (const activity of group.attempted) {
+        catalog.push({ ...activity, exhausted });
+      }
+      if (group.unattempted.length > 0 && !hasInProgress) {
+        catalog.push({
+          activityId: `qa:${serviceId}`,
+          serviceId,
+          label: group.label,
+          type: "question_answer",
+          languages: [...new Set(group.unattempted.flatMap(a => a.languages ?? []))],
+          available: true,
+          exhausted: false,
+          round: 1,
+        });
+      }
+    }
     const ids = new Set(catalog.map(activity => activity.activityId));
     for (const row of rows.values()) {
-      if (row.type === "question_answer" && !ids.has(row.activityId))
-        catalog.push({ ...row, available: false });
+      if (row.type === "question_answer" && !ids.has(row.activityId)) {
+        const group = qaByService.get(row.serviceId);
+        const exhausted = group
+          ? group.unattempted.length === 0 && group.approved.every(a => taskAvailableAt(rows.get(a.activityId)) > now())
+          : taskAvailableAt(row) > now();
+        catalog.push({ ...row, available: false, exhausted });
+      }
     }
     return catalog.map(activity => {
       const saved = rows.get(activity.activityId);
@@ -51,8 +89,12 @@ export function createEconomy({ store, now, fail, completionKey, sessionKey, att
         : readingLocks.get(activity.serviceId) ?? 0;
       return { activityId: activity.activityId, serviceId: activity.serviceId, label: activity.label,
         type: activity.type ?? "read_aloud",
-        ...(activity.type === "question_answer" ? { title: activity.title, questionId: activity.questionId,
-          languages: activity.languages ?? [], available: activity.available !== false } : {}),
+        ...(activity.type === "question_answer" ? {
+          ...(activity.title !== undefined ? { title: activity.title } : {}),
+          ...(activity.questionId !== undefined ? { questionId: activity.questionId } : {}),
+          languages: activity.languages ?? [], available: activity.available !== false,
+          exhausted: Boolean(activity.exhausted),
+        } : {}),
         round: activity.round, completed: saved?.completed === true,
         bestScore: saved?.bestScore ?? null, latestScore: saved?.latestScore ?? null,
         feedback: saved?.feedback ?? null, mpAwarded: saved?.mpAwarded ?? 0,

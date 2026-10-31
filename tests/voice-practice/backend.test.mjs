@@ -285,6 +285,48 @@ test("Q&A snapshots survive edits and retirement; marks remain visible without l
   assert.equal(other.activities.some(activity => activity.type === "question_answer"), false);
 });
 
+test("completions summary never leaks unattempted question bank titles or IDs and reports service-level Q&A exhaustion", async () => {
+  const bank = approvedQuestions();
+  const f = fixture({ graded: true, questions: bank });
+
+  // 1. Before any Q&A is attempted, /voice/completions collapses the 2 S3 bank questions into 1 service-level slot without leaking title/questionId:
+  const before = (await f.req("/voice/completions")).data;
+  const qaBefore = before.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
+  assert.equal(qaBefore.length, 1);
+  assert.equal(qaBefore[0].activityId, "qa:s3");
+  assert.equal(qaBefore[0].title, undefined);
+  assert.equal(qaBefore[0].questionId, undefined);
+  assert.equal(qaBefore[0].exhausted, false);
+  const rawBefore = JSON.stringify(before);
+  for (const q of bank) {
+    assert.equal(rawBefore.includes(q.title), false, "Unattempted question title must not leak");
+    assert.equal(rawBefore.includes(q.id), false, "Unattempted question ID must not leak");
+  }
+
+  // 2. After passing the first question, the student sees their completed question AND 1 service-level slot (exhausted: false), without leaking the second question:
+  const first = await createAnswer(f);
+  const unchosen = bank.find(q => q.id !== first.questionId);
+  await f.req(`/voice/sessions/${first.id}/answer`, spoken("S3"));
+  await f.run();
+  const mid = (await f.req("/voice/completions")).data;
+  const qaMid = mid.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
+  assert.equal(qaMid.length, 2);
+  assert.ok(qaMid.every(a => a.exhausted === false));
+  const rawMid = JSON.stringify(mid);
+  assert.equal(rawMid.includes(unchosen.title), false, "Remaining unattempted question title must not leak");
+  assert.equal(rawMid.includes(unchosen.id), false, "Remaining unattempted question ID must not leak");
+
+  // 3. After passing the second question, the service Q&A bank is exhausted (exhausted: true, no unstarted slot left):
+  const second = await createAnswer(f);
+  assert.equal(second.questionId, unchosen.id);
+  await f.req(`/voice/sessions/${second.id}/answer`, spoken("S3"));
+  await f.run();
+  const after = (await f.req("/voice/completions")).data;
+  const qaAfter = after.activities.filter(a => a.type === "question_answer" && a.serviceId === "s3");
+  assert.equal(qaAfter.length, 2);
+  assert.ok(qaAfter.every(a => a.completed && a.onCooldown && a.exhausted === true));
+});
+
 test("Q&A mobile transfer shares question, keeps rubric private and accepts short spoken answers", async () => {
   const f = fixture({ graded: true, questions: approvedQuestions() }), s = await createAnswer(f);
   assert.equal((await f.req("/voice/mobile/claim", { id: s.id, pairingToken: s.pairingToken })).statusCode, 409);

@@ -203,3 +203,41 @@ test("after cooldown expires on completed questions, choose prioritizes uncomple
   progress.set(`PLAYER#p1#ACTIVITY#${questionActivityId("s3", "b-second")}`, { completed: true, lastPassedAt: 20 * 86400 });
   assert.equal((await qDomain.choose("p1", "s3", "en-US")).id, "c-third");
 });
+
+test("per-student sticky shuffle assigns different initial questions across students and prevents re-rolling before passing", async () => {
+  const s3Questions = published.filter(q => q.serviceId === "s3");
+  const pool = ["q-1", "q-2", "q-3", "q-4", "q-5"].map((id, i) => ({
+    ...s3Questions[i % s3Questions.length],
+    id,
+    title: `Secret Title ${id}`,
+  }));
+  const progress = new Map();
+  const store = {
+    async listQuestions() { return pool; },
+    async get(key) { return progress.get(`${key.PK}#${key.SK}`); },
+  };
+  const qDomain = createQuestions({
+    store,
+    config: languageConfig,
+    services: new Map([["s3", "Amazon S3"]]),
+    fail: (code, msg) => { throw new Error(`${code}: ${msg}`); },
+    now: () => 1000,
+  });
+
+  // Across a classroom of 20 students, different students receive different initial questions from the pool:
+  const firstAssigned = new Set();
+  for (let i = 1; i <= 20; i++) {
+    const assigned = await qDomain.choose(`student-${i}`, "s3", "en-US");
+    firstAssigned.add(assigned.id);
+  }
+  assert.ok(firstAssigned.size >= 3, "Classroom students should receive diverse initial questions from the service bank");
+
+  // A student who cancels, refreshes, or fails an attempt (completed: false) is always given the exact same sticky question:
+  const initial = await qDomain.choose("student-1", "s3", "en-US");
+  assert.equal((await qDomain.choose("student-1", "s3", "en-US")).id, initial.id);
+  progress.set(`PLAYER#student-1#ACTIVITY#${questionActivityId("s3", initial.id)}`, {
+    completed: false, latestScore: 40, bestScore: 40,
+  });
+  assert.equal((await qDomain.choose("student-1", "s3", "en-US")).id, initial.id,
+    "Failing an attempt must not allow re-rolling a different question");
+});

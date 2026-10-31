@@ -402,6 +402,16 @@ AWS_REGION=us-east-1 VOICE_TABLE=CloudProjectMarker-VoicePracticeTable-xxxx \
   node src/VoicePractice/question-bank.mjs refresh refreshed-questions.json s3,ec2,iam,vpc,lambda,dynamodb
 ```
 
+#### 5.7 Classroom Assessment Fairness: Per-Student Sticky Shuffle, Zero Question-Bank Leakage & Post-Cooldown LRU Rotation
+When a service has a multi-question bank in `QUESTION_BANK`, three classroom fairness challenges arise:
+1. **Neighbor Copying**: If every student gets questions in alphabetical order (`q1`, then `q2`), students sitting next to each other in a lab receive the exact same question at the same time.
+2. **"Question Shopping" (Re-Rolling)**: If question selection were purely random on every `POST /voice/sessions` call, a student could repeatedly cancel or refresh until they draw an easier question.
+3. **Question-Bank Leakage on the Marks Page**: If `GET /voice/completions` returned every unattempted question's `title` and `questionId`, students could inspect the entire unseen question pool before taking a single oral test.
+
+To solve all three:
+- **Per-Student Sticky Shuffle ([`src/VoicePractice/questions.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/questions.mjs#L11-L103))**: Uncompleted questions for a service are ordered deterministically per student using `questionOrderKey(owner, serviceId, question.id) = SHA-256("${owner}:${serviceId}:${question.id}")`. Neighboring students receive different initial questions from the service bank, while cancelling, refreshing, or failing an attempt (`completed: false`) **always** returns the exact same assigned question until the student passes it. Once all questions in a service have been completed and their 7-day cooldown expires, [`choose()`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/questions.mjs#L86-L103) rotates by **Least-Recently-Passed (`taskAvailableAt`)** so spaced-repetition reviews cycle fairly through the entire pool.
+- **Zero Question-Bank Leakage & Service-Level Exhaustion ([`src/VoicePractice/economy.mjs`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/src/VoicePractice/economy.mjs#L37-L103), [`web-game/v2/voice-marks.js`](file:///home/developer/Documents/The-Legend-of-AWS-Warrior/web-game/v2/voice-marks.js#L117-L141))**: `GET /voice/completions` never exposes `title` or `questionId` for unattempted questions. Instead, unattempted questions in a service's pool collapse into a single service-level availability slot (`activityId: "qa:${serviceId}"`) and report `exhausted: true | false`, letting students see which services they have answered and whether a service's Q&A pool is exhausted for the week without ever leaking unseen questions.
+
 ---
 
 ## 6. CloudFormation, SAM & Dual-Stack DevOps (`Game Mode` vs. `Exam Mode`)

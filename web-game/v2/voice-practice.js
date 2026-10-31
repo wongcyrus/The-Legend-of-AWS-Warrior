@@ -402,7 +402,8 @@ export function bindVoicePractice(game) {
   const recordCompletion = data => {
     if (data.status !== "completed" || !voiceResultPassed(data) || !SERVICE_SET.has(data.serviceId)) return;
     if (isQuestionAnswer(data)) {
-      const activity = questionActivities.find(activity => activity.activityId === data.activityId);
+      const activity = questionActivities.find(activity => activity.activityId === data.activityId) ??
+        questionActivities.find(activity => !activity.completed && !activity.onCooldown);
       if (activity) {
         activity.completed = true;
         activity.onCooldown = true;

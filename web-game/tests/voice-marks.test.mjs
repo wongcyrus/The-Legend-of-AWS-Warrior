@@ -83,6 +83,33 @@ test("marks distinguish multiple Q&A questions and combine task-type, status and
   assert.equal(f.get("type").value, "all");
 });
 
+test("marks render service-level unattempted Q&A and service Q&A exhaustion status without leaking unseen question IDs", async () => {
+  const data = marks();
+  data.activities.push(
+    { activityId: "qa:s3:private", serviceId: "s3", label: "Amazon S3", type: "question_answer",
+      title: "Private screenshots", round: 1, completed: true, bestScore: 90, latestScore: 90,
+      feedback: "Good answer.", mpAwarded: 30, completedAt: 1793191336, available: true, exhausted: false },
+    { activityId: "qa:s3", serviceId: "s3", label: "Amazon S3", type: "question_answer",
+      round: 1, completed: false, bestScore: null, latestScore: null,
+      feedback: null, mpAwarded: 0, completedAt: null, available: true, exhausted: false },
+    { activityId: "qa:ec2: sizing", serviceId: "ec2", label: "Amazon EC2", type: "question_answer",
+      title: "Instance sizing", round: 1, completed: true, bestScore: 80, latestScore: 80,
+      feedback: "Solid.", mpAwarded: 20, completedAt: 1793191336, available: true, exhausted: true },
+  );
+  const f = fixture(async () => ({ ok: true, json: async () => data }));
+  f.get("key").value = "key";
+  await f.submit();
+  f.type("question_answer");
+  const rows = f.get("activities").children;
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].children[0].textContent, "Amazon S3 - Q&A: Private screenshots");
+  assert.equal(rows[0].children[2].textContent, "Completed (more Q&A available)");
+  assert.equal(rows[1].children[0].textContent, "Amazon S3 - Q&A");
+  assert.equal(rows[1].children[2].textContent, "Not yet answered (Q&A available)");
+  assert.equal(rows[2].children[0].textContent, "Amazon EC2 - Q&A: Instance sizing");
+  assert.equal(rows[2].children[2].textContent, "Completed (service Q&A exhausted)");
+});
+
 test("marks require a key and show grades, feedback, MP and ungraded history without transcripts", async () => {
   let url, options;
   const f = fixture(async (target, request) => {

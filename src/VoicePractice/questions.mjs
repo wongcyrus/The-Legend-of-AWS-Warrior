@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { languageConfig } from "./content.mjs";
 import { taskAvailableAt } from "./economy.mjs";
 
@@ -7,6 +8,8 @@ const strings = value => Array.isArray(value) && value.length <= 12 && value.eve
 const normalize = value => value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 export const questionKey = (serviceId, id) => ({ PK: "QUESTION_BANK", SK: `SERVICE#${serviceId}#QUESTION#${id}` });
 export const questionActivityId = (serviceId, id) => `qa:${serviceId}:${id}`;
+export const questionOrderKey = (owner, serviceId, id) =>
+  createHash("sha256").update(`${owner}:${serviceId}:${id}`).digest("hex");
 export const isAnswerTranscript = value => typeof value === "string" && /[\p{L}\p{N}]/u.test(value);
 
 export function validateQuestion(value, config = languageConfig) {
@@ -90,10 +93,14 @@ export function createQuestions({ store, config, services, fail, now }) {
     })));
     const eligible = options.filter((_, index) => taskAvailableAt(progress[index]) <= now());
     if (!eligible.length) fail(409, `All Q&A questions for this service are on a one-week cooldown. Available again ${new Date(Math.min(...progress.map(taskAvailableAt)) * 1000).toISOString()}. Return to the game to discover another service.`);
-    return eligible.find(question => !progress[options.indexOf(question)]?.completed) ??
+    const compareForOwner = (a, b) =>
+      questionOrderKey(owner, serviceId, a.id).localeCompare(questionOrderKey(owner, serviceId, b.id)) ||
+      a.id.localeCompare(b.id);
+    const uncompleted = eligible.filter(question => !progress[options.indexOf(question)]?.completed);
+    return [...uncompleted].sort(compareForOwner)[0] ??
       [...eligible].sort((a, b) =>
         taskAvailableAt(progress[options.indexOf(a)]) - taskAvailableAt(progress[options.indexOf(b)]) ||
-        a.id.localeCompare(b.id))[0];
+        compareForOwner(a, b))[0];
   };
   return { activities, choose };
 }
