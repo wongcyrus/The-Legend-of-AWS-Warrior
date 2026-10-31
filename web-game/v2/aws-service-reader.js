@@ -150,8 +150,25 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     const container = document.getElementById("container");
     return target === container || Boolean(container?.contains?.(target));
   };
+  const MAX_SERVICE_DISTANCE = 24;
   const ray = new THREE.Raycaster(), point = new THREE.Vector2();
-  const pick = event => {
+  const worldPos = typeof THREE.Vector3 === "function" ? new THREE.Vector3() : null;
+  const hitDistanceToPlayer = hit => {
+    const playerPos = game.player?._position;
+    if (!playerPos || typeof playerPos.x !== "number" || typeof playerPos.z !== "number") return 0;
+    if (hit?.point && typeof hit.point.x === "number" && typeof hit.point.z === "number") {
+      return Math.hypot(playerPos.x - hit.point.x, playerPos.z - hit.point.z);
+    }
+    if (hit?.object?.getWorldPosition && worldPos) {
+      hit.object.getWorldPosition(worldPos);
+      return Math.hypot(playerPos.x - worldPos.x, playerPos.z - worldPos.z);
+    }
+    if (hit?.object?.position && typeof hit.object.position.x === "number" && typeof hit.object.position.z === "number") {
+      return Math.hypot(playerPos.x - hit.object.position.x, playerPos.z - hit.object.position.z);
+    }
+    return 0;
+  };
+  const pickHit = event => {
     if (!event || !game.renderer?.domElement || !game.world?.servicePlaques) return null;
     const bounds = game.renderer.domElement.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return null;
@@ -165,14 +182,18 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     for (const p of plaques) p.updateMatrixWorld?.();
     const hits = ray.intersectObjects(plaques, false);
     for (const hit of hits) {
-      if (hit.object?.userData?.awsService) return hit.object;
+      if (hit.object?.userData?.awsService) {
+        const dist = hitDistanceToPlayer(hit);
+        return { object: hit.object, inRange: dist <= MAX_SERVICE_DISTANCE, distance: dist };
+      }
     }
     return null;
   };
   document.addEventListener("pointermove", event => {
     const canvas = game.renderer?.domElement;
     if (!canvas || !isGameTarget(event.target) || !game.ready || game.traveling) return;
-    const object = document.querySelector("dialog[open]") ? null : pick(event);
+    const picked = document.querySelector("dialog[open]") ? null : pickHit(event);
+    const object = picked?.inRange ? picked.object : null;
     const cursor = object ? "pointer" : "";
     canvas.style.cursor = cursor;
     const container = document.getElementById("container");
@@ -181,8 +202,11 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
     const summaryText = summary
       ? ` (Speech ${summary.readAvailableCount ?? (summary.readAvailable ? 2 : 0)}/${summary.readTotal ?? 2}${summary.qaTotal > 0 ? ` · Q&A ${summary.qaAvailable}/${summary.qaTotal}` : ""})`
       : "";
-    const title = object?.userData?.awsService && AWS_SERVICES[object.userData.awsService]
-      ? `${AWS_SERVICES[object.userData.awsService].label}${summaryText}: Click to learn` : "";
+    const serviceLabel = picked?.object?.userData?.awsService && AWS_SERVICES[picked.object.userData.awsService]
+      ? AWS_SERVICES[picked.object.userData.awsService].label : "";
+    const title = object && serviceLabel
+      ? `${serviceLabel}${summaryText}: Click to learn`
+      : picked && serviceLabel ? `${serviceLabel}: Walk closer to inspect tasks` : "";
     canvas.title = title;
     if (container) container.title = title;
   });
@@ -198,7 +222,13 @@ export function bindServiceReader(game, THREE, { bindVoice = bindVoicePractice }
         Math.hypot(event.clientX - start.x, event.clientY - start.y) > 16 ||
         !isGameTarget(event.target) || !game.ready || game.traveling ||
         document.querySelector("dialog[open]")) return;
-    const object = pick(event) || pick(start);
-    if (object?.userData?.awsService) showService(object.userData.awsService);
+    const picked = pickHit(event) || pickHit(start);
+    if (!picked?.object?.userData?.awsService) return;
+    if (!picked.inRange) {
+      const label = AWS_SERVICES[picked.object.userData.awsService]?.label || "AWS service";
+      game.status?.(`Move closer to the ${label} sign to view its available tasks.`);
+      return;
+    }
+    showService(picked.object.userData.awsService);
   });
 }

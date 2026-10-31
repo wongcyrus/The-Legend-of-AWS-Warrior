@@ -194,5 +194,26 @@ test('icon clicks check current voice availability without marking completion fr
     assert.equal(get('service-dialog').open, true);
     assert.equal(get('service-title').textContent, 'Amazon DynamoDB');
     get('service-close').onclick();
+
+    // Far-away 3D service plaques (> 24 units) cannot be clicked to open the dialog
+    const statusMessages = [];
+    game.status = msg => statusMessages.push(msg);
+    game.player._position = { x: 0, y: 0, z: 0 };
+    plaque.position = { x: 60, y: 4, z: 60 };
+    listeners.get('pointermove')(event);
+    assert.equal(canvas.style.cursor, '');
+    assert.equal(canvas.title, 'Amazon ECS: Walk closer to inspect tasks');
+    click();
+    assert.equal(get('service-dialog').open, false);
+    assert.deepEqual(statusMessages, ['Move closer to the Amazon ECS sign to view its available tasks.']);
+
+    // Walking within 24 units re-enables clicking the plaque
+    plaque.position = { x: 10, y: 4, z: 12 };
+    listeners.get('pointermove')(event);
+    assert.equal(canvas.style.cursor, 'pointer');
+    assert.match(canvas.title, /Click to learn/);
+    click();
+    assert.equal(get('service-dialog').open, true);
+    get('service-close').onclick();
   } finally { Object.assign(globalThis, previous); }
 });

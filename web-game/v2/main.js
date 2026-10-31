@@ -36,7 +36,7 @@ import { SHIELDS, ShieldGuard } from "./shields.js?v=20261029-v2-features-1";
 import { equipmentIcon, nextWeapon } from "./equipment-ui.js?v=20261027-equipment-bar-1";
 import { AWS_SERVICES, AWS_LANDMARKS, BUILDING_SERVICES, CLOUD_REGIONS, missionServices } from "./aws-theme.js?v=20261028-voice-1";
 import { loadServiceImages } from "./aws-world.js?v=20261031-voice-counts-2";
-import { bindServiceReader } from "./aws-service-reader.js?v=20261031-voice-counts-2";
+import { bindServiceReader } from "./aws-service-reader.js?v=20261031-voice-counts-3";
 import { SPELLS, FULL_RELEASE_RANGE, comboArtFor, spellDamage, MagicWallet, MagicCombat } from "./magic.js?v=20261030-recovery-hp-1";
 import { MagicEffects } from "./magic-effects.js?v=20261030-anime-combos-6";
 
@@ -2032,29 +2032,33 @@ class Game {
     return guide && guide._position.distanceTo(this.player._position) < 24 ? guide : null;
   }
 
-  nearbyAwsLandmark(range = 14) {
+  nearbyAwsLandmark(range = 24) {
     if (!this.player || !this.map) return null;
     const pos = this.player._position;
     const landmarks = AWS_LANDMARKS[this.map.id] || [];
+    let closest = null, bestDist = range;
     for (const lm of landmarks) {
-      if (Math.hypot(pos.x - lm.x, pos.z - lm.z) <= range) return lm;
+      const d = Math.hypot(pos.x - lm.x, pos.z - lm.z);
+      if (d <= bestDist) { bestDist = d; closest = lm; }
     }
     if (this.map.id === "village") {
       for (let i = 0; i < BUILDINGS.length; i++) {
         const b = BUILDINGS[i];
-        if (Math.hypot(pos.x - b.x, pos.z - b.z) <= range + 4) {
+        const d = Math.hypot(pos.x - b.x, pos.z - b.z);
+        if (d <= bestDist) {
+          bestDist = d;
           const service = BUILDING_SERVICES[i];
-          return { service, x: b.x, z: b.z, label: AWS_SERVICES[service]?.label };
+          closest = { service, x: b.x, z: b.z, label: AWS_SERVICES[service]?.label };
         }
       }
     }
-    return null;
+    return closest;
   }
 
   talkToGuide() {
     const quest = this.api.quest;
     const guide = this.nearbyGuide();
-    const landmark = !guide && !quest ? this.nearbyAwsLandmark?.(14) : null;
+    const landmark = !guide && !quest ? this.nearbyAwsLandmark?.(24) : null;
     if (landmark) {
       this.showService?.(landmark.service);
       return;
@@ -2388,7 +2392,7 @@ class Game {
     const eventHint = this.worldEvents?.surge > 0 ? `AZ Restored: +20% Speed & Haste (${Math.ceil(this.worldEvents.surge)}s)` :
       this.worldEvents?.activeZone?.label ? this.worldEvents.activeZone.label :
       outage ? `Outage Alert: ${outage.label} (${Math.ceil(outage.remaining)}s)` : "";
-    const landmark = this.nearbyAwsLandmark?.(14);
+    const landmark = this.nearbyAwsLandmark?.(24);
     const lmSummary = landmark ? this.serviceVoiceSummary?.get?.(landmark.service) : null;
     const lmCounts = lmSummary
       ? ` (Speech ${lmSummary.readAvailableCount ?? 0}/${lmSummary.readTotal ?? 2}${lmSummary.qaTotal > 0 ? ` · Q&A ${lmSummary.qaAvailable}/${lmSummary.qaTotal}` : ""} available)`
