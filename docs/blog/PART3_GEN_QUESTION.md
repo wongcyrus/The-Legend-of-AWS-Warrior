@@ -13,13 +13,13 @@
 
 In **[Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)** and **[Part 2 - The AWS Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md)**, we established why **Architectural Q&A** in **The Legend of AWS Warrior V2** never improvises questions at runtime:
 
-- Every Q&A session is backed by an approved question in DynamoDB (`PK = QUESTION_BANK`) containing trilingual prompts (`en-US`, `zh-HK`, `zh-CN`), 2-3 atomic concepts whose integer weights sum to `100`, known misconceptions, acceptable answers, and a reference answer.
-- However, scaling and refreshing questions across **302 AWS service landmarks** faces three major hurdles:
+- Every Q&A session is backed by an approved question in DynamoDB (`PK = QUESTION_BANK`) with trilingual prompts (`en-US`, `zh-HK`, `zh-CN`), 2-3 atomic concepts whose integer weights sum to `100`, misconceptions, acceptable answers, and a reference answer.
+- Scaling and refreshing questions across **302 AWS service landmarks** faces three major hurdles:
   1. **Community Interview Questions Go Stale**: Popular online AWS interview questions often repeat outdated claims (such as claiming S3 is eventually consistent for new objects or unencrypted by default, when AWS enabled strong read-after-write consistency and default SSE-S3 / Block Public Access years ago).
-  2. **Ungrounded Rubrics Fail Live Student Grading**: A rubric that looks reasonable on paper might be phrased too narrowly for our Two-Phase `NFKC` substring verifier (`gradeAnswer`), causing a genuinely good spoken English or Hong Kong Cantonese code-switched student answer to score below `80%`, or allowing a misconception answer to pass (`>= 60%`).
-  3. **Multi-Slot Topic Duplication**: Asking an LLM to generate multiple questions for Amazon S3 or RDS naturally gravitates toward the exact same headline topic unless a deterministic semantic deduplicator forces it onto an orthogonal architectural scenario.
+  2. **Ungrounded Rubrics Fail Live Student Grading**: A rubric that looks reasonable on paper might be phrased too narrowly for our Two-Phase `NFKC` substring verifier (`gradeAnswer`), causing a good spoken English or Hong Kong Cantonese code-switched answer to score below `80%`, or allowing a misconception answer to pass (`>= 60%`).
+  3. **Multi-Slot Topic Duplication**: Asking an LLM for multiple questions on Amazon S3 or RDS naturally gravitates toward the same headline topic unless a deterministic semantic deduplicator forces it onto an orthogonal scenario.
 
-To solve all three autonomously, we built a self-calibrating **4-Agent Question Generator and Refresher** ([src/VoiceAgent/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/question-generator.mjs) and [src/VoicePractice/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoicePractice/question-generator.mjs)) powered by **Loop Engineering**, **`@strands-agents/harness` (`^0.3.3`)**, **`@strands-agents/sdk` (`^1.23.0`)**, **Amazon Nova Web Grounding (`nova_grounding`)**, the live **AWS Knowledge MCP Server (`https://knowledge-mcp.global.api.aws`)**, and **Native Strands OpenTelemetry (`@strands-agents/sdk/telemetry`)**.
+To solve all three autonomously, we built a self-calibrating **4-Agent Question Generator and Refresher** ([src/VoiceAgent/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/question-generator.mjs) and [src/VoicePractice/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoicePractice/question-generator.mjs)) powered by **Loop Engineering**, **`@strands-agents/harness` (`^0.3.3`)**, **`@strands-agents/sdk` (`^1.23.0`)**, **Amazon Nova Web Grounding (`nova_grounding`)**, the **AWS Knowledge MCP Server (`https://knowledge-mcp.global.api.aws`)**, and **Native Strands OpenTelemetry (`@strands-agents/sdk/telemetry`)**.
 
 ---
 
@@ -46,18 +46,18 @@ In modern AI systems engineering, **Loop Engineering** sits above **Prompt Engin
 
 | Engineering Layer | Core Question | Primary Focus | Strands Implementation in Our Pipeline |
 | - | - | - | - |
-| **1. Prompt Engineering** | *"What should we say to the model?"* | Role definitions, rules, and JSON output schemas for a single turn. | Specialist `systemPrompt` per node (`interview_miner`, `aws_docs_fact_checker`, `trilingual_localizer`, `calibration_critic`). |
-| **2. Context Engineering** | *"What does the model need to know and access?"* | Curating workspace state, tools, prior questions, and context window limits. | `invocationState` (`targetMeta`, `avoidQuestions`), `McpClient`, `ContextOffloader` (`maxResultTokens: 2500`), and `preserveContext: true`. |
-| **3. Loop Engineering** | *"How does the system autonomously perceive, act, verify, route feedback, and terminate?"* | Designing the closed-loop control system (**Perceive -> Reason -> Act -> Observe -> Verify -> Targeted Self-Correction or Terminate**) with deterministic verifiers and multi-layer turn bounds. | Inner agent ReAct + `GoalLoop` (`@strands-agents/sdk/vended-plugins/goal`) nested inside an outer cyclic Strands `Graph` with stage-classified conditional back-edges. |
+| **1. Prompt Engineering** | *"What should we say to the model?"* | Role definitions, rules, and JSON schemas for a single turn. | Specialist `systemPrompt` per node (`interview_miner`, `aws_docs_fact_checker`, `trilingual_localizer`, `calibration_critic`). |
+| **2. Context Engineering** | *"What does the model need to know and access?"* | Curating workspace state, tools, prior questions, and context limits. | `invocationState` (`targetMeta`, `avoidQuestions`), `McpClient`, `ContextOffloader` (`maxResultTokens: 2500`), and `preserveContext: true`. |
+| **3. Loop Engineering** | *"How does the system perceive, act, verify, route feedback, and terminate?"* | Closed-loop control (**Perceive -> Reason -> Act -> Observe -> Verify -> Targeted Self-Correction**) with deterministic verifiers and turn caps. | Inner agent ReAct + `GoalLoop` (`@strands-agents/sdk/vended-plugins/goal`) nested inside an outer cyclic Strands `Graph` with conditional back-edges. |
 
 ### How Loop Engineering Maps to `@strands-agents/harness` and `@strands-agents/sdk`
 
 Our implementation realizes **five core Loop Engineering principles** using native Strands primitives:
 
-1. **Autonomous Tool-Calling Loops (`tool()` + `McpClient`)**: Specialist agents autonomously decide what to query via `nova_web_search` and `aws___search_documentation` / `aws___read_documentation`, inspect live citations, and perform multi-turn research before emitting a candidate.
-2. **Intra-Node Self-Correction (`GoalLoop` + `ContextOffloader`)**: Every specialist agent runs inside a Strands Harness (`createHarness`) with a vended `GoalLoop` plugin that intercepts `AfterInvocationEvent`. If an agent outputs invalid JSON, `GoalLoop` feeds the parse error back into the agent's preserved conversation context and resumes the node immediately—without triggering an outer graph cycle.
-3. **Deterministic Closed-Loop Verifiers (`verifyAndCalibrate`)**: Candidate questions must pass 5 deterministic code verifiers, including stopword-filtered Jaccard semantic anti-duplication (`findDuplicateOrOverlappingQuestion`) and 3x parallel live grading (`Promise.all` over `goodEn`, `goodZhHk`, and `wrongOutdated`) using our real production Strands grader (`createGraderAgent` + `gradeAnswer`).
-4. **Fault-Isolated Graph Routing (`Graph` Conditional Back-Edges + `preserveContext: true`)**: When verification fails, `classifyFailureStage` classifies the defect as `"localization"`, `"rubric"`, or `"topic"`. The Strands `Graph` routes a structured `TextBlock` critique back to the **exact responsible node** (`trilingual_localizer`, `aws_docs_fact_checker`, or `interview_miner`), which repairs its output in-place using its preserved conversation history (`preserveContext: true`).
+1. **Autonomous Tool-Calling Loops (`tool()` + `McpClient`)**: Specialist agents autonomously query `nova_web_search` and `aws___search_documentation` / `aws___read_documentation`, inspect live citations, and synthesize grounded outputs.
+2. **Intra-Node Self-Correction (`GoalLoop` + `ContextOffloader`)**: Every specialist agent runs inside `createHarness()` with a vended `GoalLoop` plugin (`AfterInvocationEvent`). If an agent outputs invalid JSON, `GoalLoop` feeds the parse error back into the preserved node context and resumes immediately without triggering an outer graph cycle.
+3. **Deterministic Closed-Loop Verifiers (`verifyAndCalibrate`)**: Candidates must pass 5 deterministic verifiers, including stopword-filtered Jaccard semantic anti-duplication (`findDuplicateOrOverlappingQuestion`) and 3x parallel live grading (`Promise.all` over `goodEn`, `goodZhHk`, and `wrongOutdated`) using our production Strands grader (`createGraderAgent` + `gradeAnswer`).
+4. **Fault-Isolated Graph Routing (`Graph` Conditional Back-Edges + `preserveContext: true`)**: When verification fails, `classifyFailureStage` classifies the defect as `"localization"`, `"rubric"`, or `"topic"`. The Strands `Graph` routes a structured `TextBlock` critique back to the **exact responsible node** (`trilingual_localizer`, `aws_docs_fact_checker`, or `interview_miner`), which repairs its output in-place.
 5. **Defense-in-Depth Turn Governance**: Hard turn caps at four independent layers (`limits: { turns: 1 }` on the grader, `maxAttempts: 2` on `GoalLoop`, `maxTurnsPerNode = 4` via `BeforeModelCallEvent`, and `maxAttempts = 3` / `maxSteps = 12` on `Graph`) guarantee termination.
 
 ---
@@ -82,8 +82,8 @@ graph TD
 ### 3.1 Grounding Tools: Amazon Nova Web Grounding (`tool()`) and AWS Knowledge MCP (`McpClient`)
 
 We wire two live grounding mechanisms into Strands:
-1. **`createNovaWebSearchTool`**: Wraps Amazon Bedrock's `ConverseCommand` with `systemTool: { name: "nova_grounding" }` inside a Strands `tool()`, extracting search queries and web citations from `citationsContent`.
-2. **`loadAwsKnowledgeMcpTools`**: Uses Strands' native `McpClient.loadServers()` to connect to the live **AWS Knowledge MCP Server** (`https://knowledge-mcp.global.api.aws`) and filter for `aws___search_documentation` and `aws___read_documentation`.
+1. **`createNovaWebSearchTool`**: Wraps Amazon Bedrock's `ConverseCommand` (`systemTool: { name: "nova_grounding" }`) inside a Strands `tool()`, extracting search queries and citations from `citationsContent`.
+2. **`loadAwsKnowledgeMcpTools`**: Uses `McpClient.loadServers()` to connect to the **AWS Knowledge MCP Server** (`https://knowledge-mcp.global.api.aws`) and filter for `aws___search_documentation` and `aws___read_documentation`.
 
 ```javascript
 // src/VoiceAgent/question-generator.mjs
@@ -92,37 +92,20 @@ import { McpClient, tool } from "@strands-agents/sdk";
 
 const defaultClient = new BedrockRuntimeClient({ maxAttempts: 3, retryMode: "adaptive" });
 
-export function extractNovaGroundingResult(response) {
-  const blocks = response?.output?.message?.content ?? [];
-  const textParts = [], queries = [], citations = [];
-  for (const block of blocks) {
-    if (typeof block?.text === "string") textParts.push(block.text);
-    if (block?.toolUse?.name === "nova_grounding" && block.toolUse.input?.query) {
-      queries.push(String(block.toolUse.input.query));
-    }
-    for (const citation of block?.citationsContent?.citations ?? []) {
-      const url = citation?.location?.web?.url;
-      if (url) citations.push({ title: citation?.title ?? url, url });
-    }
-  }
-  return { answer: textParts.join("").trim(), queries, citations };
-}
-
 export function createNovaWebSearchTool({
   send = command => defaultClient.send(command),
   modelId = process.env.VOICE_MODEL_ID ?? "us.amazon.nova-2-lite-v1:0",
 } = {}) {
   return tool({
     name: "nova_web_search",
-    description: "Search the live web using Amazon Nova Web Grounding (nova_grounding) for common AWS interview questions, community answers, and recent AWS service changes.",
+    description: "Search the live web using Amazon Nova Web Grounding (nova_grounding) for common AWS interview questions and recent service changes.",
     inputSchema: {
       type: "object",
-      properties: { query: { type: "string", description: "Search query for AWS interview questions." } },
+      properties: { query: { type: "string" } },
       required: ["query"],
     },
     callback: async input => {
       const query = String(input?.query ?? "").trim();
-      if (!query) throw new Error("Search query is required");
       const response = await send(new ConverseCommand({
         modelId,
         messages: [{ role: "user", content: [{ text: query }] }],
@@ -141,17 +124,16 @@ export async function loadAwsKnowledgeMcpTools({
   const [mcpClient] = await McpClient.loadServers({
     awsKnowledge: { url, toolFilters: { allowed } },
   });
-  const tools = await mcpClient.listTools();
-  return { tools, disconnect: () => mcpClient.disconnect() };
+  return { tools: await mcpClient.listTools(), disconnect: () => mcpClient.disconnect() };
 }
 ```
 
 ### 3.2 Level 1 (Inner Loop): Building Each Specialist Node with `createHarness`, `GoalLoop`, and `ContextOffloader`
 
-Every specialist node is constructed by `createStrandsNodeAgent()`. Three Loop Engineering mechanisms work together inside each node:
+Every specialist node is created by `createStrandsNodeAgent()`. Three Loop Engineering mechanisms work together inside each node:
 
 1. **Intra-Node `GoalLoop` (`@strands-agents/sdk/vended-plugins/goal`)**: Evaluates `parseJsonFromText(text)` on the node's final response. If a model outputs malformed JSON, `GoalLoop` returns `{ passed: false, feedback: ... }` and resumes the agent in-place (`preserveContext: true`) up to `maxAttempts: 2`.
-2. **`ContextOffloader` (`@strands-agents/sdk/vended-plugins/context-offloader`)**: Offloads MCP documentation reads larger than `2500` tokens into `InMemoryStorage` while keeping a `1000`-token preview in active context, preventing context overflow across multi-turn tool calls.
+2. **`ContextOffloader` (`@strands-agents/sdk/vended-plugins/context-offloader`)**: Offloads MCP documentation reads larger than `2500` tokens into `InMemoryStorage` while keeping a `1000`-token preview in active context.
 3. **Resumption-Aware Turn Cap (`BeforeInvocationEvent` + `BeforeModelCallEvent`)**: When `GoalLoop` resumes an agent after a JSON failure, `event.resumed` is `true`, so `turnsInCurrentInvocation` is **not** reset—ensuring tool calls and `GoalLoop` retries share a single hard ceiling (`boundedMaxTurns = 4`).
 
 ```javascript
@@ -176,9 +158,7 @@ async function createStrandsNodeAgent({
     maxAttempts: Math.min(2, boundedMaxTurns),
     preserveContext: true,
     goal: response => {
-      const text = (response?.content ?? [])
-        .map(block => (typeof block?.text === "string" ? block.text : ""))
-        .join("\n").trim();
+      const text = (response?.content ?? []).map(b => b?.text ?? "").join("\n").trim();
       try {
         parseJsonFromText(text);
         return { passed: true };
@@ -195,10 +175,7 @@ async function createStrandsNodeAgent({
   const plugins = [jsonGoalLoop];
   if (tools.length > 0) {
     plugins.unshift(new ContextOffloader({
-      storage: new InMemoryStorage(),
-      maxResultTokens: 2500,
-      previewTokens: 1000,
-      includeRetrievalTool: false,
+      storage: new InMemoryStorage(), maxResultTokens: 2500, previewTokens: 1000, includeRetrievalTool: false,
     }));
   }
 
@@ -217,8 +194,7 @@ async function createStrandsNodeAgent({
     if (!event?.resumed) turnsInCurrentInvocation = 0;
   });
   agent.addHook(BeforeModelCallEvent, () => {
-    turnsInCurrentInvocation += 1;
-    if (turnsInCurrentInvocation > boundedMaxTurns) {
+    if (++turnsInCurrentInvocation > boundedMaxTurns) {
       throw new Error(`Agent "${id}" exceeded maximum inner loop turns (${boundedMaxTurns})`);
     }
   });
@@ -310,13 +286,10 @@ const calibrationCritic = await createStrandsNodeAgent({
 The heart of **Loop Engineering** is replacing subjective LLM self-review with deterministic verification. When `calibration_critic` calls `verify_and_calibrate_question`, Strands passes `toolContext.invocationState` into the tool callback, running **five deterministic gates** in `verifyAndCalibrate()`:
 
 1. **Gate 1 (`validateQuestion`)**: Enforces trilingual prompts, 2-3 concepts whose integer weights sum strictly to `100`, non-empty `misconceptions`, `acceptableAnswers`, and `referenceAnswer`.
-2. **Gate 2 (`findDuplicateOrOverlappingQuestion`)**: Normalizes tokens via `NFKC`, strips stopwords and the service name, and computes **Jaccard token similarity** against `avoidQuestions`. Rejects `overlapping_prompt` (`>= 0.55`) and `overlapping_concepts` (`>= 0.60`).
+2. **Gate 2 (`findDuplicateOrOverlappingQuestion`)**: Computes stopword-filtered **Jaccard token similarity** against `avoidQuestions`, rejecting `overlapping_prompt` (`>= 0.55`) and `overlapping_concepts` (`>= 0.60`).
 3. **Gate 3 (`cantoneseOnlyChars`)**: Rejects `zh-CN` prompts containing Cantonese-only characters (`/[嘅喺唔畀佢哋乜啲揀嚟]/u`).
 4. **Gate 4 (`forbiddenVoiceClaim`)**: Ensures no field mentions pronunciation, voice tone, or accent.
-5. **Gate 5 (3x Parallel Live Grader Calibration)**: Invokes the production Strands grader (`grader` from `src/VoiceAgent/agent.mjs`, running with `limits: { turns: 1 }`) and our Two-Phase `NFKC` substring verifier (`gradeAnswer`) in parallel via `Promise.all`:
-   - `goodEn` must pass with `score >= 80`.
-   - `goodZhHk` (Cantonese + English code-switched) must pass with `score >= 80`.
-   - `wrongOutdated` (stating `misconceptions[0]`) must fail with `score < 60`.
+5. **Gate 5 (3x Parallel Live Grader Calibration)**: Invokes the production Strands grader (`grader` from `src/VoiceAgent/agent.mjs`, `limits: { turns: 1 }`) and our Two-Phase `NFKC` substring verifier (`gradeAnswer`) in parallel via `Promise.all`: `goodEn` (`>= 80`), `goodZhHk` (`>= 80`), and `wrongOutdated` (`< 60`).
 
 ```javascript
 // src/VoiceAgent/question-generator.mjs
@@ -394,23 +367,21 @@ const calibrationTool = tool({
 
 ### 3.5 Level 2 (Outer Loop): Cyclic Strands `Graph` Engineering and Targeted Feedback Routing
 
-Building a **cyclic multi-agent graph** in `@strands-agents/sdk` where `calibration_critic` conditionally routes execution back to `trilingual_localizer`, `aws_docs_fact_checker`, or `interview_miner` uses three key techniques in `buildGraph()`:
+Building a **cyclic multi-agent graph** in `@strands-agents/sdk` where `calibration_critic` conditionally routes execution back to `trilingual_localizer`, `aws_docs_fact_checker`, or `interview_miner` uses three techniques in `buildGraph()`:
 
-1. **Enabling Forward Progress in a Cyclic Graph (`BeforeMultiAgentInvocationEvent`)**: Because upstream nodes have incoming conditional back-edges from `calibration_critic`, a `BeforeMultiAgentInvocationEvent` hook marks `calibration_critic.status = Status.COMPLETED` when `results.length === 0` so forward edges fire on Cycle 1, while conditional back-edges check `lastNodeId === "calibration_critic"` and `invocationState.lastFailureStage`.
-2. **Injecting Structured Critique into Stateful Node Memory (`evaluateCriticOutcome` + `TextBlock`)**: When verification fails, `evaluateCriticOutcome()` increments `invocationState.cycleCount` and appends a `new TextBlock(critiqueMessage)` (`{ previousAttemptCritique, failureStage, targetNode, cycle }`) to `lastCriticResult.content`. Because every node sets `preserveContext: true`, the target node receives this critique on top of its prior conversation history.
-3. **Ephemeral Critique Cleanup (`BeforeNodeCallEvent`)**: Once the critique `TextBlock` is delivered to the target node, `BeforeNodeCallEvent` clears `lastCriticResult.content = []` so downstream nodes never receive stale critiques.
+1. **Enabling Forward Progress (`BeforeMultiAgentInvocationEvent`)**: Marks `calibration_critic.status = Status.COMPLETED` when `results.length === 0` so forward edges fire on Cycle 1, while conditional back-edges check `lastNodeId === "calibration_critic"` and `invocationState.lastFailureStage`.
+2. **Injecting Structured Critique into Stateful Node Memory (`evaluateCriticOutcome` + `TextBlock`)**: Appends a `new TextBlock(critiqueMessage)` (`{ previousAttemptCritique, failureStage, targetNode, cycle }`) to `lastCriticResult.content`. With `preserveContext: true` on every node, the target specialist node receives this critique on top of its prior conversation history.
+3. **Ephemeral Critique Cleanup (`BeforeNodeCallEvent`)**: Clears `lastCriticResult.content = []` once delivered so downstream nodes never receive stale critiques.
 
 ```javascript
 // src/VoiceAgent/question-generator.mjs
 const evaluateCriticOutcome = async state => {
   const criticResults = state.node("calibration_critic")?.results ?? [];
-  const turnNumber = criticResults.length;
-  if (invocationState.evaluatedCriticTurn === turnNumber) return;
-  invocationState.evaluatedCriticTurn = turnNumber;
+  if (invocationState.evaluatedCriticTurn === criticResults.length) return;
+  invocationState.evaluatedCriticTurn = criticResults.length;
 
   if (!invocationState.calibratedResult) {
-    const finalText = (state.node("calibration_critic")?.content ?? [])
-      .map(block => (typeof block?.text === "string" ? block.text : "")).join("\n").trim();
+    const finalText = (state.node("calibration_critic")?.content ?? []).map(b => b?.text ?? "").join("\n").trim();
     try {
       invocationState.calibratedResult = await verifyAndCalibrate(parseJsonFromText(finalText), invocationState.targetMeta);
       invocationState.lastCritique = null;
@@ -429,16 +400,13 @@ const evaluateCriticOutcome = async state => {
   invocationState.shouldRetry = invocationState.cycleCount < boundedMaxAttempts;
 
   const targetByStage = { localization: "trilingual_localizer", rubric: "aws_docs_fact_checker", topic: "interview_miner" };
-  const critiqueMessage = JSON.stringify({
+  const lastCriticResult = criticResults[criticResults.length - 1];
+  lastCriticResult?.content?.push(new TextBlock(JSON.stringify({
     previousAttemptCritique: invocationState.lastCritique,
     failureStage: invocationState.lastFailureStage,
     targetNode: targetByStage[invocationState.lastFailureStage] ?? "interview_miner",
     cycle: invocationState.cycleCount,
-  });
-  const lastCriticResult = criticResults[criticResults.length - 1];
-  if (lastCriticResult && Array.isArray(lastCriticResult.content)) {
-    lastCriticResult.content.push(new TextBlock(critiqueMessage));
-  }
+  })));
 };
 
 const graph = new Graph({
@@ -481,8 +449,7 @@ const graph = new Graph({
       source: "calibration_critic",
       target: "interview_miner",
       handler: async state => {
-        const lastNodeId = state.results.at(-1)?.nodeId;
-        if (lastNodeId !== "calibration_critic") return false;
+        if (state.results.at(-1)?.nodeId !== "calibration_critic") return false;
         await evaluateCriticOutcome(state);
         return Boolean(invocationState.shouldRetry && invocationState.lastFailureStage === "topic");
       },
@@ -494,15 +461,12 @@ const graph = new Graph({
 
 graph.addHook(BeforeMultiAgentInvocationEvent, event => {
   const criticNodeState = event.state.node("calibration_critic");
-  if (criticNodeState && criticNodeState.results.length === 0) {
-    criticNodeState.status = Status.COMPLETED;
-  }
+  if (criticNodeState && criticNodeState.results.length === 0) criticNodeState.status = Status.COMPLETED;
 });
 
 graph.addHook(BeforeNodeCallEvent, event => {
   if (event.nodeId !== "calibration_critic") {
-    const criticResults = event.state.node("calibration_critic")?.results ?? [];
-    const lastCriticResult = criticResults[criticResults.length - 1];
+    const lastCriticResult = (event.state.node("calibration_critic")?.results ?? []).at(-1);
     if (lastCriticResult?.content?.length > 0) lastCriticResult.content = [];
   }
 });
@@ -510,16 +474,14 @@ graph.addHook(BeforeNodeCallEvent, event => {
 
 ### 3.6 Streaming Graph Execution (`graph.stream`) and Multi-Slot Batch Accumulation
 
-To execute the pipeline and capture live telemetry, `generateOrRefreshQuestion()` consumes `graph.stream(taskPrompt, { invocationState })`, while `runQuestionBatchJob` ([src/VoicePractice/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoicePractice/question-generator.mjs)) feeds each newly approved question into `avoidQuestions` before starting the next slot:
+`generateOrRefreshQuestion()` consumes `graph.stream(taskPrompt, { invocationState })`, while `runQuestionBatchJob` ([src/VoicePractice/question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoicePractice/question-generator.mjs)) feeds each newly approved question into `avoidQuestions` before starting the next slot:
 
 ```javascript
 // 1. Streaming live Strands Graph events (src/VoiceAgent/question-generator.mjs)
 const streamGen = graph.stream(taskPrompt, { invocationState });
 for (let next = await streamGen.next(); !next.done; next = await streamGen.next()) {
   const event = next.value;
-  if (event.type === "beforeNodeCallEvent") {
-    inFlightByNode.set(event.nodeId, { stepIndex: ++stepCounter, nodeId: event.nodeId, toolCalls: [] });
-  } else if (event.type === "multiAgentHandoffEvent") {
+  if (event.type === "multiAgentHandoffEvent") {
     const isLoopBack = event.source === "calibration_critic" && (event.targets ?? []).length > 0;
     handoffs.push({ source: event.source, targets: event.targets, isLoopBack, failureStage: isLoopBack ? invocationState.lastFailureStage : null });
   }
@@ -541,8 +503,6 @@ for (let i = 0; i < countPerService; i++) {
 
 ### 3.7 Multi-Layer Maximum Turn Limits (Preventing Infinite Loops)
 
-To guarantee that no agent or graph can ever enter an infinite loop, turn caps are enforced at **four independent layers**:
-
 | Layer | Component | Bound | Enforcement Mechanism |
 | - | - | - | - |
 | **Layer 1** | Live Spoken Answer Grader (`src/VoiceAgent/agent.mjs`) | `limits: { turns: 1 }` | Passed directly to `strandsAgent.invoke(..., { limits: { turns: 1 } })` |
@@ -554,7 +514,7 @@ To guarantee that no agent or graph can ever enter an infinite loop, turn caps a
 
 ## 4. Native Strands Observability and Live UI Tracing in Jaeger
 
-Instead of writing custom trace wrappers, we rely on **Strands' native OpenTelemetry instrumentation** (`@strands-agents/sdk/telemetry` `setupTracer` + `@strands-agents/harness` `OTEL_TRACES_EXPORTER=otlp`), flushing all spans via `await tracerProvider.forceFlush()` when `generateOrRefreshQuestion` completes:
+We rely on **Strands' native OpenTelemetry instrumentation** (`@strands-agents/sdk/telemetry` `setupTracer` + `@strands-agents/harness` `OTEL_TRACES_EXPORTER=otlp`), flushing all spans via `await tracerProvider.forceFlush()` when `generateOrRefreshQuestion` completes:
 
 ```javascript
 let tracerProvider = null;
@@ -603,31 +563,21 @@ Clicking into the root `invoke_graph aws-interview-question-pipeline` span displ
 ```
 invoke_graph aws-interview-question-pipeline (34,286.7ms | 35,711 tokens)
 ├── node interview_miner (7,934.9ms)
-│   └── invoke_agent interview_miner (7,931.2ms)
-│       ├── execute_agent_loop_cycle cycle-1 (6,065.8ms)
-│       │   ├── chat us.amazon.nova-2-lite-v1:0 (1,227.4ms)
-│       │   └── execute_tool nova_web_search (4,833.2ms)
-│       └── execute_agent_loop_cycle cycle-2 (1,864.2ms)
+│   └── invoke_agent interview_miner -> cycle-1: nova_web_search (4,833.2ms) -> cycle-2
 ├── node aws_docs_fact_checker (12,997.6ms)
-│   └── invoke_agent aws_docs_fact_checker (12,996.5ms)
-│       ├── execute_agent_loop_cycle cycle-1 -> aws___search_documentation (1,718.1ms)
-│       ├── execute_agent_loop_cycle cycle-2 -> 2x aws___read_documentation (2,553.6ms)
-│       └── execute_agent_loop_cycle cycle-3 (2,115.1ms)
+│   └── invoke_agent aws_docs_fact_checker -> search_documentation + 2x read_documentation
 ├── node trilingual_localizer (3,414.3ms)
 │   └── invoke_agent trilingual_localizer (3,412.8ms)
 └── node calibration_critic (9,937.3ms)
-    └── invoke_agent calibration_critic (9,936.3ms)
-        ├── execute_agent_loop_cycle cycle-1 (6,544.2ms)
-        │   └── execute_tool verify_and_calibrate_question (2,007.5ms)
-        │       ├── invoke_agent Strands Agent [goodEn -> 100/100] (2,001.8ms)
-        │       ├── invoke_agent Strands Agent [goodZhHk -> 100/100] (1,706.8ms)
-        │       └── invoke_agent Strands Agent [wrongOutdated -> 50/100] (1,742.7ms)
-        └── execute_agent_loop_cycle cycle-2 (3,392.1ms)
+    └── invoke_agent calibration_critic -> verify_and_calibrate_question (2,007.5ms)
+        ├── invoke_agent Strands Agent [goodEn -> 100/100] (2,001.8ms)
+        ├── invoke_agent Strands Agent [goodZhHk -> 100/100] (1,706.8ms)
+        └── invoke_agent Strands Agent [wrongOutdated -> 50/100] (1,742.7ms)
 ```
 
 ### 4.3 The Resulting Calibrated S3 Question (`s3-lifecycle-optimization`)
 
-Because the two baseline S3 questions (`private-screenshots` and `asset-storage`) were passed in `avoidQuestions`, `interview_miner` automatically selected **S3 Lifecycle Cost Optimization**, verified its storage class transitions against official AWS documentation via MCP, localized it into `en-US`, `zh-HK`, and `zh-CN`, and calibrated it against the live grader (`goodEnScore: 100`, `goodZhHkScore: 100`, `wrongOutdatedScore: 50`):
+Because the two baseline S3 questions (`private-screenshots` and `asset-storage`) were passed in `avoidQuestions`, `interview_miner` selected **S3 Lifecycle Cost Optimization**, verified its storage class transitions against official AWS documentation via MCP, localized it into `en-US`, `zh-HK`, and `zh-CN`, and calibrated it against the live grader (`goodEnScore: 100`, `goodZhHkScore: 100`, `wrongOutdatedScore: 50`):
 
 ```json
 {
