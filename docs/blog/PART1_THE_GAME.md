@@ -149,95 +149,179 @@ Any monster close enough to melee-strike the Warrior can **always** be struck ba
 
 Passing graded voice practice activities charges the server-backed **MP Wallet** (up to `100 MP`). Players toggle Cloud Arts using keys **`3`-`7`** and press **`X`** to cast. Every cast is authorized atomically by the server (`POST /voice/casts`) before local 3D effects and Cantonese battle cries fire, and all monster kills from a single cast (including multi-wave ultimates) share **one grading batch** so multi-kill waves never spam duplicate AWS mission-grading calls.
 
-<SimpleTabs>
+---
 
-<SimpleTab name="Base Cloud Arts (1 Art)">
+### 5.1 The 5 Base Cloud Arts (1 Art Selected)
 
-| Key | Cloud Art and Bilingual Banner | AWS Service Theme | MP / Cooldown | Combat Mechanics |
-| - | - | - | - | - |
-| `3` | **Event-Driven λ / 瞬式・事件雷切** | AWS Lambda | `12 MP` / `12s` | Forward lightning reaches 120 units and chains across 3 targets (`100%`, `50%`, `25%` damage). |
-| `4` | **Auto Scaling Army / 影分身・彈性軍勢** | EC2 Auto Scaling | `15 MP` / `20s` | Summons 5 animated copies of the Warrior that advance and strike 3 times each. |
-| `5` | **Domain: Infinite Storage / 領域展開・無量儲存** | Amazon S3 | `20 MP` / `45s` | Stationary 16-unit domain dealing 6 damage pulses + final burst over 6s while slowing enemies. |
-| `6` | **Private Cloud Barrier / 結界術・私有雲界** | Amazon VPC | `15 MP` / `25s` | 12-unit protective ward for 8s that halves incoming damage and pushes back intruders. |
-| `7` | **Cross-Region Recovery / 終式・跨區復甦** | Disaster Recovery | `25 MP` / `60s` | Places a 12s recovery anchor that intercepts a lethal/low-HP hit and restores you to 35% HP at the anchor. |
+#### 1. 瞬式・事件雷切 (Event-Driven λ)
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 瞬式・事件雷切 (Event-Driven λ).mp4]**
+- **Key / Cost / Cooldown**: Key `3` | `12 MP` | `12s` cooldown
+- **AWS Service Theme**: AWS Lambda
+- **Combat Mechanics**: Fires a forward lightning bolt reaching `120 units` and chaining across up to 3 targets (`100%`, `50%`, and `25%` damage).
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 影分身・彈性軍勢 (Auto Scaling Army).mp4]**
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 瞬式・事件雷切 (Event-Driven λ).mp4 — Replace with Youtube embed]**
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 領域展開・無量儲存 (Domain - Infinite Storage).mp4]**
+#### 2. 影分身・彈性軍勢 (Auto Scaling Army)
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 結界術・私有雲界 (Private Cloud Barrier).mp4]**
+- **Key / Cost / Cooldown**: Key `4` | `15 MP` | `20s` cooldown
+- **AWS Service Theme**: Amazon EC2 Auto Scaling
+- **Combat Mechanics**: Summons 5 animated shadow copies of the Warrior that advance forward up to `28 units` and strike enemies 3 times each.
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 終式・跨區復甦 (Cross-Region Recovery).mp4]**
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 影分身・彈性軍勢 (Auto Scaling Army).mp4 — Replace with Youtube embed]**
 
-</SimpleTab>
+#### 3. 領域展開・無量儲存 (Domain: Infinite Storage)
 
-<SimpleTab name="Tier 1 Combo Arts (2 Arts)">
+- **Key / Cost / Cooldown**: Key `5` | `20 MP` | `45s` cooldown
+- **AWS Service Theme**: Amazon S3
+- **Combat Mechanics**: Expands a stationary `16-unit` storage domain for `6 seconds`, dealing 6 damage pulses plus a final burst while slowing enemies inside.
 
-| Keys | Combo Art and Bilingual Banner | AWS Theme | Anime Inspiration and 3D Combat Effect |
-| - | - | - | - |
-| `3+4` / `4+5` | **Fargate Blade Barrage / 千刃・容器萬解** | AWS Fargate and ECS | *Bleach / Fate* — Opens 5 golden container portals firing 18 glowing blades up to 75 units in 3 volleys (`2.2x` Power/volley). |
-| `3+5` | **Dynamo Singularity / 赫式・毫秒爆裂** | Amazon DynamoDB | *Jujutsu Kaisen (Hollow Purple)* — Fuses Blue and Red orbs into an 18-unit Hollow Purple sphere shooting 115 units (`3.4x` Power x 4 waves). |
-| `4+6` / `3+6` | **ALB Almighty Push / 神羅・負載天征** | Elastic Load Balancing | *Naruto (Shinra Tensei)* — Warrior rises into the sky releasing a 360-degree gravity sphere and 16 radial spikes across 32 units (`3.0x` Power). |
-| `5+6` / `6+7` | **CloudWatch Omniscience / 天照・全知之眼** | CloudWatch and X-Ray | *Naruto (Amaterasu)* — Erupts 24 pitch-black flame pillars and a floating Mangekyo eye with a sweeping X-Ray laser pulsing 6 times (`1.8x` Power + slow). |
-| `3+7` / `4+7` | **CloudFront Edge Flash / 炎呼吸・邊緣瞬閃** | Amazon CloudFront | *Demon Slayer* — Twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a 65-unit corridor (`3.2x` Power x 3 slashes). |
-| `5+7` | **Bedrock Titan Meteor / 天礙震星・基岩星隕** | Amazon Bedrock | *Naruto (Tengai Shinsei)* — Drops twin colossal craggy boulders from a sky portal 22 units ahead (`9.0x` Power AoE across 26 units). |
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 領域展開・無量儲存 (Domain - Infinite Storage).mp4 — Replace with Youtube embed]**
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 千刃・容器萬解 (Fargate Blade Barrage).mp4]**
+#### 4. 結界術・私有雲界 (Private Cloud Barrier)
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 赫式・毫秒爆裂 (Dynamo Singularity).mp4]**
+- **Key / Cost / Cooldown**: Key `6` | `15 MP` | `25s` cooldown
+- **AWS Service Theme**: Amazon VPC
+- **Combat Mechanics**: Deploys a `12-unit` protective subnet ward for `8 seconds` that halves incoming damage and repels approaching enemies.
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 神羅・負載天征 (ALB Almighty Push).mp4]**
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 結界術・私有雲界 (Private Cloud Barrier).mp4 — Replace with Youtube embed]**
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 天照・全知之眼 (CloudWatch Omniscience).mp4]**
+#### 5. 終式・跨區復甦 (Cross-Region Recovery)
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 炎呼吸・邊緣瞬閃 (CloudFront Edge Flash).mp4]**
+- **Key / Cost / Cooldown**: Key `7` | `25 MP` | `60s` cooldown
+- **AWS Service Theme**: AWS Cross-Region Disaster Recovery
+- **Combat Mechanics**: Restores `35% HP` immediately on cast and places a `12-second` recovery anchor that intercepts a lethal or low-HP hit (`25% HP` or below), teleporting the Warrior back and restoring `35% HP`.
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 天礙震星・基岩星隕 (Bedrock Titan Meteor).mp4]**
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 終式・跨區復甦 (Cross-Region Recovery).mp4 — Replace with Youtube embed]**
 
-</SimpleTab>
+---
 
-<SimpleTab name="Tier 2 and Tier 3 Combo Arts (3-4 Arts)">
+### 5.2 Tier 1 Awakening Combo Arts (2 Cloud Arts Combined)
 
-| Tier | Keys | Combo Art and Bilingual Banner | AWS Theme | Anime Inspiration and 3D Combat Effect |
-| - | - | - | - | - |
-| **Tier 2 (3 Arts)** | `3+4+[5/6/7]` | **EKS Susanoo Mecha / 須佐能乎・容器魔神** | Amazon EKS | *Naruto (Susanoo)* — Manifests a 24-unit cyan Susanoo colossus cleaving 4 times with twin energy katanas across 42 units (`4.2x` Power/cleave). |
-| **Tier 2 (3 Arts)** | `[3/4]+5+6` | **Step Functions Malevolent Shrine / 伏魔御廚子・無伺服器斬界** | AWS Step Functions | *Jujutsu Kaisen (Malevolent Shrine)* — Summons a dark-crimson Torii shrine unleashing 8 omnidirectional slash waves across 38 units (`2.8x` Power). |
-| **Tier 2 (3 Arts)** | `[3/4]+5+7` / `3+6+7` | **Lake Formation Planetary Devastation / 地爆天星・資料湖封印** | AWS Lake Formation | *Naruto (Chibaku Tensei)* — Launches a black gravity core upward, ripping 18 boulders into a floating planetoid (`8.5x` Power AoE crush). |
-| **Tier 2 (3 Arts)** | `[4/5]+6+7` | **EBS Snapshot Time Rewind / 時空回溯・快照結界** | Amazon EBS Snapshots | *JoJo / Bleach* — Projects a 34-unit golden clockwork astrolabe with counter-rotating hands pulsing 4 time-shockwaves (`3.4x` Power each). |
-| **Tier 3 (4 Arts)** | `3+4+5+[6/7]` / `3+4+6+7` | **Aurora Excalibur / 誓約勝利・極光聖劍** | Aurora Global DB | *Fate/Stay Night (Excalibur)* — Points a 92-unit light beam to the sky, then cleaves down into a 110-unit golden-cyan Excalibur beam (`4.8x` Power x 4 ticks). |
-| **Tier 3 (4 Arts)** | `[3/4]+5+6+7` | **SageMaker Infinite Void / 無量空處・全知星圖** | Amazon SageMaker | *Jujutsu Kaisen (Unlimited Void)* — Encloses a 44-unit radius in a cosmic black dome with 24 orbiting stars (`3.2x` Power x 6 bursts + `6.0x` finale). |
+#### 6. 千刃・容器萬解 (Fargate Blade Barrage)
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 須佐能乎・容器魔神 (EKS Susanoo Mecha).mp4]**
+- **Keys / Cost / Cooldown**: Keys `3+4` or `4+5` | `27-35 MP` | `20-45s` cooldown
+- **AWS Service Theme**: AWS Fargate and Amazon ECS
+- **Anime Inspiration and 3D Combat Effect**: *Bleach (Senbonzakura) / Fate (Gate of Babylon)* — Opens 5 golden container portals behind the Warrior firing 18 glowing blades up to `75 units` in 3 volleys (`2.2x` Power per volley).
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 伏魔御廚子・無伺服器斬界 (Step Functions Malevolent Shrine).mp4]**
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 千刃・容器萬解 (Fargate Blade Barrage).mp4 — Replace with Youtube embed]**
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 地爆天星・資料湖封印 (Lake Formation Planetary Devastation).mp4]**
+#### 7. 赫式・毫秒爆裂 (Dynamo Singularity)
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 時空回溯・快照結界 (EBS Snapshot Time Rewind).mp4]**
+- **Keys / Cost / Cooldown**: Keys `3+5` | `32 MP` | `45s` cooldown
+- **AWS Service Theme**: Amazon DynamoDB
+- **Anime Inspiration and 3D Combat Effect**: *Jujutsu Kaisen (Hollow Purple)* — Fuses Blue and Red orbs into an `18-unit` Hollow Purple singularity sphere shooting `115 units` forward (`3.4x` Power across 4 waves).
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 誓約勝利・極光聖劍 (Aurora Excalibur).mp4]**
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 赫式・毫秒爆裂 (Dynamo Singularity).mp4 — Replace with Youtube embed]**
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 無量空處・全知星圖 (SageMaker Infinite Void).mp4]**
+#### 8. 神羅・負載天征 (ALB Almighty Push)
 
-</SimpleTab>
+- **Keys / Cost / Cooldown**: Keys `4+6` or `3+6` | `27-30 MP` | `25s` cooldown
+- **AWS Service Theme**: Elastic Load Balancing (ALB)
+- **Anime Inspiration and 3D Combat Effect**: *Naruto (Shinra Tensei)* — The Warrior rises into the sky releasing a 360-degree gravity repulsion sphere and 16 radial spikes across `32 units` (`3.0x` Power + knockback).
 
-<SimpleTab name="Cataclysmic 5-Art Ultimates (87 MP)">
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 神羅・負載天征 (ALB Almighty Push).mp4 — Replace with Youtube embed]**
 
-Selecting all 5 Cloud Arts (`3`-`7`) transforms the cast button into **全域部署 (`87 MP`)**, triggering a **50% / 50% randomized cataclysmic formation** across a **128-unit radius**:
+#### 9. 天照・全知之眼 (CloudWatch Omniscience)
 
-1. **Global Deployment / 全域部署 (50% Chance — AWS Global Multi-Region Infrastructure)**: Summons **four 6x Cloud Avatars** facing North, South, East, and West with 24 sky-to-ground judgement pillars and tectonic fissures.
-2. **Hyperscale Rumbling / 地鳴・超大規模踏境 (50% Chance — AWS Hyperscale Compute Fleet)**: Erects the **Founding Titan's colossal skeletal spine and ribcage** at the origin and marches an expanding wall of **7.5x crimson Colossal Titans** outward in scalding steam.
-3. Both formations release **three expanding execution shockwaves** across `128 units` (`1.2s` per wave) that defeat ordinary monsters and bosses on wave contact (blocked by solid walls and buildings).
+- **Keys / Cost / Cooldown**: Keys `5+6` or `6+7` | `35-40 MP` | `45-60s` cooldown
+- **AWS Service Theme**: Amazon CloudWatch and AWS X-Ray
+- **Anime Inspiration and 3D Combat Effect**: *Naruto (Amaterasu)* — Erupts 24 pitch-black flame pillars and a floating Mangekyo eye with a sweeping X-Ray laser pulsing 6 times over `7 seconds` (`1.8x` Power + slow).
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 全域部署 (Global Deployment).mp4]**
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 天照・全知之眼 (CloudWatch Omniscience).mp4 — Replace with Youtube embed]**
 
-> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 地鳴・超大規模踏境 (Hyperscale Rumbling).mp4]**
+#### 10. 炎呼吸・邊緣瞬閃 (CloudFront Edge Flash)
 
-</SimpleTab>
+- **Keys / Cost / Cooldown**: Keys `3+7` or `4+7` | `37-40 MP` | `60s` cooldown
+- **AWS Service Theme**: Amazon CloudFront
+- **Anime Inspiration and 3D Combat Effect**: *Demon Slayer (Thunderclap and Flash x Rengoku)* — Unleashes twin spiraling flame-and-thunder dragon helices and 8 Edge-PoP fire pillars along a `65-unit` corridor (`3.2x` Power across 3 slashes).
 
-</SimpleTabs>
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 炎呼吸・邊緣瞬閃 (CloudFront Edge Flash).mp4 — Replace with Youtube embed]**
+
+#### 11. 天礙震星・基岩星隕 (Bedrock Titan Meteor)
+
+- **Keys / Cost / Cooldown**: Keys `5+7` | `45 MP` | `60s` cooldown
+- **AWS Service Theme**: Amazon Bedrock
+- **Anime Inspiration and 3D Combat Effect**: *Naruto (Tengai Shinsei)* — Summons a sky portal dropping twin colossal craggy meteors `22 units` ahead, dealing `9.0x` Power AoE damage across a `26-unit` radius.
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 天礙震星・基岩星隕 (Bedrock Titan Meteor).mp4 — Replace with Youtube embed]**
+
+---
+
+### 5.3 Tier 2 Grand Awakening Combo Arts (3 Cloud Arts Combined)
+
+#### 12. 須佐能乎・容器魔神 (EKS Susanoo Mecha)
+
+- **Keys / Cost / Cooldown**: Keys `3+4+[5/6/7]` | `42-52 MP` | `25-60s` cooldown
+- **AWS Service Theme**: Amazon EKS
+- **Anime Inspiration and 3D Combat Effect**: *Naruto (Complete Body Susanoo)* — Manifests a `24-unit` cyan Susanoo colossus around the Warrior that cleaves 4 times with twin energy katanas across `42 units` (`4.2x` Power per cleave).
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 須佐能乎・容器魔神 (EKS Susanoo Mecha).mp4 — Replace with Youtube embed]**
+
+#### 13. 伏魔御廚子・無伺服器斬界 (Step Functions Malevolent Shrine)
+
+- **Keys / Cost / Cooldown**: Keys `[3/4]+5+6` | `47-50 MP` | `45s` cooldown
+- **AWS Service Theme**: AWS Step Functions
+- **Anime Inspiration and 3D Combat Effect**: *Jujutsu Kaisen (Malevolent Shrine)* — Summons a dark-crimson Torii shrine unleashing 8 omnidirectional slash waves across `38 units` over `4.5 seconds` (`2.8x` Power + slow).
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 伏魔御廚子・無伺服器斬界 (Step Functions Malevolent Shrine).mp4 — Replace with Youtube embed]**
+
+#### 14. 地爆天星・資料湖封印 (Lake Formation Planetary Devastation)
+
+- **Keys / Cost / Cooldown**: Keys `[3/4]+5+7` or `3+6+7` | `52-60 MP` | `60s` cooldown
+- **AWS Service Theme**: AWS Lake Formation
+- **Anime Inspiration and 3D Combat Effect**: *Naruto (Chibaku Tensei)* — Launches a black gravity core into the sky, ripping 18 earthen boulders upward into a floating planetoid that crushes enemies below (`8.5x` Power AoE).
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 地爆天星・資料湖封印 (Lake Formation Planetary Devastation).mp4 — Replace with Youtube embed]**
+
+#### 15. 時空回溯・快照結界 (EBS Snapshot Time Rewind)
+
+- **Keys / Cost / Cooldown**: Keys `[4/5]+6+7` | `55-60 MP` | `60s` cooldown
+- **AWS Service Theme**: Amazon EBS Snapshots
+- **Anime Inspiration and 3D Combat Effect**: *JoJo (The World) / Bleach* — Projects a `34-unit` golden clockwork astrolabe with 12 Roman-numeral pillars and counter-rotating clock hands pulsing 4 time-shockwaves (`3.4x` Power each).
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 時空回溯・快照結界 (EBS Snapshot Time Rewind).mp4 — Replace with Youtube embed]**
+
+---
+
+### 5.4 Tier 3 Mythic Awakening Combo Arts (4 Cloud Arts Combined)
+
+#### 16. 誓約勝利・極光聖劍 (Aurora Excalibur)
+
+- **Keys / Cost / Cooldown**: Keys `3+4+5+[6/7]` or `3+4+6+7` | `62-72 MP` | `45-60s` cooldown
+- **AWS Service Theme**: Amazon Aurora Global Database
+- **Anime Inspiration and 3D Combat Effect**: *Fate/Stay Night (Excalibur)* — Points a `92-unit` golden light pillar into the sky, then cleaves downward into a `110-unit` golden-cyan Excalibur beam (`4.8x` Power across 4 ticks).
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 誓約勝利・極光聖劍 (Aurora Excalibur).mp4 — Replace with Youtube embed]**
+
+#### 17. 無量空處・全知星圖 (SageMaker Infinite Void)
+
+- **Keys / Cost / Cooldown**: Keys `[3/4]+5+6+7` | `72-75 MP` | `60s` cooldown
+- **AWS Service Theme**: Amazon SageMaker
+- **Anime Inspiration and 3D Combat Effect**: *Jujutsu Kaisen (Unlimited Void)* — Encloses a `44-unit` radius inside a cosmic black dome with 24 orbiting stars and an event-horizon ring (`3.2x` Power across 6 bursts + `6.0x` singularity finale).
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 無量空處・全知星圖 (SageMaker Infinite Void).mp4 — Replace with Youtube embed]**
+
+---
+
+### 5.5 Cataclysmic 5-Art Super Attacks (All 5 Cloud Arts Combined: `87 MP`, 50% / 50% Chance)
+
+Selecting all 5 Cloud Arts (`3`-`7`) transforms the cast button into **全域部署 (`87 MP`, `60s` cooldown)**, triggering a **50% / 50% randomized cataclysmic formation** across a **`128-unit` radius** with three expanding execution shockwaves that defeat ordinary monsters and bosses on wave contact:
+
+#### 18. 全域部署 (Global Deployment — 50% Chance)
+
+- **Keys / Cost / Cooldown**: Keys `3+4+5+6+7` | `87 MP` | `60s` cooldown
+- **AWS Service Theme**: AWS Global Multi-Region Infrastructure
+- **3D Combat Effect**: Summons **four 6x Cloud Avatars** facing North, South, East, and West with 24 sky-to-ground judgement pillars, tectonic fissures, and three `128-unit` execution shockwaves.
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 全域部署 (Global Deployment).mp4 — Replace with Youtube embed]**
+
+#### 19. 地鳴・超大規模踏境 (Hyperscale Rumbling — 50% Chance)
+
+- **Keys / Cost / Cooldown**: Keys `3+4+5+6+7` | `87 MP` | `60s` cooldown
+- **AWS Service Theme**: AWS Hyperscale Compute Fleet
+- **Anime Inspiration and 3D Combat Effect**: *Attack on Titan (The Rumbling)* — Erects the **Founding Titan's colossal skeletal spine and ribcage** at the origin and marches an expanding wall of **7.5x crimson Colossal Titans** outward in scalding steam across `128 units`.
+
+> **[UPLOAD YOUTUBE VIDEO: docs/videos/THE LEGEND OF AWS Warrior - 地鳴・超大規模踏境 (Hyperscale Rumbling).mp4 — Replace with Youtube embed]**
 
 ---
 
