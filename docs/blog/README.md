@@ -11,6 +11,7 @@ Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â
 
 ### 1. [Part 1 - The Game: Gamifying Cloud Architecture, Oral Interview Prep and 19 Anime x AWS Cloud Arts in a 3D Action RPG](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)
 
+- **Description (for Search Results & Feeds)**: Discover how we defeated the "Copy-to-AI, Paste-Back" reflex in university cloud classes by turning spoken English, Cantonese, and Mandarin AWS architectural explanations into the Magic Power (MP) economy of a 4-region Three.js 3D Action RPG. Equipped with ephemeral mobile QR-code wireless microphone handoff for lab PCs and 19 anime-inspired AWS Cloud Arts, students practice real-world oral interview skills to unlock cataclysmic multi-region spells.
 - **Cover Image**: `docs/images/aws_warrior_v2_blog_part1_cover.png` (`1.64 MiB`, `< 2 MB`)
 - **Defeating the "Copy-to-AI, Paste-Back" Reflex**: Why students copy questions to AI and paste back answers without ever reading themâ€”and how requiring a **spoken answer** (with typing and pasting disabled) ensures students **read and vocalize the answer at least once**, while **fun gameplay** motivates voluntary practice.
 - Exploring **302 discoverable AWS service plaques** across 4 open-world realms (*Cloudlands Village*, *Frostpeak Highlands*, *Sunspire Desert*, and *The Forgotten Vault*), dynamic **AZ Outage Alerts**, and **Timed Perfect Parry** + **Close-Range 360-Degree and Standoff Melee Combat**.
@@ -19,6 +20,7 @@ Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â
 
 ### 2. [Part 2 - The AWS Design: Zero-Trust Serverless Referee, Amazon Bedrock AgentCore Runtime and Single-Table DynamoDB Architecture](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md)
 
+- **Description (for Search Results & Feeds)**: Learn how to prevent LLM hallucinated grading, score drift, and adversarial prompt injection in educational games by placing a deterministic Zero-Trust Referee Lambda in front of an IAM-isolated Amazon Bedrock AgentCore Runtime powered by `@strands-agents/harness` and Amazon Nova 2 Lite. We walk through Two-Phase `NFKC` verbatim substring evidence verification, asynchronous Amazon Transcribe pipelines, and atomic single-table DynamoDB transactions.
 - **Cover Image**: `docs/images/aws_warrior_v2_blog_part2_cover.png` (`1.65 MiB`, `< 2 MB`)
 - Why our architecture places a **Trusted Referee Lambda (`VoicePracticeFunction`)** between API Gateway and an IAM-isolated **Untrusted AI Sandbox (`AWS::BedrockAgentCore::Runtime`)** with zero DynamoDB permissions.
 - Bypassing API Gateway's 29-second timeout with asynchronous self-invoking Lambda workers, dual authentication bridging (`x-api-key` + SHA-256 mobile capability tokens to IAM SigV4), and speech input quality gates.
@@ -27,6 +29,7 @@ Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â
 
 ### 3. [Part 3 - Gen Question: Autonomous AWS Question Bank Generation with Loop Engineering, Strands Multi-Agent Graphs, Harness Plugins and Live OpenTelemetry Tracing](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md)
 
+- **Description (for Search Results & Feeds)**: Explore how Dual-Level Loop Engineering with `@strands-agents/harness` (`GoalLoop`, `ContextOffloader`) and cyclic `@strands-agents/sdk` multi-agent graphs autonomously mines, fact-checks, localizes, and calibrates trilingual AWS interview questions across 302 services. Grounded by Amazon Nova Web Grounding and the live AWS Knowledge MCP Server, every candidate rubric is verified against a 3-way live grader with full OpenTelemetry trace visibility in Jaeger.
 - **Cover Image**: `docs/images/aws_warrior_v2_blog_part3_cover.png` (`1.35 MiB`, `< 2 MB`)
 
 - **Loop Engineering vs. Prompt Engineering vs. Context Engineering**: The 5 pillars of building closed-loop, self-verifying agent systems.
