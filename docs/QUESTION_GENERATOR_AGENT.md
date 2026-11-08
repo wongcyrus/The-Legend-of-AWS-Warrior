@@ -23,10 +23,10 @@ In modern AI systems engineering, **Loop Engineering** is the system-level disci
 
 ### The 5 Pillars of True Loop Engineering
 1. **Model-Driven Action & Observation (Not Imperative Scripting)**: Instead of hardcoding when and how to search the web or read documentation, each specialist agent autonomously decides which tools to invoke, inspects the returned observations, and decides whether to call another tool or synthesize its output.
-2. **Deterministic Verifiers & Guardrails (Closed-Loop Feedback)**: An agent never grades its own homework by "vibes." Every iteration is checked by deterministic verifiers: JSON schema validation (`GoalLoop`), rubric weight invariants (`validateQuestion`), stopword-filtered Jaccard semantic overlap checks (`findDuplicateOrOverlappingQuestion`), Cantonese/Mandarin script hygiene, and live 3-way synthetic student grading (`verifyAndCalibrate`).
+2. **Deterministic Verifiers & Guardrails (Closed-Loop Feedback)**: An agent never grades its own homework by "vibes." Every iteration is checked by deterministic verifiers: Strands structured-output schema validation (Zod), rubric weight invariants (`validateQuestion`), stopword-filtered Jaccard semantic overlap checks (`findDuplicateOrOverlappingQuestion`), Cantonese/Mandarin script hygiene, and live 3-way synthetic student grading (`verifyAndCalibrate`).
 3. **Structured Error Feedback Into Stateful Memory**: When a verifier rejects an output, the system does not blindly re-run the same prompt from scratch. It preserves the node conversation context (`preserveContext: true`) and feeds the structured critique back into the exact responsible node so the agent knows *why* the previous candidate failed and *how* to fix it.
-4. **Verifiable Goal Termination**: Both the inner `GoalLoop` and the outer `Graph` exit as soon as a verifiable goal state (`passed: true` / `invocationState.calibratedResult !== null`) is satisfied—not after a fixed number of turns.
-5. **Bounded Multi-Layer Governance & Native Observability**: Hard budget caps across every loop level (`maxTurnsPerNode = 4` on every inner specialist agent via `BeforeModelCallEvent`, `maxAttempts = 2` on each node's `GoalLoop`, `limits: { turns: 1 }` on the live spoken answer grader, and `maxAttempts = 3` / `maxSteps = 12` on the outer Strands `Graph`) guarantee that no inner tool-calling loop or outer graph feedback cycle can ever run forever, while native Strands OpenTelemetry (`@strands-agents/sdk/telemetry`) emits full GenAI trace hierarchies to OTLP collectors like Jaeger.
+4. **Verifiable Goal Termination**: Both the inner structured-output loop and the outer `Graph` exit as soon as a verifiable goal state (validated structured output / `invocationState.calibratedResult !== null`) is satisfied—not after a fixed number of turns.
+5. **Bounded Multi-Layer Governance & Native Observability**: Hard budget caps across every loop level (`maxTurnsPerNode = 8` on every inner specialist agent via `BeforeModelCallEvent`, including structured-output retries, `limits: { turns: 1 }` on the live spoken answer grader, and `maxAttempts = 3` / `maxSteps = 12` on the outer Strands `Graph`) guarantee that no inner tool-calling loop or outer graph feedback cycle can ever run forever, while native Strands OpenTelemetry (`@strands-agents/sdk/telemetry`) emits full GenAI trace hierarchies to OTLP collectors like Jaeger.
 
 ---
 
@@ -40,10 +40,10 @@ Our Question Generator ([`createQuestionGenerator`](../src/VoiceAgent/question-g
 flowchart TB
   subgraph OuterLoop["Level 2 (Outer Loop): Strands Graph Orchestration (aws-interview-question-pipeline)"]
     direction LR
-    N1["<b>Node 1: interview_miner</b><br/>createHarness() + GoalLoop<br/>ContextOffloader · maxTurns=4"]
-    N2["<b>Node 2: aws_docs_fact_checker</b><br/>createHarness() + GoalLoop<br/>ContextOffloader · maxTurns=4"]
-    N3["<b>Node 3: trilingual_localizer</b><br/>createHarness() + GoalLoop<br/>preserveContext: true · maxTurns=4"]
-    N4["<b>Node 4: calibration_critic</b><br/>createHarness() + GoalLoop<br/>ContextOffloader · maxTurns=4"]
+    N1["<b>Node 1: interview_miner</b><br/>createHarness() + structured output<br/>ContextOffloader · maxTurns=8"]
+    N2["<b>Node 2: aws_docs_fact_checker</b><br/>createHarness() + structured output<br/>ContextOffloader · maxTurns=8"]
+    N3["<b>Node 3: trilingual_localizer</b><br/>createHarness() + structured output<br/>preserveContext: true · maxTurns=8"]
+    N4["<b>Node 4: calibration_critic</b><br/>createHarness() + structured output<br/>ContextOffloader · maxTurns=8"]
 
     N1 -->|"handoff"| N2
     N2 -->|"handoff"| N3
@@ -53,15 +53,15 @@ flowchart TB
     N4 -. "stage = topic" .-> N1
   end
 
-  subgraph InnerLoop1["Level 1 (Inner Loop: Node 1 ReAct + GoalLoop)"]
+  subgraph InnerLoop1["Level 1 (Inner Loop: Node 1 ReAct + structured output)"]
     T1["Tool: nova_web_search<br/>(Amazon Nova Web Grounding)"]
   end
 
-  subgraph InnerLoop2["Level 1 (Inner Loop: Node 2 ReAct + GoalLoop)"]
+  subgraph InnerLoop2["Level 1 (Inner Loop: Node 2 ReAct + structured output)"]
     T2["MCP Tools: aws___search_documentation<br/>& aws___read_documentation"]
   end
 
-  subgraph InnerLoop4["Level 1 (Inner Loop: Node 4 ReAct + GoalLoop)"]
+  subgraph InnerLoop4["Level 1 (Inner Loop: Node 4 ReAct + structured output)"]
     T4["Tool: verify_and_calibrate_question<br/>(Schema + Anti-Dup + 3x Live Grader)"]
   end
 
@@ -70,21 +70,22 @@ flowchart TB
   N4 <--> InnerLoop4
 ```
 
-### Level 1: The Inner Loop (`createHarness()` + `GoalLoop` + `ContextOffloader`)
+### Level 1: The Inner Loop (`createHarness()` + Structured Output + `ContextOffloader`)
 Each specialist node in the pipeline is constructed via [`createStrandsNodeAgent`](../src/VoiceAgent/question-generator.mjs#L284-L396) using `createHarness()` from `@strands-agents/harness` (`^0.3.3`) and `@strands-agents/sdk` (`^1.23.0`), backed by [`BedrockModel`](../src/VoiceAgent/question-generator.mjs#L296-L302) (`us.amazon.nova-2-lite-v1:0`, `temperature: 0`, `stream: false`).
 
-When a node executes, Strands runs its internal **Reason → Tool Use (`tool_use`) → Tool Result (`ContextOffloader`) → Reason (`end_turn`) → `GoalLoop` Verification (`AfterInvocationEvent`)** cycle:
+When a node executes, Strands runs its internal **Reason → Tool Use (`tool_use`) → Tool Result (`ContextOffloader`) → Structured Output Tool → Zod Validation** cycle:
 
 1. **Strands Harness (`@strands-agents/harness` `createHarness`)**:
    - Configures each specialist agent with `contextManager: { strategies: ["largeToolOffloading", "overflowProtection"], stash: false }`, `effort: "auto"`, `caching: false`, and locked-down `builtinTools: []`, `builtinPlugins: []`, `session: false`, `memory: false`, `skills: false`, `backgroundTasks: false`.
 2. **`ContextOffloader` Plugin (`@strands-agents/sdk/vended-plugins/context-offloader`)**:
    - Attached to every tool-using specialist node (`interview_miner`, `aws_docs_fact_checker`, `calibration_critic`) with `InMemoryStorage` (`maxResultTokens: 2500`, `previewTokens: 1000`, `includeRetrievalTool: false`).
    - Automatically truncates and offloads oversized AWS documentation reads or web grounding payloads so they never overflow the model's context window across multi-turn tool calls.
-3. **`GoalLoop` Plugin (`@strands-agents/sdk/vended-plugins/goal`)**:
-   - Attached to every specialist node (`<id>:json-goal-loop`, `maxAttempts: Math.min(2, boundedMaxTurns)`, `preserveContext: true`) with a deterministic JSON goal evaluator ([`parseJsonFromText`](../src/VoiceAgent/question-generator.mjs#L201-L212)).
-   - If a specialist node ever outputs prose or malformed JSON on its final turn, `GoalLoop` intercepts `AfterInvocationEvent`, injects structured error feedback (`"Output from <id> was not valid JSON... Return ONLY valid JSON matching your node schema"`), and resumes the agent within the same node before handing off to the next graph node.
-4. **Hard Inner Turn Budget (`maxTurnsPerNode = 4`, clamped `1..10`)**:
-   - Each node registers `BeforeInvocationEvent` (resetting the turn counter only when `!event?.resumed` so `GoalLoop` resumes share the same bounded turn budget) and `BeforeModelCallEvent` hooks that throw `Agent "<id>" exceeded maximum inner loop turns (<boundedMaxTurns>)` if a runaway tool loop ever exceeds the turn cap.
+3. **Strands Structured Output (`structuredOutputSchema`)**:
+   - Each specialist has a separate Zod schema for its mined topic, verified rubric, localized question, or final calibration candidate. Strands exposes the schema as `strands_structured_output`, which the agent calls last after its research or calibration tools.
+   - Invalid tool arguments produce validation feedback for correction within the same node. A plain-text reply triggers Strands' forced structured-output retry. The generator no longer extracts JSON from model text.
+   - A `NodeResultEvent` hook serializes the validated `structuredOutput` into a `TextBlock` for graph handoffs, because the graph forwards node content rather than the structured-output property. The critic verifier consumes the typed result directly.
+4. **Hard Inner Turn Budget (`maxTurnsPerNode = 8`, clamped `1..12`)**:
+   - Each node registers `BeforeInvocationEvent` and `BeforeModelCallEvent` hooks that throw `Agent "<id>" exceeded maximum inner loop turns (<boundedMaxTurns>)` if a tool loop or structured-output retry exceeds the turn cap.
 
 ### Level 2: The Outer Loop (Strands `Graph` Stage-Classified Feedback Cycle)
 When the candidate question, rubric, or localization fails verification in `calibration_critic`, the Assurance Plane classifies the defect via [`classifyFailureStage`](../src/VoiceAgent/question-generator.mjs#L183-L199) into one of three fault domains and routes the Strands [`Graph`](../src/VoiceAgent/question-generator.mjs#L748-L816) back to the **exact specialist node** responsible for fixing it:
@@ -106,7 +107,8 @@ When the candidate question, rubric, or localization fails verification in `cali
 ### Node 1: `interview_miner` (`InterviewQuestionMinerAgent`)
 - **Source**: [`src/VoiceAgent/question-generator.mjs#L572-L596`](../src/VoiceAgent/question-generator.mjs#L572-L596)
 - **Tools**: [`nova_web_search`](../src/VoiceAgent/question-generator.mjs#L236-L265) (Amazon Bedrock `ConverseCommand` with `systemTool: { name: "nova_grounding" }`)
-- **Plugins**: `ContextOffloader` + `interview_miner:json-goal-loop`
+- **Output**: Zod-validated mined topic, answer, suspected outdated claims, and web citations
+- **Plugins**: `ContextOffloader`
 - **Responsibility**:
   - Searches the live web via Amazon Nova Web Grounding for the most frequently asked cloud engineering interview questions for the target AWS service (`s3`, `iam`, `ec2`, `vpc`, `rds`, `cloudfront`, `ecs`, etc.).
   - Inspects `avoidQuestions` (summaries of all existing questions for the same service) and `previousAttemptCritique` (if looping back on `failureStage === "topic"`) to pick an orthogonal architectural scenario and AWS capability.
@@ -115,7 +117,8 @@ When the candidate question, rubric, or localization fails verification in `cali
 ### Node 2: `aws_docs_fact_checker` (`AwsDocsFactCheckerAgent`)
 - **Source**: [`src/VoiceAgent/question-generator.mjs#L598-L632`](../src/VoiceAgent/question-generator.mjs#L598-L632)
 - **Tools**: Live **AWS Knowledge MCP** tools ([`loadAwsKnowledgeMcpTools`](../src/VoiceAgent/question-generator.mjs#L267-L282) connected to `https://knowledge-mcp.global.api.aws`: `aws___search_documentation`, `aws___read_documentation`)
-- **Plugins**: `ContextOffloader` + `aws_docs_fact_checker:json-goal-loop`
+- **Output**: Zod-validated English question, rubric, and AWS documentation citations
+- **Plugins**: `ContextOffloader`
 - **Responsibility**:
   - Audits both the mined question premise and community answer against official AWS documentation.
   - Rewrites outdated premises (e.g., S3 eventual consistency myths, default encryption misconceptions) into accurate questions and stores the outdated belief in `misconceptions[]`.
@@ -123,8 +126,8 @@ When the candidate question, rubric, or localization fails verification in `cali
 
 ### Node 3: `trilingual_localizer` (`TrilingualLocalizationAgent`)
 - **Source**: [`src/VoiceAgent/question-generator.mjs#L634-L672`](../src/VoiceAgent/question-generator.mjs#L634-L672)
-- **Tools**: Pure transformation node (no external tools)
-- **Plugins**: `trilingual_localizer:json-goal-loop`
+- **Tools**: `strands_structured_output` only (no external tools)
+- **Output**: Zod-validated question requiring all three locale prompts
 - **Responsibility**:
   - Produces natural spoken interview prompts across all three supported game locales:
     - `en-US`: Conversational English scenario prompt.
@@ -134,7 +137,8 @@ When the candidate question, rubric, or localization fails verification in `cali
 ### Node 4: `calibration_critic` (`CalibrationCriticAgent`)
 - **Source**: [`src/VoiceAgent/question-generator.mjs#L674-L699`](../src/VoiceAgent/question-generator.mjs#L674-L699)
 - **Tools**: [`verify_and_calibrate_question`](../src/VoiceAgent/question-generator.mjs#L526-L569)
-- **Plugins**: `ContextOffloader` + `calibration_critic:json-goal-loop`
+- **Output**: Zod-validated question and all three synthetic transcripts
+- **Plugins**: `ContextOffloader`
 - **Responsibility**:
   - Generates three realistic spoken student transcripts:
     1. `goodEn`: Spoken English answer covering all rubric concepts.
@@ -176,7 +180,7 @@ Strands provides two complementary native observability layers wired into [`src/
    - At the end of each graph run, `generateOrRefreshQuestion` calls `await tracerProvider.forceFlush()` so all batched OTLP spans are guaranteed to flush immediately to your OTLP collector (Jaeger, Langfuse, or Arize Phoenix) before the CLI exits.
 2. **Live `graph.stream()` Event Collector & Topology Extractor**:
    - Captures `beforeNodeCallEvent`, `nodeStreamUpdateEvent` (`beforeToolCallEvent`, `afterToolCallEvent`, `agentResultEvent`), `nodeResultEvent`, and `multiAgentHandoffEvent`.
-   - [`extractGraphTopology`](../src/VoiceAgent/question-generator.mjs#L22-L96) inspects `graph.nodes` and `graph.edges` (normalizing `AgentNode` edge references to string node IDs) to record node visit counts, execution latency, tools invoked, `GoalLoop` verification status (`goalLoopResult`), and conditional loop-back counts, plus a Mermaid flowchart string.
+   - [`extractGraphTopology`](../src/VoiceAgent/question-generator.mjs#L22-L96) inspects `graph.nodes` and `graph.edges` (normalizing `AgentNode` edge references to string node IDs) to record node visit counts, execution latency, tools invoked, structured-output enablement (`structuredOutput`), and conditional loop-back counts, plus a Mermaid flowchart string.
 
 ### CLI Usage & Live Jaeger UI Walkthrough
 

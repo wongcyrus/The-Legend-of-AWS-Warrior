@@ -52,6 +52,53 @@ const sampleSyntheticTranscripts = {
   wrongOutdated: "RDS Multi-AZ standby instances automatically distribute read-heavy query traffic across both zones.",
 };
 
+function structuredResponse(command, output) {
+  const outputTool = command.input.toolConfig.tools.find(
+    entry => entry.toolSpec?.name === "strands_structured_output"
+  );
+  assert.ok(outputTool, "Every generator node must request structured output");
+  assert.equal(outputTool.toolSpec.inputSchema.json.type, "object");
+  return {
+    stopReason: "tool_use",
+    output: {
+      message: {
+        role: "assistant",
+        content: [{
+          toolUse: {
+            toolUseId: "structured-output",
+            name: outputTool.toolSpec.name,
+            input: output,
+          },
+        }],
+      },
+    },
+  };
+}
+
+function questionNodeResponse(command, question) {
+  const systemText = command.input.system?.[0]?.text ?? "";
+  if (systemText.includes("InterviewQuestionMinerAgent")) {
+    return structuredResponse(command, {
+      serviceId: question.serviceId,
+      candidateId: question.id,
+      interviewTopic: question.title,
+      commonQuestion: question.prompts["en-US"],
+      typicalCommunityAnswer: question.referenceAnswer,
+      suspectedOutdatedClaims: question.misconceptions,
+      webCitations: [],
+    });
+  }
+  if (systemText.includes("AwsDocsFactCheckerAgent")) {
+    const { id, serviceId, title, concepts, misconceptions, acceptableAnswers, referenceAnswer } = question;
+    return structuredResponse(command, {
+      id, serviceId, title, concepts, misconceptions, acceptableAnswers, referenceAnswer,
+      enPrompt: question.prompts["en-US"],
+      awsDocCitations: [],
+    });
+  }
+  return structuredResponse(command, question);
+}
+
 test("createNovaWebSearchTool invokes Bedrock nova_grounding systemTool and extracts citations", async () => {
   const sent = [];
   const searchTool = createNovaWebSearchTool({
@@ -172,15 +219,7 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
           },
         };
       }
-      return {
-        stopReason: "end_turn",
-        output: {
-          message: {
-            role: "assistant",
-            content: [{ text: JSON.stringify({ serviceId: "rds", candidateId: "multi-az-failover", commonQuestion: "Multi-AZ vs Read Replica" }) }],
-          },
-        },
-      };
+      return questionNodeResponse(command, q);
     }
     if (sys.includes("AwsDocsFactCheckerAgent")) {
       if (!checkerCalledTool) {
@@ -195,23 +234,13 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
           },
         };
       }
-      return {
-        stopReason: "end_turn",
-        output: {
-          message: {
-            role: "assistant",
-            content: [{ text: JSON.stringify({ id: q.id, serviceId: "rds", title: q.title, enPrompt: q.prompts["en-US"], concepts: q.concepts, misconceptions: q.misconceptions, acceptableAnswers: q.acceptableAnswers, referenceAnswer: q.referenceAnswer }) }],
-          },
-        },
-      };
+      const handoff = command.input.messages.flatMap(message => message.content)
+        .filter(block => typeof block.text === "string").map(block => block.text).join("\n");
+      assert.match(handoff, /"candidateId":"multi-az-failover"/);
+      return questionNodeResponse(command, q);
     }
     if (sys.includes("TrilingualLocalizationAgent")) {
-      return {
-        stopReason: "end_turn",
-        output: {
-          message: { role: "assistant", content: [{ text: JSON.stringify(q) }] },
-        },
-      };
+      return questionNodeResponse(command, q);
     }
     if (sys.includes("CalibrationCriticAgent")) {
       if (!criticCalledTool) {
@@ -232,15 +261,7 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
           },
         };
       }
-      return {
-        stopReason: "end_turn",
-        output: {
-          message: {
-            role: "assistant",
-            content: [{ text: JSON.stringify({ question: q, syntheticTranscripts: sampleSyntheticTranscripts }) }],
-          },
-        },
-      };
+      return structuredResponse(command, { question: q, syntheticTranscripts: sampleSyntheticTranscripts });
     }
     throw new Error(`Unexpected system prompt: ${sys}`);
   };
@@ -301,6 +322,81 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
   assert.doesNotThrow(() => JSON.stringify(result.trace));
 });
 
+test("Structured critic output preserves refresh metadata and cannot reuse calibration for a changed final question", async () => {
+  const question = sampleGeneratedQuestion();
+  let finalQuestion = question;
+  let criticTurn = 0;
+  let gradingCalls = 0;
+  const generator = createQuestionGenerator({
+    webSearchTool: null,
+    docTools: [],
+    maxAttempts: 1,
+    send: async command => {
+      const systemText = command.input.system?.[0]?.text ?? "";
+      if (!systemText.includes("CalibrationCriticAgent")) {
+        return questionNodeResponse(command, question);
+      }
+      criticTurn++;
+      if (criticTurn === 1) {
+        return {
+          stopReason: "tool_use",
+          output: {
+            message: {
+              role: "assistant",
+              content: [{
+                toolUse: {
+                  toolUseId: "calibrate",
+                  name: "verify_and_calibrate_question",
+                  input: { question, syntheticTranscripts: sampleSyntheticTranscripts },
+                },
+              }],
+            },
+          },
+        };
+      }
+      return structuredResponse(command, {
+        question: finalQuestion,
+        syntheticTranscripts: sampleSyntheticTranscripts,
+      });
+    },
+    grader: async ({ transcript }) => {
+      gradingCalls++;
+      const met = transcript.includes("synchronous standby");
+      return {
+        concepts: question.concepts.map((concept, index) => ({
+          id: concept.id,
+          verdict: met ? "met" : "missing",
+          evidence: met ? (index === 0 ? "synchronous standby" : "Read Replicas") : "",
+        })),
+        feedback: "Checked.",
+      };
+    },
+  });
+  const input = {
+    serviceId: "rds",
+    label: "Amazon RDS",
+    passage: "Amazon RDS manages relational databases.",
+    existingQuestion: { ...question, id: "locked-rds-id", version: 2, expectedRevision: 5 },
+    status: "draft",
+  };
+  const refreshed = await generator.generateOrRefreshQuestion(input);
+  assert.equal(refreshed.question.id, "locked-rds-id");
+  assert.equal(refreshed.question.version, 3);
+  assert.equal(refreshed.question.expectedRevision, 5);
+  assert.equal(refreshed.question.status, "draft");
+  assert.equal(gradingCalls, 3, "An unchanged structured result reuses its successful calibration");
+
+  criticTurn = 0;
+  finalQuestion = {
+    ...question,
+    concepts: [{ ...question.concepts[0], weight: 50 }, question.concepts[1]],
+  };
+  await assert.rejects(
+    () => generator.generateOrRefreshQuestion(input),
+    /Invalid Q&A question/
+  );
+});
+
 test("Stage-classified loop routing sends localization defects to trilingual_localizer and rubric defects to aws_docs_fact_checker", async () => {
   assert.equal(classifyFailureStage("Mandarin prompt (zh-CN) contains Cantonese-only characters"), "localization");
   assert.equal(classifyFailureStage("Synthetic goodZhHk failed calibration (score=50, expected >=80)"), "localization");
@@ -324,20 +420,9 @@ test("Stage-classified loop routing sends localization defects to trilingual_loc
     if (sys.includes("CalibrationCriticAgent")) {
       attemptCount++;
       const chosen = attemptCount === 1 ? qBadMandarin : qGood;
-      return {
-        stopReason: "end_turn",
-        output: {
-          message: {
-            role: "assistant",
-            content: [{ text: JSON.stringify({ question: chosen, syntheticTranscripts: sampleSyntheticTranscripts }) }],
-          },
-        },
-      };
+      return structuredResponse(command, { question: chosen, syntheticTranscripts: sampleSyntheticTranscripts });
     }
-    return {
-      stopReason: "end_turn",
-      output: { message: { role: "assistant", content: [{ text: JSON.stringify(qGood) }] } },
-    };
+    return questionNodeResponse(command, qGood);
   };
 
   const grader = async ({ transcript }) => ({
@@ -401,20 +486,9 @@ test("Stage-classified loop routing sends localization defects to trilingual_loc
       if (sys.includes("CalibrationCriticAgent")) {
         rubricAttempt++;
         const chosen = rubricAttempt === 1 ? qBadWeights : qGood;
-        return {
-          stopReason: "end_turn",
-          output: {
-            message: {
-              role: "assistant",
-              content: [{ text: JSON.stringify({ question: chosen, syntheticTranscripts: sampleSyntheticTranscripts }) }],
-            },
-          },
-        };
+        return structuredResponse(command, { question: chosen, syntheticTranscripts: sampleSyntheticTranscripts });
       }
-      return {
-        stopReason: "end_turn",
-        output: { message: { role: "assistant", content: [{ text: JSON.stringify(qGood) }] } },
-      };
+      return questionNodeResponse(command, qGood);
     },
     webSearchTool: null,
     docTools: [],
@@ -591,29 +665,16 @@ test("semantic deduplication blocks repeated topics with different IDs and passe
     if (sys.includes("CalibrationCriticAgent")) {
       attempt++;
       const chosen = attempt === 1 ? disguisedDuplicate : distinctRdsQuestion;
-      return {
-        stopReason: "end_turn",
-        output: {
-          message: {
-            role: "assistant",
-            content: [{
-              text: JSON.stringify({
-                question: chosen,
-                syntheticTranscripts: {
-                  goodEn: "Automated backups and transaction logs enable point-in-time recovery to any second, while manual snapshots persist after the RDS instance is deleted.",
-                  goodZhHk: "Automated backups 同 transaction logs 可以做到 point-in-time recovery，而 manual snapshots 喺刪除 RDS instance 之後仍然保留。",
-                  wrongOutdated: "Automated backups are kept forever after deleting the database.",
-                },
-              }),
-            }],
-          },
+      return structuredResponse(command, {
+        question: chosen,
+        syntheticTranscripts: {
+          goodEn: "Automated backups and transaction logs enable point-in-time recovery to any second, while manual snapshots persist after the RDS instance is deleted.",
+          goodZhHk: "Automated backups 同 transaction logs 可以做到 point-in-time recovery，而 manual snapshots 喺刪除 RDS instance 之後仍然保留。",
+          wrongOutdated: "Automated backups are kept forever after deleting the database.",
         },
-      };
+      });
     }
-    return {
-      stopReason: "end_turn",
-      output: { message: { role: "assistant", content: [{ text: JSON.stringify(distinctRdsQuestion) }] } },
-    };
+    return questionNodeResponse(command, distinctRdsQuestion);
   };
 
   const grader = async ({ transcript }) => ({
@@ -718,7 +779,7 @@ test("Inner Agent maxTurnsPerNode and Outer Graph maxAttempts prevent infinite l
   assert.equal(modelTurnCalls, 3);
 });
 
-test("Strands Harness and harness-sdk GoalLoop + ContextOffloader plugins self-correct malformed JSON output within a node", async () => {
+test("Strands structured output retries text replies and invalid schema fields within a node", async () => {
   const mockWebTool = tool({
     name: "nova_web_search",
     description: "Mock Nova web search",
@@ -746,50 +807,6 @@ test("Strands Harness and harness-sdk GoalLoop + ContextOffloader plugins self-c
     docTools: [mockDocTool],
     send: async command => {
       const systemText = command.input?.system?.[0]?.text ?? "";
-      if (systemText.includes("InterviewQuestionMinerAgent")) {
-        return {
-          stopReason: "end_turn",
-          output: {
-            message: {
-              role: "assistant",
-              content: [{
-                text: JSON.stringify({
-                  serviceId: "rds",
-                  candidateId: "rds-multi-az",
-                  interviewTopic: "Multi-AZ vs Read Replicas",
-                  commonQuestion: "How does RDS Multi-AZ differ from Read Replicas?",
-                  typicalCommunityAnswer: "Multi-AZ is for failover.",
-                  suspectedOutdatedClaims: [],
-                  webCitations: [],
-                }),
-              }],
-            },
-          },
-        };
-      }
-      if (systemText.includes("AwsDocsFactCheckerAgent")) {
-        return {
-          stopReason: "end_turn",
-          output: {
-            message: {
-              role: "assistant",
-              content: [{
-                text: JSON.stringify({
-                  id: "rds-multi-az",
-                  serviceId: "rds",
-                  title: "RDS Multi-AZ High Availability",
-                  enPrompt: sampleGeneratedQuestion("rds", "rds-multi-az").prompts["en-US"],
-                  concepts: sampleGeneratedQuestion("rds", "rds-multi-az").concepts,
-                  misconceptions: sampleGeneratedQuestion("rds", "rds-multi-az").misconceptions,
-                  acceptableAnswers: sampleGeneratedQuestion("rds", "rds-multi-az").acceptableAnswers,
-                  referenceAnswer: sampleGeneratedQuestion("rds", "rds-multi-az").referenceAnswer,
-                  awsDocCitations: [],
-                }),
-              }],
-            },
-          },
-        };
-      }
       if (systemText.includes("TrilingualLocalizationAgent")) {
         localizerTurn++;
         if (localizerTurn === 1) {
@@ -803,33 +820,27 @@ test("Strands Harness and harness-sdk GoalLoop + ContextOffloader plugins self-c
             },
           };
         }
-        return {
-          stopReason: "end_turn",
-          output: {
-            message: {
-              role: "assistant",
-              content: [{ text: JSON.stringify(sampleGeneratedQuestion("rds", "rds-multi-az")) }],
-            },
-          },
-        };
+        if (localizerTurn === 2) {
+          assert.deepEqual(command.input.toolConfig.toolChoice, { tool: { name: "strands_structured_output" } });
+          const invalid = sampleGeneratedQuestion("rds", "rds-multi-az");
+          delete invalid.prompts["zh-CN"];
+          invalid.concepts[0].weight = "60";
+          return structuredResponse(command, invalid);
+        }
+        const toolErrors = command.input.messages.flatMap(message => message.content)
+          .filter(block => block.toolResult);
+        assert.ok(toolErrors.length > 0, "Schema errors must be returned to Nova for correction");
+        assert.match(JSON.stringify(toolErrors), /zh-CN/);
+        assert.match(JSON.stringify(toolErrors), /weight/);
+        return questionNodeResponse(command, sampleGeneratedQuestion("rds", "rds-multi-az"));
       }
       if (systemText.includes("CalibrationCriticAgent")) {
-        return {
-          stopReason: "end_turn",
-          output: {
-            message: {
-              role: "assistant",
-              content: [{
-                text: JSON.stringify({
-                  question: sampleGeneratedQuestion("rds", "rds-multi-az"),
-                  syntheticTranscripts: sampleSyntheticTranscripts,
-                }),
-              }],
-            },
-          },
-        };
+        return structuredResponse(command, {
+          question: sampleGeneratedQuestion("rds", "rds-multi-az"),
+          syntheticTranscripts: sampleSyntheticTranscripts,
+        });
       }
-      throw new Error(`Unexpected system prompt: ${systemText}`);
+      return questionNodeResponse(command, sampleGeneratedQuestion("rds", "rds-multi-az"));
     },
     grader: async ({ transcript }) => {
       if (transcript.includes("synchronous standby")) {
@@ -857,19 +868,14 @@ test("Strands Harness and harness-sdk GoalLoop + ContextOffloader plugins self-c
     passage: "Amazon RDS manages relational databases.",
   });
 
-  assert.equal(localizerTurn, 2);
+  assert.equal(localizerTurn, 3);
   assert.equal(result.question.id, "rds-multi-az");
   const nodes = result.trace.topology.nodes;
   for (const node of nodes) {
     assert.equal(node.harness, true);
-    assert.ok(node.plugins.includes(`${node.id}:json-goal-loop`));
+    assert.equal(node.structuredOutput, true);
   }
   const minerNode = nodes.find(n => n.id === "interview_miner");
   assert.ok(minerNode.plugins.includes("strands:context-offloader"));
-  const localizerNode = nodes.find(n => n.id === "trilingual_localizer");
-  assert.equal(localizerNode.goalLoopResult?.passed, true);
-  assert.equal(localizerNode.goalLoopResult?.stopReason, "satisfied");
-  assert.equal(localizerNode.goalLoopResult?.attempts?.length, 2);
-  assert.equal(localizerNode.goalLoopResult?.attempts?.[0]?.passed, false);
-  assert.equal(localizerNode.goalLoopResult?.attempts?.[1]?.passed, true);
+  assert.equal(result.trace.steps.length, 4, "Schema retries stay within the localizer node");
 });

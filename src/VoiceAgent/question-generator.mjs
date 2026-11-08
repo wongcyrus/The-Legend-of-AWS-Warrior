@@ -1,10 +1,64 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { createHarness } from "@strands-agents/harness";
 import { BedrockModel, BeforeInvocationEvent, BeforeModelCallEvent, Graph, McpClient, TextBlock, tool } from "@strands-agents/sdk";
-import { BeforeMultiAgentInvocationEvent, BeforeNodeCallEvent, Status } from "@strands-agents/sdk/multiagent";
+import { BeforeMultiAgentInvocationEvent, BeforeNodeCallEvent, NodeResultEvent, Status } from "@strands-agents/sdk/multiagent";
 import { ContextOffloader, InMemoryStorage } from "@strands-agents/sdk/vended-plugins/context-offloader";
-import { GoalLoop } from "@strands-agents/sdk/vended-plugins/goal";
+import { z } from "zod";
 import { createAgent as createGraderAgent } from "./agent.mjs";
+
+const requiredText = max => z.string().min(1).max(max);
+const identifierSchema = requiredText(100).regex(/^[a-zA-Z0-9_-]+$/);
+const conceptSchema = z.object({
+  id: requiredText(60).regex(/^[a-zA-Z0-9_-]+$/),
+  description: requiredText(500),
+  weight: z.number().int().min(1).max(100),
+});
+const rubricShape = {
+  id: identifierSchema,
+  serviceId: identifierSchema,
+  title: requiredText(150),
+  concepts: z.array(conceptSchema).min(1).max(8),
+  misconceptions: z.array(requiredText(600)).max(12),
+  acceptableAnswers: z.array(requiredText(600)).max(12),
+  referenceAnswer: requiredText(2000),
+};
+const questionSchema = z.object({
+  ...rubricShape,
+  version: z.number().int().min(1),
+  status: z.enum(["draft", "approved", "retired"]),
+  expectedRevision: z.number().int().min(0).nullable(),
+  prompts: z.object({
+    "en-US": requiredText(2000),
+    "zh-HK": requiredText(2000),
+    "zh-CN": requiredText(2000),
+  }),
+}).describe("Complete trilingual AWS interview question and grading rubric.");
+const syntheticTranscriptsSchema = z.object({
+  goodEn: requiredText(2000),
+  goodZhHk: requiredText(2000),
+  wrongOutdated: requiredText(2000),
+});
+const nodeOutputSchemas = {
+  interview_miner: z.object({
+    serviceId: identifierSchema,
+    candidateId: identifierSchema,
+    interviewTopic: requiredText(500),
+    commonQuestion: requiredText(2000),
+    typicalCommunityAnswer: requiredText(2000),
+    suspectedOutdatedClaims: z.array(z.string()),
+    webCitations: z.array(z.string()),
+  }).describe("Mined AWS interview topic, community answer, and web evidence."),
+  aws_docs_fact_checker: z.object({
+    ...rubricShape,
+    enPrompt: requiredText(2000),
+    awsDocCitations: z.array(z.string()),
+  }).describe("AWS-documentation-verified interview question and grading concepts."),
+  trilingual_localizer: questionSchema,
+  calibration_critic: z.object({
+    question: questionSchema,
+    syntheticTranscripts: syntheticTranscriptsSchema,
+  }).describe("Final question and three synthetic answers for rubric calibration."),
+};
 
 let tracerProvider = null;
 
@@ -44,9 +98,9 @@ export function extractGraphTopology(graph, { steps = [], handoffs = [] } = {}) 
     type: node.type,
     description: node.config?.description ?? "",
     preserveContext: Boolean(node.preserveContext),
-    harness: Boolean(node.agent?.goalLoop),
-    plugins: [node.agent?.contextOffloader?.name, node.agent?.goalLoop?.name].filter(Boolean),
-    goalLoopResult: node.agent?.goalLoop?.lastResult?.(node.agent) ?? null,
+    harness: Boolean(node.agent?.structuredOutputSchema),
+    structuredOutput: Boolean(node.agent?.structuredOutputSchema),
+    plugins: [node.agent?.contextOffloader?.name].filter(Boolean),
     visits: visitCounts.get(node.id) ?? 0,
     totalDurationMs: durationByNode.get(node.id) ?? 0,
     toolsUsed: [...(toolsByNode.get(node.id) ?? [])],
@@ -317,28 +371,8 @@ async function createStrandsNodeAgent({
     };
   }
 
-  const jsonGoalLoop = new GoalLoop({
-    name: `${id}:json-goal-loop`,
-    maxAttempts: Math.min(2, boundedMaxTurns),
-    preserveContext: true,
-    goal: response => {
-      const text = (response?.content ?? [])
-        .map(block => (typeof block?.text === "string" ? block.text : ""))
-        .join("\n")
-        .trim();
-      try {
-        parseJsonFromText(text);
-        return { passed: true };
-      } catch (error) {
-        return {
-          passed: false,
-          feedback: `Output from ${id} was not valid JSON (${error.message}). Return ONLY valid JSON matching your node schema.`,
-        };
-      }
-    },
-  });
-
-  const plugins = [jsonGoalLoop];
+  const structuredOutputSchema = nodeOutputSchemas[id];
+  const plugins = [];
   let contextOffloader = null;
   if (tools.length > 0) {
     contextOffloader = new ContextOffloader({
@@ -358,6 +392,7 @@ async function createStrandsNodeAgent({
     effort: "auto",
     caching: false,
     systemPrompt,
+    structuredOutputSchema,
     tools,
     plugins,
     builtinTools: [],
@@ -375,7 +410,7 @@ async function createStrandsNodeAgent({
     ...(traceAttributes ? { traceAttributes } : {}),
   });
 
-  agent.goalLoop = jsonGoalLoop;
+  agent.structuredOutputSchema = structuredOutputSchema;
   agent.contextOffloader = contextOffloader;
 
   let turnsInCurrentInvocation = 0;
@@ -546,8 +581,10 @@ export function createQuestionGenerator({
       const state = toolContext?.invocationState ?? {};
       if (!state.targetMeta) throw new Error("Missing targetMeta in invocationState");
       try {
+        const calibratedOutput = JSON.stringify(nodeOutputSchemas.calibration_critic.parse(input));
         const verified = await verifyAndCalibrate(input, state.targetMeta);
         state.calibratedResult = verified;
+        state.calibratedOutput = calibratedOutput;
         state.lastCritique = null;
         state.lastFailureStage = null;
         return {
@@ -557,6 +594,7 @@ export function createQuestionGenerator({
         };
       } catch (error) {
         state.calibratedResult = null;
+        state.calibratedOutput = null;
         state.lastCritique = error.message;
         state.lastFailureStage = classifyFailureStage(error);
         return {
@@ -579,11 +617,11 @@ export function createQuestionGenerator({
       traceAttributes,
       systemPrompt: `You are Agent 1 (InterviewQuestionMinerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 Your job is to find the most common, practical cloud engineering interview question for the requested AWS service (or audit an existing question if supplied).
-1. Call the nova_web_search tool ONCE (or at most twice) to search for the most frequently asked interview questions and typical candidate answers for the target AWS service, then immediately return your final JSON without further searches.
+1. Call the nova_web_search tool ONCE (or at most twice) to search for the most frequently asked interview questions and typical candidate answers for the target AWS service, then complete the structured output without further searches.
 2. If avoidQuestions or avoidQuestionIds is non-empty, or if [node: calibration_critic] reported a previousAttemptCritique, you MUST pick a COMPLETELY DIFFERENT interview question topic, architectural scenario, and AWS capability/feature that does NOT overlap in prompt or grading concepts with any entry in avoidQuestions, and choose a unique candidateId not in avoidQuestionIds.
 3. Focus on practical, foundational scenario-based interview questions that a student can answer orally in 20-45 seconds (explaining WHY and HOW, not memorizing obscure quotas).
 4. Identify any parts of the popular interview question or traditional candidate answer that might be outdated due to AWS updates.
-5. Return ONLY valid JSON:
+5. Call strands_structured_output LAST with these fields:
 {
   "serviceId": "...",
   "candidateId": "short-kebab-case-id",
@@ -606,7 +644,7 @@ Your job is to find the most common, practical cloud engineering interview quest
       systemPrompt: `You are Agent 2 (AwsDocsFactCheckerAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the mined interview question from [node: interview_miner] (and, if a rubric calibration retry occurred, a targeted previousAttemptCritique from [node: calibration_critic]).
 Your job is to verify BOTH the question premise and the answer against official AWS documentation using your documentation search tools (such as aws___search_documentation).
-1. Call aws___search_documentation once (and at most 1 aws___read_documentation call if needed) to verify current AWS behavior, security defaults, and best practices for this service and topic, then immediately return your final JSON without extra tool calls.
+1. Call aws___search_documentation once (and at most 1 aws___read_documentation call if needed) to verify current AWS behavior, security defaults, and best practices for this service and topic, then complete the structured output without extra searches.
 2. If [node: calibration_critic] reported a rubric or grading calibration critique, fix the concepts[], weights, misconceptions[], or prompt clarity to resolve that exact critique.
 3. If the mined interview question premise or traditional answer is outdated, rewrite the question and rubric so they are 100% accurate according to current official AWS documentation.
 4. Ensure the id, title, enPrompt, and concepts[] do NOT duplicate or overlap with any existing question listed in avoidQuestions or avoidQuestionIds.
@@ -614,7 +652,7 @@ Your job is to verify BOTH the question premise and the answer against official 
 6. Design 2 or 3 atomic grading concepts in concepts[] whose integer weights MUST sum strictly to 100 (e.g. 60 + 40, or 50 + 50, or 40 + 35 + 25).
 7. Each concept description must describe a clear architectural idea in plain English that a student can express in their own spoken words.
 8. Never mention voice, pronunciation, accent, or speaking tone anywhere.
-9. Return ONLY valid JSON:
+9. Call strands_structured_output LAST with these fields:
 {
   "id": "kebab-case-question-id",
   "serviceId": "...",
@@ -648,7 +686,7 @@ Rules:
 3. "zh-HK": Translate into authentic spoken Hong Kong Cantonese (using natural HK Cantonese phrasing such as 你嘅、點解、點樣、入面、邊啲) while keeping official English AWS service/feature terms (e.g., Amazon S3, IAM role, Security Group) where HK cloud engineers naturally code-switch.
 4. "zh-CN": Translate into natural Simplified Chinese Mandarin. NEVER use Cantonese characters (嘅, 喺, 唔, 畀, 佢, 哋, 乜, 啲, 揀, 嚟) in "zh-CN".
 5. Preserve id, serviceId, version, status, expectedRevision, title, concepts, misconceptions, acceptableAnswers, and referenceAnswer exactly as required by the schema.
-6. Return ONLY valid JSON:
+6. Call strands_structured_output LAST with these fields:
 {
   "id": "...",
   "serviceId": "...",
@@ -681,13 +719,13 @@ Rules:
       traceAttributes,
       systemPrompt: `You are Agent 4 (CalibrationCriticAgent) in a Strands Multi-Agent AWS Question Bank pipeline.
 You receive the localized trilingual question from [node: trilingual_localizer].
-Your job is to construct three realistic spoken student transcripts to test-grade the rubric, call the verify_and_calibrate_question tool to verify schema + live grading, and output the final JSON:
+Your job is to construct three realistic spoken student transcripts to test-grade the rubric, call the verify_and_calibrate_question tool to verify schema + live grading, and complete the structured output:
 1. "goodEn": A natural 1-2 sentence spoken English answer that clearly states every concept in question.concepts[].
 2. "goodZhHk": A natural 1-2 sentence spoken Hong Kong Cantonese + English code-switched answer that clearly states every concept in question.concepts[].
 3. "wrongOutdated": A plausible 1-2 sentence spoken English answer that states the misconception in question.misconceptions[0] and misses the required concepts.
-4. Call verify_and_calibrate_question with { question, syntheticTranscripts } to validate the rubric. If verify_and_calibrate_question reports a transcript issue, refine syntheticTranscripts and re-verify; if the question or rubric itself is flawed, output the JSON so the Strands Graph conditional loop routes the critique back to [node: interview_miner].
+4. Call verify_and_calibrate_question with { question, syntheticTranscripts } to validate the rubric. If verify_and_calibrate_question reports a transcript issue, refine syntheticTranscripts and re-verify; if the question or rubric itself is flawed, complete the structured output so the Strands Graph conditional loop routes the critique to the appropriate specialist.
 5. Never mention pronunciation, voice quality, or accent in any field.
-Return ONLY valid JSON:
+Call strands_structured_output LAST with these fields:
 {
   "question": { ...the complete question object from trilingual_localizer... },
   "syntheticTranscripts": {
@@ -705,15 +743,14 @@ Return ONLY valid JSON:
         return;
       }
       invocationState.evaluatedCriticTurn = turnNumber;
+      const output = criticResults.at(-1)?.structuredOutput;
+      if (JSON.stringify(output) !== invocationState.calibratedOutput) {
+        invocationState.calibratedResult = null;
+      }
       if (!invocationState.calibratedResult) {
-        const criticNode = state.node("calibration_critic");
-        const finalText = (criticNode?.content ?? [])
-          .map(block => (typeof block?.text === "string" ? block.text : ""))
-          .join("\n")
-          .trim();
         try {
-          const parsed = parseJsonFromText(finalText);
-          invocationState.calibratedResult = await verifyAndCalibrate(parsed, invocationState.targetMeta);
+          if (!output) throw new Error("CalibrationCriticAgent did not return structured output");
+          invocationState.calibratedResult = await verifyAndCalibrate(output, invocationState.targetMeta);
           invocationState.lastCritique = null;
           invocationState.lastFailureStage = null;
         } catch (error) {
@@ -800,6 +837,13 @@ Return ONLY valid JSON:
       const criticNodeState = event.state.node("calibration_critic");
       if (criticNodeState && criticNodeState.results.length === 0) {
         criticNodeState.status = Status.COMPLETED;
+      }
+    });
+
+    graph.addHook(NodeResultEvent, event => {
+      if (event.result.structuredOutput !== undefined) {
+        // Graph handoffs forward content, not structuredOutput or tool-call arguments.
+        event.result.content = [new TextBlock(JSON.stringify(event.result.structuredOutput))];
       }
     });
 
