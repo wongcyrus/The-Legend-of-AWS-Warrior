@@ -5,13 +5,13 @@
 
 > **Draft for review.** Implementation and trial observations as of 8 November 2026.
 >
-> Series: [Part 1 - The Game](PART1_THE_GAME.md), [Part 2 - The AWS Design](PART2_AWS_DESIGN.md), [Part 3 - The Original Question Generator](PART3_GEN_QUESTION.md), and Part 4 - Structured Output and Question Quality.
+> Series: [Part 1 - The Game](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md), [Part 2 - The AWS Design](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART2_AWS_DESIGN.md), [Part 3 - The Original Question Generator](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md), and Part 4 - Structured Output and Question Quality.
 
 ---
 
 ## 1. The Problem: A Question Can Score 100 and Still Be Wrong
 
-In [Part 3](PART3_GEN_QUESTION.md), I described a four-agent pipeline that mines AWS interview topics, checks documentation, translates prompts, and calibrates rubrics against synthetic student answers.
+In [Part 3](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md), I described a four-agent pipeline that mines AWS interview topics, checks documentation, translates prompts, and calibrates rubrics against synthetic student answers.
 
 The idea was sensible: generate a good English answer, a good Cantonese answer, and an outdated answer. The good answers should score at least 80, while the outdated answer should fail below 60.
 
@@ -65,7 +65,7 @@ const result = await agent.invoke(input);
 const output = structuredOutputSchema.parse(result.structuredOutput);
 ```
 
-The production implementation is in [question-generator.mjs](../../src/VoiceAgent/question-generator.mjs).
+The production implementation is in [question-generator.mjs](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/question-generator.mjs).
 
 Strands exposes a `strands_structured_output` tool. It validates the submitted arguments using the supplied Zod schema. Invalid arguments become tool-error feedback, allowing the model to correct them inside the bounded agent invocation.
 
@@ -201,8 +201,6 @@ The outer graph still has four nodes. Inside its calibration verifier, we now in
 This is an isolated internal review invocation, not a fifth graph node or another independently configurable model role.
 
 > **[INSERT IMAGE: docs/images/aws_warrior_v2_part4_question_quality_pipeline_diagram.png — AWS Strands Question Quality Pipeline: Structured Output, Evidence-Backed Review & Calibration]**
-
-![AWS Strands Question Quality Pipeline: Structured Output, Evidence-Backed Review & Calibration](docs/images/aws_warrior_v2_part4_question_quality_pipeline_diagram.png)
 
 The factual reviewer receives the question, source claims, source passages, and technical glossary. It does not receive synthetic scores or the writer's approval.
 
@@ -398,7 +396,7 @@ Harder services, additional retries, and second-question diversity can increase 
 
 The cost lesson is not "more agents are always better." It is **measure the complete workflow, distinguish failed work from successful output, and require each extra check to earn its cost by catching meaningful defects**.
 
-For per-model rates, aggregation rules, and measurement inputs, see [the generator costing documentation](../QUESTION_GENERATOR_AGENT.md#costing-from-traces-not-token-limits). Public pricing sources are [Amazon Bedrock](https://aws.amazon.com/bedrock/pricing/) and [AgentCore](https://aws.amazon.com/bedrock/agentcore/pricing/).
+For per-model rates, aggregation rules, and measurement inputs, see [the generator costing documentation](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/QUESTION_GENERATOR_AGENT.md#costing-from-traces-not-token-limits). Public pricing sources are [Amazon Bedrock](https://aws.amazon.com/bedrock/pricing/) and [AgentCore](https://aws.amazon.com/bedrock/agentcore/pricing/).
 
 ---
 
@@ -426,12 +424,12 @@ At the time of this draft, **55 targeted tests passed**. They cover contracts, s
 
 For implementation details, see:
 
-- [Current generator architecture](../QUESTION_GENERATOR_AGENT.md)
-- [Strands graph and structured-output contracts](../../src/VoiceAgent/question-generator.mjs)
-- [Source binding, translation checks, and factual-review validation](../../src/VoiceAgent/question-quality.mjs)
-- [Per-role model configuration](../../src/VoiceAgent/question-generator-config.mjs)
-- [Web Answer adapter](../../src/VoiceAgent/web-answer.mjs)
-- [Generator regression tests](../../tests/voice-practice/question-generator.test.mjs)
+- [Current generator architecture](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/QUESTION_GENERATOR_AGENT.md)
+- [Strands graph and structured-output contracts](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/question-generator.mjs)
+- [Source binding, translation checks, and factual-review validation](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/question-quality.mjs)
+- [Per-role model configuration](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/question-generator-config.mjs)
+- [Web Answer adapter](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/src/VoiceAgent/web-answer.mjs)
+- [Generator regression tests](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/tests/voice-practice/question-generator.test.mjs)
 
 ---
 
