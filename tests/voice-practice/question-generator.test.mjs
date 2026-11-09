@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tool } from "../../src/VoiceAgent/node_modules/@strands-agents/sdk/dist/src/index.js";
+import { questionClaimFields, readAwsSource, validateFactualReview,
+  validateSourceClaims, validateTechnicalTranslations } from "../../src/VoiceAgent/question-quality.mjs";
 import {
   classifyFailureStage,
   createNovaWebSearchTool,
@@ -52,7 +55,79 @@ const sampleSyntheticTranscripts = {
   wrongOutdated: "RDS Multi-AZ standby instances automatically distribute read-heavy query traffic across both zones.",
 };
 
+const sourceUrl = "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html";
+const sourceText = "Multi-AZ DB instance deployments maintain a synchronous standby in another Availability Zone for automatic failover. The standby cannot serve read traffic. Read Replicas use asynchronous replication to offload read queries.";
+const sampleClaims = question => [...questionClaimFields(question)].map(([field, claim]) => ({
+  field, claim, sourceUrl, quote: sourceText,
+}));
+const sampleFactualReview = question => ({
+  passed: true, failureStage: "rubric", issues: [],
+  claimReviews: [...questionClaimFields(question).keys()].map(field => ({
+    field, verdict: "supported", reason: "The retrieved passage supports this deployment variant.",
+  })),
+  alternativesRequired: false,
+  alternativeReason: "This is a fixed feature comparison, not an architectural implementation choice.",
+  alternativeAnswers: [],
+});
+
+function groundedQualityGenerator(question, { passage = sourceText, review = sampleFactualReview(question),
+  transcripts = sampleSyntheticTranscripts, grader, changeClaims, changeRubric, readUrl = sourceUrl } = {}) {
+  const stats = { reviews: 0, grades: 0, sourceReads: 0, feedback: [] };
+  let researchTurn = 0;
+  let calibrated = false;
+  const docs = tool({
+    name: "aws_web_answer", description: "Mock discovery",
+    inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+    callback: async () => ({ citations: [{ url: sourceUrl }] }),
+  });
+  const generator = createQuestionGenerator({
+    webSearchTool: null, docTools: [docs], maxAttempts: 1,
+    sourceReader: async url => { stats.sourceReads++; return { url, text: passage }; },
+    grader: async input => { stats.grades++; return grader(input); },
+    send: async command => {
+      stats.feedback.push(...command.input.messages.flatMap(message => message.content)
+        .filter(block => block.toolResult).map(block => JSON.stringify(block.toolResult)));
+      const system = command.input.system[0].text;
+      if (system.startsWith("You are FactualReviewAgent")) {
+        stats.reviews++;
+        const payload = JSON.parse(command.input.messages[0].content[0].text);
+        return structuredResponse(command, typeof review === "function" ? review(payload) : review);
+      }
+      if (system.includes("AwsDocsFactCheckerAgent")) {
+        if (researchTurn++ < 2) return {
+          stopReason: "tool_use", output: { message: { content: [{
+            toolUse: { toolUseId: `research-${researchTurn}`,
+              name: researchTurn === 1 ? "aws_web_answer" : "read_aws_sources",
+              input: researchTurn === 1 ? { query: "Source facts" } : { urls: [readUrl] } },
+          }] } },
+        };
+        const response = questionNodeResponse(command, question);
+        const output = response.output.message.content[0].toolUse.input;
+        output.sourceClaims = sampleClaims(question).map(claim => ({ ...claim, quote: passage }));
+        changeClaims?.(output.sourceClaims);
+        changeRubric?.(output);
+        return response;
+      }
+      if (system.includes("CalibrationCriticAgent")) {
+        if (!calibrated) {
+          calibrated = true;
+          return { stopReason: "tool_use", output: { message: { content: [{
+            toolUse: { toolUseId: "calibrate", name: "verify_and_calibrate_question",
+              input: { question, syntheticTranscripts: transcripts } },
+          }] } } };
+        }
+        return structuredResponse(command, { question, syntheticTranscripts: transcripts });
+      }
+      return questionNodeResponse(command, question);
+    },
+  });
+  return { generator, stats };
+}
+
 function structuredResponse(command, output) {
+  if (command.input.system?.[0]?.text.includes("CalibrationCriticAgent") && !output.review) {
+    output = { ...output, review: { passed: true, failureStage: "rubric", issues: [] } };
+  }
   const outputTool = command.input.toolConfig.tools.find(
     entry => entry.toolSpec?.name === "strands_structured_output"
   );
@@ -93,9 +168,11 @@ function questionNodeResponse(command, question) {
     return structuredResponse(command, {
       id, serviceId, title, concepts, misconceptions, acceptableAnswers, referenceAnswer,
       enPrompt: question.prompts["en-US"],
-      awsDocCitations: [],
+      awsDocCitations: ["https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html"],
+      sourceClaims: sampleClaims(question),
     });
   }
+  if (systemText.startsWith("You are FactualReviewAgent")) return structuredResponse(command, sampleFactualReview(question));
   return structuredResponse(command, question);
 }
 
@@ -201,11 +278,16 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
 
   let minerCalledTool = false;
   let checkerCalledTool = false;
+  let checkerReadSource = false;
   let criticCalledTool = false;
   const q = sampleGeneratedQuestion("rds", "multi-az-failover", 1, null);
 
   const send = async command => {
     const sys = command.input.system?.[0]?.text ?? "";
+    if (sys.startsWith("You are FactualReviewAgent")) {
+      assert.doesNotMatch(command.input.messages[0].content[0].text, /goodEnScore|goodZhHkScore/);
+      return questionNodeResponse(command, q);
+    }
     if (sys.includes("InterviewQuestionMinerAgent")) {
       if (!minerCalledTool) {
         minerCalledTool = true;
@@ -233,6 +315,12 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
             },
           },
         };
+      }
+      if (!checkerReadSource) {
+        checkerReadSource = true;
+        return { stopReason: "tool_use", output: { message: { role: "assistant", content: [{
+          toolUse: { toolUseId: "read-source", name: "read_aws_sources", input: { urls: [sourceUrl] } },
+        }] } } };
       }
       const handoff = command.input.messages.flatMap(message => message.content)
         .filter(block => typeof block.text === "string").map(block => block.text).join("\n");
@@ -289,6 +377,7 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
     send,
     webSearchTool: mockWebTool,
     docTools: [mockDocTool],
+    sourceReader: async url => ({ url, text: sourceText }),
     grader,
   });
 
@@ -303,7 +392,7 @@ test("4-agent Strands Graph mines interview question, verifies AWS docs via MCP 
   assert.equal(criticCalledTool, true);
   assert.equal(docCalls.length, 1);
   assert.equal(result.question.id, "multi-az-failover");
-  assert.equal(result.question.status, "approved");
+  assert.equal(result.question.status, "draft");
   assert.equal(result.calibration.goodEnScore, 100);
   assert.equal(result.calibration.goodZhHkScore, 100);
   assert.equal(result.calibration.wrongOutdatedScore, 0);
@@ -358,6 +447,7 @@ test("Structured critic output preserves refresh metadata and cannot reuse calib
         question: finalQuestion,
         syntheticTranscripts: sampleSyntheticTranscripts,
       });
+
     },
     grader: async ({ transcript }) => {
       gradingCalls++;
@@ -395,6 +485,35 @@ test("Structured critic output preserves refresh metadata and cannot reuse calib
     () => generator.generateOrRefreshQuestion(input),
     /Invalid Q&A question/
   );
+});
+
+test("omitted provider revision metadata is assigned by the server for new questions and refreshes", async () => {
+  const question = sampleGeneratedQuestion();
+  const { expectedRevision, ...modelQuestion } = question;
+  const generator = createQuestionGenerator({
+    webSearchTool: null, docTools: [], maxAttempts: 1,
+    send: async command => {
+      if (command.input.system?.[0]?.text.includes("CalibrationCriticAgent")) {
+        return structuredResponse(command, { question: modelQuestion, syntheticTranscripts: sampleSyntheticTranscripts });
+      }
+      return questionNodeResponse(command, modelQuestion);
+    },
+    grader: async ({ transcript }) => ({
+      concepts: question.concepts.map((concept, index) => ({
+        id: concept.id, verdict: transcript.includes("synchronous standby") ? "met" : "missing",
+        evidence: transcript.includes("synchronous standby") ? (index ? "Read Replicas" : "synchronous standby") : "",
+      })), feedback: "Checked.",
+    }),
+  });
+  const input = { serviceId: "rds", label: "RDS", passage: "RDS" };
+  const generated = await generator.generateOrRefreshQuestion(input);
+  assert.equal(generated.question.expectedRevision, null);
+  const refreshed = await generator.generateOrRefreshQuestion({
+    ...input, existingQuestion: { ...question, expectedRevision: 5, version: 2 },
+  });
+  assert.equal(refreshed.question.expectedRevision, 5);
+  assert.equal(refreshed.question.version, 3);
+  assert.equal(refreshed.question.id, question.id);
 });
 
 test("Stage-classified loop routing sends localization defects to trilingual_localizer and rubric defects to aws_docs_fact_checker", async () => {
@@ -562,6 +681,7 @@ test("runQuestionBatchJob checkpoints per service, skips completed services on r
       countPerService: 1,
       checkpointFile,
       publish: true,
+      status: "approved",
       store,
       generator: mockGenerator,
     });
@@ -576,6 +696,7 @@ test("runQuestionBatchJob checkpoints per service, skips completed services on r
       countPerService: 1,
       checkpointFile,
       publish: true,
+      status: "approved",
       store,
       generator: mockGenerator,
     });
@@ -591,6 +712,7 @@ test("runQuestionBatchJob checkpoints per service, skips completed services on r
       services: ["rds"],
       checkpointFile: refreshFile,
       publish: true,
+      status: "approved",
       store,
       generator: mockGenerator,
     });
@@ -715,6 +837,7 @@ test("semantic deduplication blocks repeated topics with different IDs and passe
     mode: "generate",
     services: ["s3"],
     countPerService: 2,
+    status: "approved",
     publish: false,
     generator: {
       async generateOrRefreshQuestion({ serviceId, slotIndex, avoidQuestions }) {
@@ -798,15 +921,31 @@ test("Strands structured output retries text replies and invalid schema fields w
       properties: { search_phrase: { type: "string" } },
       required: ["search_phrase"],
     },
-    callback: async () => ({ results: [{ title: "RDS Multi-AZ", url: "https://docs.aws.amazon.com/rds" }] }),
+    callback: async () => ({ results: [{ title: "RDS Multi-AZ", url: "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html" }] }),
   });
 
   let localizerTurn = 0;
   const generator = createQuestionGenerator({
     webSearchTool: mockWebTool,
     docTools: [mockDocTool],
+    sourceReader: async url => ({ url, text: sourceText }),
     send: async command => {
       const systemText = command.input?.system?.[0]?.text ?? "";
+      if (systemText.includes("AwsDocsFactCheckerAgent") &&
+          !command.input.messages.some(message => message.content.some(block => block.toolResult))) {
+        return {
+          stopReason: "tool_use",
+          output: { message: { role: "assistant", content: [{
+            toolUse: { toolUseId: "docs", name: "aws___search_documentation", input: { search_phrase: "RDS Multi-AZ" } },
+          }] } },
+        };
+      }
+      if (systemText.includes("AwsDocsFactCheckerAgent") &&
+          !command.input.messages.some(message => message.content.some(block => block.toolResult?.toolUseId === "read-source"))) {
+        return { stopReason: "tool_use", output: { message: { role: "assistant", content: [{
+          toolUse: { toolUseId: "read-source", name: "read_aws_sources", input: { urls: [sourceUrl] } },
+        }] } } };
+      }
       if (systemText.includes("TrilingualLocalizationAgent")) {
         localizerTurn++;
         if (localizerTurn === 1) {
@@ -878,4 +1017,502 @@ test("Strands structured output retries text replies and invalid schema fields w
   const minerNode = nodes.find(n => n.id === "interview_miner");
   assert.ok(minerNode.plugins.includes("strands:context-offloader"));
   assert.equal(result.trace.steps.length, 4, "Schema retries stay within the localizer node");
+});
+
+test("default Chinese models include grounding and production-like calibration grading in usage", async () => {
+  const q = sampleGeneratedQuestion();
+  const generator = createQuestionGenerator({
+    docTools: [],
+    send: async command => {
+      const sys = command.input.system?.[0]?.text ?? "";
+      if (command.input.toolConfig?.tools?.[0]?.systemTool) {
+        return { stopReason: "end_turn", output: { message: { content: [{ text: "Research topic" }] } },
+          usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 } };
+      }
+      if (sys.includes("You grade the student's CURRENT answer")) {
+        const request = JSON.parse(command.input.messages[0].content[0].text);
+        const met = request.transcript.includes("synchronous standby");
+        return {
+          stopReason: "end_turn",
+          output: { message: { content: [{ text: JSON.stringify({
+            concepts: q.concepts.map((concept, index) => ({
+              id: concept.id, verdict: met ? "met" : "missing",
+              evidence: met ? (index === 0 ? "synchronous standby" : "Read Replicas") : "",
+            })), feedback: "Checked.",
+          }) }] } },
+          usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+        };
+      }
+      if (sys.includes("InterviewQuestionMinerAgent") &&
+          !command.input.messages.some(message => message.content.some(block => block.toolResult))) {
+        return { stopReason: "tool_use", output: { message: { content: [{
+          toolUse: { toolUseId: "grounding", name: "nova_web_search", input: { query: "RDS interview" } },
+        }] } }, usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 } };
+      }
+      const response = sys.includes("CalibrationCriticAgent")
+        ? structuredResponse(command, { question: q, syntheticTranscripts: sampleSyntheticTranscripts })
+        : questionNodeResponse(command, q);
+      return { ...response, usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 } };
+    },
+  });
+  const { trace, question } = await generator.generateOrRefreshQuestion({ serviceId: "rds", label: "RDS", passage: "RDS" });
+  assert.equal(question.status, "draft");
+  assert.equal(trace.modelInvocations.filter(record => record.role === "grader").length, 3);
+  assert.equal(trace.modelInvocations.filter(record => record.role === "grounding").length, 1);
+  assert.equal(trace.modelInvocations.find(record => record.role === "factChecker").modelId, "zai.glm-5");
+  assert.equal(trace.modelInvocations.find(record => record.role === "localizer").modelId, "qwen.qwen3-next-80b-a3b");
+  assert.equal(trace.modelInvocations.find(record => record.role === "critic").modelId, "deepseek.v3.2");
+  assert.equal(trace.usage.totalTokens, trace.modelInvocations.length * 12);
+  assert.equal(trace.usageComplete, true);
+});
+
+test("persistent research budget forces structured output after two calls even across tool history", async () => {
+  const q = sampleGeneratedQuestion();
+  let researchCalls = 0;
+  const docTool = tool({
+    name: "aws_web_answer",
+    description: "Evidence",
+    inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+    callback: async () => { researchCalls++; return {
+      citations: [{ url: "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html" }],
+    }; },
+  });
+  const generator = createQuestionGenerator({
+    webSearchTool: null, docTools: [docTool],
+    sourceReader: async url => { researchCalls++; return { url, text: sourceText }; },
+    grader: async ({ transcript }) => ({
+      concepts: q.concepts.map((concept, index) => ({
+        id: concept.id, verdict: transcript.includes("synchronous standby") ? "met" : "missing",
+        evidence: transcript.includes("synchronous standby") ? (index ? "Read Replicas" : "synchronous standby") : "",
+      })), feedback: "Checked.",
+    }),
+    send: async command => {
+      const sys = command.input.system?.[0]?.text ?? "";
+      if (sys.includes("AwsDocsFactCheckerAgent")) {
+        if (researchCalls < 2) return {
+          stopReason: "tool_use",
+          output: { message: { content: [{
+            toolUse: { toolUseId: `research-${researchCalls}`,
+              name: researchCalls === 0 ? "aws_web_answer" : "read_aws_sources",
+              input: researchCalls === 0 ? { query: "RDS" } : { urls: [sourceUrl] } },
+          }] } },
+        };
+        assert.deepEqual(command.input.toolConfig.toolChoice, { tool: { name: "strands_structured_output" } });
+      }
+      if (sys.includes("CalibrationCriticAgent")) {
+        assert.match(sys, /PRIVATE_RESEARCH_EVIDENCE:/);
+        assert.match(sys, /Concepts.MultiAZ.html/);
+        return structuredResponse(command, { question: q, syntheticTranscripts: sampleSyntheticTranscripts });
+      }
+      return questionNodeResponse(command, q);
+    },
+  });
+  const { trace, question } = await generator.generateOrRefreshQuestion({ serviceId: "rds", label: "RDS", passage: "RDS" });
+  assert.equal(researchCalls, 2);
+  assert.equal(trace.evidence.length, 2);
+  assert.deepEqual(question.sources, ["https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html"]);
+});
+
+test("independent critic rejection overrides successful calibration and retains failed traces", async () => {
+  const q = sampleGeneratedQuestion();
+  let criticCalls = 0;
+  let gradingCalls = 0;
+  const generator = createQuestionGenerator({
+    webSearchTool: null, docTools: [], maxAttempts: 1,
+    grader: async ({ transcript }) => {
+      gradingCalls++;
+      return { concepts: q.concepts.map((concept, index) => ({
+        id: concept.id, verdict: transcript.includes("synchronous standby") ? "met" : "missing",
+        evidence: transcript.includes("synchronous standby") ? (index ? "Read Replicas" : "synchronous standby") : "",
+      })), feedback: "Checked." };
+    },
+    send: async command => {
+      if (command.input.system?.[0]?.text.includes("CalibrationCriticAgent")) {
+        if (++criticCalls === 1) return {
+          stopReason: "tool_use", output: { message: { content: [{
+            toolUse: { toolUseId: "calibrate", name: "verify_and_calibrate_question",
+              input: { question: q, syntheticTranscripts: sampleSyntheticTranscripts } },
+          }] } },
+        };
+        return structuredResponse(command, {
+          question: q, syntheticTranscripts: sampleSyntheticTranscripts,
+          review: { passed: false, failureStage: "rubric", issues: ["Snapshot rollback claim is unsupported"] },
+        });
+      }
+      return questionNodeResponse(command, q);
+    },
+  });
+  await assert.rejects(
+    generator.generateOrRefreshQuestion({ serviceId: "rds", label: "RDS", passage: "RDS" }),
+    error => {
+      assert.match(error.message, /rollback claim is unsupported/);
+      assert.equal(error.trace.status, "FAILED");
+      assert.ok(error.trace.modelInvocations.length);
+      return true;
+    },
+  );
+  assert.equal(gradingCalls, 3);
+});
+
+test("source claims require verbatim retrieved passages and coverage, not just matching AWS URLs", () => {
+  const q = sampleGeneratedQuestion();
+  const claims = sampleClaims(q);
+  const passages = [{ url: sourceUrl, text: sourceText }];
+  assert.doesNotThrow(() => validateSourceClaims(q, claims, passages));
+  assert.throws(() => validateSourceClaims(q, claims, []), /quotation was not found/);
+  assert.throws(() => validateSourceClaims(q, [
+    { ...claims[0], quote: "A fabricated default not stated by the source." }, ...claims.slice(1),
+  ], passages), /quotation was not found/);
+  assert.throws(() => validateSourceClaims(q, claims.filter(claim => claim.field !== "concepts.vs-read-replica"), passages),
+    /do not cover rubric fields: concepts.vs-read-replica/);
+  assert.throws(() => validateSourceClaims(q, [{ ...claims[0], field: "inventedField" }, ...claims.slice(1)], passages),
+    /unknown rubric field/);
+});
+
+test("PITR glossary rejects the observed point-to-point translations and formal-only Cantonese", async () => {
+  const q = sampleGeneratedQuestion();
+  q.prompts = {
+    "en-US": "How would you configure point-in-time recovery (PITR)?",
+    "zh-HK": "你會點樣設定時間點還原 (PITR)？",
+    "zh-CN": "你会如何配置时间点恢复 (PITR)？",
+  };
+  assert.doesNotThrow(() => validateTechnicalTranslations(q));
+  for (const [language, badPrompt] of [
+    ["zh-HK", "你會點樣設定點對點恢復？"],
+    ["zh-CN", "你会如何配置点对点恢复？"],
+  ]) {
+    const invalid = { ...q, prompts: { ...q.prompts, [language]: badPrompt } };
+    assert.throws(() => validateTechnicalTranslations(invalid), error => error.failureStage === "localization");
+    const { generator, stats } = groundedQualityGenerator(invalid);
+    await assert.rejects(generator.generateOrRefreshQuestion({ serviceId: "rds" }), /mistranslates point-in-time/);
+    assert.equal(stats.reviews, 0);
+    assert.equal(stats.grades, 0);
+  }
+  assert.throws(() => validateTechnicalTranslations({
+    ...q, prompts: { ...q.prompts, "zh-HK": "你應該如何設定備份和恢復？" },
+  }), /spoken Cantonese/);
+});
+
+test("S3 timing, duration and RDS source contradictions fail before grading and cannot be voted away", async () => {
+  for (const defect of [
+    {
+      serviceId: "s3",
+      claim: "Lifecycle rules cannot transition objects before the minimum duration of the target class.",
+      passage: "Certain storage classes have a minimum object storage duration. If you transition objects out of these storage classes before the minimum duration, you are charged for the remainder of that duration.",
+      reason: "The draft confuses entering a target class with exiting a class and minimum-duration charges.",
+    },
+    {
+      serviceId: "s3",
+      prompt: "Files are processed for 30 days, then retained for another 90 days before archive. When should they transition?",
+      claim: "Transition to the archive after 90 days from creation.",
+      passage: "Lifecycle transition rules specify the age of objects in days after creation.",
+      reason: "Thirty active days plus another ninety retained days means 120 total days, not 90.",
+    },
+    {
+      serviceId: "rds",
+      claim: "Default retention is 7 days.",
+      passage: "If you create a DB instance using the Amazon RDS API or the AWS CLI and if you don't set the backup retention period, the default backup retention period is one day. If you create a DB instance using the console, the default backup retention period is seven days.",
+      reason: "Seven days is only the console default; API/CLI defaults are one day.",
+    },
+  ]) {
+    const q = sampleGeneratedQuestion(defect.serviceId);
+    q.referenceAnswer = defect.claim;
+    if (defect.prompt) q.prompts["en-US"] = defect.prompt;
+    const { generator, stats } = groundedQualityGenerator(q, {
+      passage: defect.passage,
+      review: payload => {
+        assert.equal(payload.question.referenceAnswer, defect.claim);
+        assert.equal(payload.sourcePassages[0].text, defect.passage);
+        assert.ok(payload.sourceClaims.some(claim => claim.field === "referenceAnswer"));
+        assert.equal(payload.syntheticTranscripts, undefined);
+        assert.equal(payload.calibration, undefined);
+        const review = sampleFactualReview(q);
+        review.claimReviews.find(claim => claim.field === "referenceAnswer").verdict = "contradicted";
+        review.claimReviews.find(claim => claim.field === "referenceAnswer").reason = defect.reason;
+        return review;
+      },
+    });
+    await assert.rejects(generator.generateOrRefreshQuestion({ serviceId: defect.serviceId }), error => {
+      assert.match(error.message, /Independent factual review: referenceAnswer/);
+      assert.equal(error.trace.qualityReviews[0].status, "failed");
+      assert.equal(error.trace.qualityReviews[0].review.passed, true, "A summary approval cannot override a contradictory claim verdict");
+      return true;
+    });
+    assert.equal(stats.reviews, 1, "Tool and final-output retries reuse the rejection for the same candidate");
+    assert.equal(stats.grades, 0);
+  }
+});
+
+test("factual reviewer corrects approval notes in issues before grading", async () => {
+  const q = sampleGeneratedQuestion();
+  let reviewTurns = 0;
+  const { generator, stats } = groundedQualityGenerator(q, {
+    review: () => {
+      const review = sampleFactualReview(q);
+      if (++reviewTurns === 1) review.issues = ["This fixed feature comparison has no architectural alternatives."];
+      return review;
+    },
+    grader: async ({ transcript }) => ({
+      concepts: q.concepts.map(concept => ({
+        id: concept.id, verdict: transcript === sampleSyntheticTranscripts.wrongOutdated ? "missing" : "met",
+        evidence: transcript === sampleSyntheticTranscripts.wrongOutdated ? "" : "Read Replicas",
+      })), feedback: "Checked.",
+    }),
+  });
+  const result = await generator.generateOrRefreshQuestion({ serviceId: "rds" });
+  assert.equal(stats.reviews, 2);
+  assert.equal(stats.grades, 3);
+  assert.ok(stats.feedback.some(feedback => feedback.includes("When passed=true, issues must be empty")));
+  assert.equal(result.trace.qualityReviews.length, 1);
+  assert.deepEqual(result.trace.qualityReviews[0].review.issues, []);
+  assert.equal(result.trace.qualityReviews[0].status, "passed");
+});
+
+test("missing source passages fail before factual review or grading", async () => {
+  const { generator, stats } = groundedQualityGenerator(sampleGeneratedQuestion(), {
+    changeClaims: claims => { claims[0].sourceUrl = "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIT.html"; },
+  });
+  await assert.rejects(generator.generateOrRefreshQuestion({ serviceId: "rds" }), /exceeded maximum inner loop turns/);
+  assert.ok(stats.feedback.some(feedback => feedback.includes("Source URL was not read")));
+  assert.equal(stats.reviews, 0);
+  assert.equal(stats.grades, 0);
+  const unseen = groundedQualityGenerator(sampleGeneratedQuestion(), {
+    readUrl: "https://example.com/untrusted-doc",
+  });
+  await assert.rejects(unseen.generator.generateOrRefreshQuestion({ serviceId: "rds" }), /exceeded maximum inner loop turns/);
+  assert.ok(unseen.stats.feedback.some(feedback => feedback.includes("No AWS source passages")));
+  assert.equal(unseen.stats.sourceReads, 0, "Non-AWS source URLs must never be fetched");
+});
+
+test("writer corrects stale citations and server-owned excerpts cannot be forged by model quotations", async () => {
+  const q = sampleGeneratedQuestion();
+  let writerTurns = 0;
+  const { generator, stats } = groundedQualityGenerator(q, {
+    changeRubric: output => {
+      writerTurns++;
+      if (writerTurns === 1) output.awsDocCitations = ["https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIT.html"];
+      if (writerTurns === 2) output.sourceClaims[0].quote = "This invented quotation was never read from an AWS page.";
+    },
+    grader: async ({ transcript }) => ({
+      concepts: q.concepts.map(concept => ({
+        id: concept.id, verdict: transcript === sampleSyntheticTranscripts.wrongOutdated ? "missing" : "met",
+        evidence: transcript === sampleSyntheticTranscripts.wrongOutdated ? "" : "Read Replicas",
+      })), feedback: "Checked.",
+    }),
+  });
+  const result = await generator.generateOrRefreshQuestion({ serviceId: "rds" });
+  assert.equal(result.question.id, q.id);
+  assert.equal(writerTurns, 2);
+  assert.equal(stats.sourceReads, 1);
+  assert.equal(stats.reviews, 1);
+  assert.equal(stats.grades, 3);
+  assert.ok(stats.feedback.some(feedback => feedback.includes("not prior visits")));
+  const claims = result.trace.qualityReviews[0].sourceClaims;
+  assert.ok(claims.every(claim => sourceText.includes(claim.quote)));
+  assert.ok(claims.every(claim => !claim.quote.includes("invented quotation")));
+  const calls = result.trace.steps.find(step => step.nodeId === "aws_docs_fact_checker").toolCalls;
+  assert.deepEqual(calls.filter(call => call.name === "strands_structured_output").map(call => call.status), ["error", "success"]);
+});
+
+test("canonical AWS documentation not listed by discovery is evidence only after its page is read", async () => {
+  const q = sampleGeneratedQuestion();
+  const canonical = "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html";
+  const { generator, stats } = groundedQualityGenerator(q, {
+    readUrl: canonical,
+    changeRubric: output => {
+      output.awsDocCitations = [canonical];
+      output.sourceClaims.forEach(claim => { claim.sourceUrl = canonical; });
+    },
+    grader: async ({ transcript }) => ({
+      concepts: q.concepts.map(concept => ({
+        id: concept.id, verdict: transcript === sampleSyntheticTranscripts.wrongOutdated ? "missing" : "met",
+        evidence: transcript === sampleSyntheticTranscripts.wrongOutdated ? "" : "Read Replicas",
+      })), feedback: "Checked.",
+    }),
+  });
+  const result = await generator.generateOrRefreshQuestion({ serviceId: "rds" });
+  assert.equal(stats.sourceReads, 1);
+  assert.ok(result.question.sources.includes(canonical));
+});
+
+test("EC2 and CloudFront valid alternatives must pass calibration rather than being punished for optional services", async () => {
+  for (const service of ["ec2", "cloudfront"]) {
+    const q = sampleGeneratedQuestion(service, `${service}-optional-services`);
+    q.title = service === "ec2" ? "Rolling patch updates" : "Caching immutable game assets";
+    q.prompts = service === "ec2" ? {
+      "en-US": "How would you patch EC2 instances behind a load balancer while maintaining healthy capacity?",
+      "zh-HK": "你會點樣幫負載平衡器後面嘅 EC2 instances 更新補丁，同時保持健康容量？",
+      "zh-CN": "你会如何为负载均衡器后面的 EC2 实例更新补丁，同时保持健康容量？",
+    } : {
+      "en-US": "How would you cache immutable game assets in CloudFront and reduce origin load?",
+      "zh-HK": "你會點樣喺 CloudFront 快取唔會改嘅遊戲資源，同時減少 origin 負載？",
+      "zh-CN": "你会如何在 CloudFront 缓存不可变的游戏资源，同时减少源站负载？",
+    };
+    q.concepts = service === "ec2" ? [
+      { id: "healthy-capacity", description: "Maintain healthy serving capacity during a controlled rolling update.", weight: 60 },
+      { id: "patch-delivery", description: "Deliver operating system patches using an automated mechanism.", weight: 40 },
+    ] : [
+      { id: "cache-control", description: "Use versioned immutable assets and appropriate cache headers.", weight: 60 },
+      { id: "origin-offload", description: "Reduce origin requests through effective caching.", weight: 40 },
+    ];
+    q.misconceptions = [service === "ec2" ? "All EC2 instances must stop simultaneously for patching." : "All static assets require a zero TTL."];
+    q.referenceAnswer = service === "ec2"
+      ? "Use Instance Refresh and Image Builder to deploy patched AMIs while preserving healthy capacity."
+      : "Use versioned filenames, cache headers and Origin Shield to reduce origin load.";
+    q.acceptableAnswers = [q.referenceAnswer];
+    const transcripts = {
+      goodEn: q.referenceAnswer,
+      goodZhHk: `我哋會用 ${service === "ec2" ? "Instance Refresh 同 Image Builder" : "Origin Shield 同 versioned filenames"}。`,
+      wrongOutdated: q.misconceptions[0],
+    };
+    const alternative = service === "ec2"
+      ? "Use Patch Manager with a rolling maintenance plan and load-balancer draining."
+      : "Use versioned filenames and appropriate cache headers without Origin Shield.";
+    const passage = service === "ec2"
+      ? "Patch Manager automates operating system patching. A rolling maintenance plan can drain instances from the load balancer while maintaining healthy capacity."
+      : "Versioned filenames and appropriate cache headers improve cache hit rates and reduce origin requests. Origin Shield is an optional additional caching layer.";
+    const review = { ...sampleFactualReview(q), alternativesRequired: true,
+      alternativeReason: "The scenario does not require the specific AWS implementation.",
+      alternativeAnswers: [{ answer: alternative, sourceUrl, quote: passage }] };
+    for (const acceptsAlternative of [false, true]) {
+      const { generator, stats } = groundedQualityGenerator(q, {
+        review, passage, transcripts,
+        grader: async ({ transcript }) => {
+          const met = transcript === alternative ? acceptsAlternative : transcript !== transcripts.wrongOutdated;
+          return {
+            concepts: q.concepts.map(concept => ({
+              id: concept.id, verdict: met ? "met" : "missing",
+              evidence: met ? (transcript === alternative ? (service === "ec2" ? "Patch Manager" : "versioned filenames") : (service === "ec2" ? "Instance Refresh" : "Origin Shield")) : "",
+            })), feedback: "Checked.",
+          };
+        },
+      });
+      if (acceptsAlternative) {
+        const result = await generator.generateOrRefreshQuestion({ serviceId: service });
+        assert.deepEqual(result.calibration.alternativeScores, [100]);
+      } else {
+        await assert.rejects(generator.generateOrRefreshQuestion({ serviceId: service }), /Valid alternative answer failed calibration/);
+      }
+      assert.equal(stats.reviews, 1);
+      assert.equal(stats.grades, acceptsAlternative ? 4 : 8);
+    }
+  }
+  const q = sampleGeneratedQuestion();
+  assert.throws(() => validateFactualReview({
+    ...sampleFactualReview(q), alternativesRequired: true,
+  }, sampleClaims(q), [{ url: sourceUrl, text: sourceText }]), /lacks a source-backed valid alternative/);
+  assert.throws(() => validateFactualReview({
+    ...sampleFactualReview(q), claimReviews: sampleFactualReview(q).claimReviews.slice(1),
+  }, sampleClaims(q), []), /omitted claim fields/);
+});
+
+test("AWS source reader extracts bounded text and follows only bounded, allowlisted AWS redirects", async () => {
+  let calls = 0;
+  const fetchImpl = async (url, options) => {
+    calls++;
+    assert.equal(url, sourceUrl);
+    assert.equal(options.redirect, "manual");
+    assert.ok(options.signal);
+    return new Response(`<html><nav>irrelevant navigation</nav><div id="main-col-body"><script>hidden instructions</script><p>${sourceText}</p><p>RPO &amp; RTO</p></div></html>`,
+      { headers: { "content-type": "text/html; charset=utf-8" } });
+  };
+  const passage = await readAwsSource(sourceUrl + "#details", { fetchImpl });
+  assert.match(passage.text, /RPO & RTO/);
+  assert.doesNotMatch(passage.text, /hidden instructions|irrelevant navigation/);
+  for (const url of ["http://docs.aws.amazon.com/page", "https://example.com/page", "https://user@aws.amazon.com/page",
+    "https://aws.amazon.com/page?query=anything"]) {
+    await assert.rejects(readAwsSource(url, { fetchImpl }), /official AWS HTTPS/);
+  }
+  assert.equal(calls, 1);
+  await assert.rejects(readAwsSource(sourceUrl, {
+    fetchImpl: async () => new Response("a".repeat(1000001), { headers: { "content-type": "text/plain" } }),
+  }), /one-megabyte/);
+  await assert.rejects(readAwsSource(sourceUrl, {
+    fetchImpl: async () => new Response("binary", { headers: { "content-type": "application/octet-stream" } }),
+  }), /requires HTML or plain text/);
+  await assert.rejects(readAwsSource(sourceUrl, {
+    fetchImpl: async () => { throw new TypeError("redirect rejected"); },
+  }), /redirect rejected/);
+  const resolvedUrl = "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html";
+  const redirected = await readAwsSource(sourceUrl, {
+    fetchImpl: async url => url === sourceUrl
+      ? new Response("", { status: 302, headers: { location: resolvedUrl } })
+      : new Response(sourceText, { headers: { "content-type": "text/plain" } }),
+  });
+  assert.equal(redirected.resolvedUrl, resolvedUrl);
+  assert.doesNotThrow(() => validateSourceClaims(sampleGeneratedQuestion(),
+    sampleClaims(sampleGeneratedQuestion()).map(claim => ({ ...claim, sourceUrl: resolvedUrl })), [redirected]));
+  let unsafeRedirectCalls = 0;
+  await assert.rejects(readAwsSource(sourceUrl, {
+    fetchImpl: async () => {
+      unsafeRedirectCalls++;
+      return new Response("", { status: 302, headers: { location: "https://example.com/page" } });
+    },
+  }), /official AWS HTTPS/);
+  assert.equal(unsafeRedirectCalls, 1);
+  let redirectCalls = 0;
+  await assert.rejects(readAwsSource(sourceUrl, {
+    fetchImpl: async () => {
+      redirectCalls++;
+      return new Response("", { status: 301, headers: { location: sourceUrl } });
+    },
+  }), /redirect limit/);
+  assert.equal(redirectCalls, 4);
+});
+
+test("Web Answer cannot silently fall back on an empty or failed Gateway session", async () => {
+  let disconnected = false;
+  const generator = createQuestionGenerator({
+    evidenceSource: "web-answer", webAnswerUrl: "https://unused",
+    webAnswerLoader: async () => ({ tools: [], disconnect: async () => { disconnected = true; } }),
+  });
+  await assert.rejects(generator.generateOrRefreshQuestion({ serviceId: "rds" }), /evidence tool is required/);
+  assert.equal(disconnected, true);
+});
+
+test("generation CLI rejects implicit publication before any AWS work or checkpoint writes", () => {
+  const directory = mkdtempSync(join(tmpdir(), "voice-draft-cli-"));
+  try {
+    const file = join(directory, "drafts.json");
+    const result = spawnSync(process.execPath, [
+      "src/VoicePractice/question-bank.mjs", "generate", file, "rds", "--publish", "--no-publish",
+    ], { encoding: "utf8", env: { ...process.env, VOICE_TABLE: "not-a-real-table" } });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /drafts only/);
+    assert.equal(existsSync(file), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("fatal parallel batch waits for in-flight work and preserves failed traces across resume", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "voice-failed-traces-"));
+  try {
+    const traceFile = join(directory, "traces.json");
+    let completed = false;
+    const generator = {
+      async generateOrRefreshQuestion({ serviceId, status }) {
+        if (serviceId === "rds") {
+          const error = new Error("Evidence unavailable");
+          error.trace = { serviceId, slotIndex: 1, status: "FAILED", modelInvocations: [{ status: "error" }] };
+          throw error;
+        }
+        await new Promise(resolve => setImmediate(resolve));
+        completed = true;
+        return {
+          question: { ...sampleGeneratedQuestion(serviceId), status },
+          trace: { serviceId, slotIndex: 1, status: "COMPLETED" },
+        };
+      },
+    };
+    await assert.rejects(runQuestionBatchJob({
+      services: ["rds", "ecs"], concurrency: 2, countPerService: 1, traceFile, generator,
+    }), /Evidence unavailable/);
+    assert.equal(completed, true);
+    assert.equal(JSON.parse(readFileSync(traceFile, "utf8")).filter(trace => trace.status === "FAILED").length, 1);
+    await runQuestionBatchJob({ services: ["ecs"], countPerService: 1, traceFile, generator });
+    assert.equal(JSON.parse(readFileSync(traceFile, "utf8")).filter(trace => trace.status === "FAILED").length, 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

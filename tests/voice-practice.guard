@@ -27,8 +27,8 @@ rule voice_feature_is_explicit {
     Resources.VoiceAgentRuntime.Properties.ProtocolConfiguration == "HTTP"
     Resources.VoicePracticeFunction.Properties.ReservedConcurrentExecutions == 5
     Resources.VoicePracticeLogGroup.Properties.RetentionInDays == 14
-    Resources.VoicePracticeLogGroup.Properties.KmsKeyId EXISTS
-    Resources.VoiceAgentLogGroup.Properties.KmsKeyId EXISTS
-    Resources.VoiceLogConfiguratorLogGroup.Properties.KmsKeyId EXISTS
-    Resources.VoiceLogKey.Properties.EnableKeyRotation == true
+    Resources.VoicePracticeLogGroup.Properties.KmsKeyId !EXISTS
+    Resources.VoiceAgentLogGroup.Properties.KmsKeyId !EXISTS
+    Resources.VoiceLogConfiguratorLogGroup.Properties.KmsKeyId !EXISTS
+    Resources.VoiceLogKey !EXISTS
 }

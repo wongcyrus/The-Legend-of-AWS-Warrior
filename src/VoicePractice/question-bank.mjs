@@ -114,11 +114,12 @@ async function main(args) {
     const otel = flags.includes("--otel");
     const traceConsole = flags.includes("--trace-console");
     const force = flags.includes("--force");
-    const shouldPublish = flags.includes("--publish") || (Boolean(process.env.VOICE_TABLE) && !flags.includes("--no-publish"));
-    if (shouldPublish && !process.env.VOICE_TABLE) throw new Error("VOICE_TABLE is required when publishing");
+    if (flags.includes("--publish")) throw new Error("Generation produces drafts only. Review the file, then import drafts and approve questions explicitly.");
     const store = process.env.VOICE_TABLE ? (await import("./aws.mjs")).awsDependencies().store : null;
     const { createQuestionGenerator, runQuestionBatchJob } = await import("./question-generator.mjs");
+    const { parseGeneratorFlags } = await import("../VoiceAgent/question-generator-config.mjs");
     const generator = createQuestionGenerator({
+      ...parseGeneratorFlags(flags),
       otel,
       traceConsole,
       onTraceEvent: concurrency === 1
@@ -139,15 +140,15 @@ async function main(args) {
       countPerService,
       concurrency,
       continueOnError,
-      status: "approved",
+      status: "draft",
       checkpointFile: target,
       traceFile,
       force,
-      publish: shouldPublish,
+      publish: false,
       store,
       generator,
       onServiceComplete: ({ serviceId, questions, completedCount, skippedCount, totalCount }) => {
-        console.log(`[${action}] (${(completedCount ?? 0) + (skippedCount ?? 0)}/${totalCount ?? serviceList.length}) Completed ${serviceId}: ${questions.length} calibrated approved question(s) saved to ${target}${shouldPublish ? " & published to DynamoDB" : ""}.`);
+        console.log(`[${action}] (${(completedCount ?? 0) + (skippedCount ?? 0)}/${totalCount ?? serviceList.length}) Completed ${serviceId}: ${questions.length} draft question(s) saved to ${target}. Human factual and language review is required.`);
       },
       onServiceError: ({ serviceId, error }) => {
         console.warn(`[${action}] ⚠ Failed ${serviceId}: ${error.message}`);
@@ -157,13 +158,12 @@ async function main(args) {
       console.log(`Saved Strands Graph & Runtime Trace JSON to ${traceFile}`);
     }
     const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = summary.usage ?? {};
-    const estCostUsd = ((inputTokens / 1_000_000) * 0.30 + (outputTokens / 1_000_000) * 2.50).toFixed(4);
     console.log(
-      `Finished ${action}: ${summary.completedServices.length} service(s) processed, ${summary.skippedServices.length} skipped from checkpoint, ${summary.failedServices.length} failed, ${summary.publishedCount} question(s) published | Tokens: ${inputTokens.toLocaleString()} in + ${outputTokens.toLocaleString()} out = ${totalTokens.toLocaleString()} total (~$${estCostUsd} USD).`
+      `Finished ${action}: ${summary.completedServices.length} service(s) processed, ${summary.skippedServices.length} skipped from checkpoint, ${summary.failedServices.length} failed. Nothing published. Reported tokens: ${inputTokens.toLocaleString()} in + ${outputTokens.toLocaleString()} out = ${totalTokens.toLocaleString()} total. Failed responses may have unreported usage; Web Answer and Gateway charges are separate.`
     );
     return;
   }
-  throw new Error("Usage: node question-bank.mjs validate|publish|import FILE\n       node question-bank.mjs export FILE [SERVICE]\n       node question-bank.mjs approve|retire SERVICE QUESTION EXPECTED_REVISION\n       node question-bank.mjs generate|refresh FILE SERVICE[,SERVICE...] [--count=2] [--publish|--no-publish] [--force] [--trace-json=FILE] [--otel] [--trace-console]");
+  throw new Error("Usage: node question-bank.mjs validate|publish|import FILE\n       node question-bank.mjs export FILE [SERVICE]\n       node question-bank.mjs approve|retire SERVICE QUESTION EXPECTED_REVISION\n       node question-bank.mjs generate|refresh FILE SERVICE[,SERVICE...] [--count=2] [--no-publish] [--model-profile=nova|chinese] [--miner-model=ID] [--fact-checker-model=ID] [--localizer-model=ID] [--critic-model=ID] [--grader-model=ID] [--grounding-model=ID] [--evidence-source=knowledge|web-answer] [--web-answer-url=URL] [--force] [--trace-json=FILE] [--otel] [--trace-console]");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

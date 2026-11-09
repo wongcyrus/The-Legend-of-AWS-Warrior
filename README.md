@@ -1,6 +1,6 @@
 # The Legend of AWS Warrior
 
-The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. Students need to play the game to get the instruction generated from AWS Bedrock by talking to the NPC girl and kill the monster to trigger unit test in AWS Lambda. It is an AWS SAM application.
+The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. Students need to play the game to get the instruction generated from AWS Bedrock by talking to the NPC girl and kill the monster to trigger unit test in AWS Lambda. Deploy with AWS SAM or AWS CDK.
 
 [![The Legend of AWS Warrior - Explanation and demonstration](https://img.youtube.com/vi/xuCo3ZiFt-M/0.jpg)](https://www.youtube.com/watch?v=xuCo3ZiFt-M)
 
@@ -16,7 +16,8 @@ The Legend of AWS Warrior is a project assignment with AWS Academy Learner Lab. 
 
 ## Architecture
 
-The application is deployed with AWS SAM. The current deployment uses the
+The existing application is deployed with AWS SAM; a separate, single-deployment
+CDK option is also available below. The current SAM deployment uses the
 `CloudProjectMarker` stack in `us-east-1`. Solid arrows below show requests and
 data access; dashed arrows show optional paths or supporting configuration.
 
@@ -75,7 +76,7 @@ flowchart TB
         Config -.-> Voice
     end
 
-    Logs["CloudWatch logs<br/>KMS-encrypted voice logs"]
+    Logs["CloudWatch logs<br/>Default encryption"]
     Core -.-> Logs
     Voice -.-> Logs
     Worker -.-> Logs
@@ -163,6 +164,76 @@ This repository supports deploying two different environment modes:
 2. **Exam Mode (`CloudProjectMarkerExam`)**: Direct task playground (`/playground`) and grading without game assets.
 
 For central configuration details, see [**`CONFIG.md`**](CONFIG.md).
+
+### CDK option: one application deployment
+
+The `cdk/` app provisions the backend, optional voice runtime, private website
+bucket and CloudFront distribution in **one `cdk deploy`**. CDK publishes
+content-addressed Lambda, AgentCore and website assets automatically; no manual
+artifact bucket upload or initial backend-only deployment is needed.
+CloudFront forwards `/Prod/*` to API Gateway without caching, forwarding query
+strings and API-key headers. Both frontend builds use their own website origin,
+so no deployed API endpoint is needed at build time.
+
+This creates **new, independent environments**, defaulting to
+`CloudProjectMarkerCdk` and `CloudProjectMarkerCdkExam`. It does not import,
+update or migrate your SAM stack, marks or API keys. Running both environments
+incurs separate AWS usage charges, including storage and optional model calls.
+SAM and its scripts remain supported unchanged.
+The CDK APIs do not manage the account-wide API Gateway logging role, so they
+leave the logging configuration used by existing APIs in place.
+
+Prerequisites: Node.js 22+, .NET 8 SDK, and AWS CLI credentials authorised to
+deploy CDK/CloudFormation resources. Voice additionally requires AgentCore
+availability and access to the configured Nova model/inference profile in the
+target region. SAM CLI and Docker are not required for this option.
+
+```bash
+cd cdk
+npm ci
+export AWS_REGION=us-east-1
+
+# Once per target account/region (shared CDK infrastructure, not an app phase):
+npx cdk bootstrap "aws://$(aws sts get-caller-identity --query Account --output text)/$AWS_REGION"
+
+# Production, including voice practice and checkpoint saves:
+npm run build -- --voice
+npm run synth -- -c voice=true --quiet
+npm run diff -- -c voice=true
+npm run deploy -- -c voice=true --parameters SecretHash='replace-with-a-stable-secret'
+```
+
+Open the `WebsiteUrl` output. Subsequent deployments reuse the existing
+`SecretHash` when `--parameters SecretHash=...` is omitted; keep its value stable
+or existing encrypted student keys will stop working. The secret parameter is
+masked and is not embedded in stack outputs. `KeygenApiEndpoint` is the base
+`/Prod/keygen` URL; supply URL-encoded `hash` and `email` query parameters when
+issuing a key. For `admin/generate_api_key.sh`, explicitly provide the same
+secret through `SECRET_HASH`; it cannot be read back from this masked parameter.
+
+For production **without voice**, omit both `--voice` and `-c voice=true`.
+For exam mode, build with `npm run build -- --exam` and use `-c mode=exam`
+on synth/diff/deploy. Add both voice options if voice is needed in exam mode.
+The build manifest rejects mismatched build/deployment modes. Reuse the same
+context options for every operation; `-c stackName=MyNewCdkStack` selects a
+custom independent stack. The CDK app deliberately does not read or rewrite
+the SAM `.env` files or tracked frontend constants.
+
+Scheduled grading is disabled by default; enable it with
+`--parameters ScheduleGrader=enable` and optionally `ScheduleExpression`.
+CDK retains student tables, test reports and voice audio
+on deletion; review retained data and dynamically issued API keys before manual
+cleanup. The website bucket is emptied and deleted by CDK.
+Do not use the SAM teardown script for this retention-preserving lifecycle.
+To delete the CDK stack, run `npx cdk destroy` with the same context options.
+
+Shared table schemas, .NET handler/environment/route contracts and voice security
+resources are read from `template.yaml` to avoid drift between deployment
+options. CDK creates native resources for the SAM functions/APIs, scheduler and
+website; its synthesized template has **no SAM transform**.
+Validate infrastructure changes with `npm run check && npm test`.
+
+### Existing SAM option
 
 ### Prerequisites
 For the first time on x86_64 Linux, install AWS SAM CLI and the .NET 8 SDK:
@@ -602,8 +673,11 @@ artifacts, validates the combined SAM template, and creates a change set.
 It preserves deployed non-voice resources/code and rejects unexpected resource
 changes or replacement. Review the printed change set before execution. Use
 `--execute` only when provisioning is intended. Keep the existing artifact
-bucket private, encrypted and TLS-only. Retained infrastructure includes AgentCore
-and a log-encryption KMS key. Graded readings invoke the configured Bedrock model
+bucket private, encrypted and TLS-only. Voice logs use default CloudWatch
+encryption with 14-day retention, without a customer-managed KMS key. When
+upgrading an older stack, the previous log key is retained: wait for historical
+encrypted logs to expire (or explicitly delete them) before scheduling key
+deletion. Graded readings invoke the configured Bedrock model
 through AgentCore and incur inference charges, but no Amazon Transcribe charges.
 Cap attempts, monitor
 spend, and test classroom browsers before rollout.

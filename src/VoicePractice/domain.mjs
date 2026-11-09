@@ -106,6 +106,7 @@ export function createService(deps) {
     ...(currentSession(s) ? {
       mode: s.mode, ...(s.mode === "graded_question_answer" ? {
         type: "question_answer", questionTexts: s.questionTexts, questionId: s.questionId, questionTitle: s.questionTitle,
+        ...(s.questionSnapshot?.sources?.length ? { questionSources: s.questionSnapshot.sources } : {}),
       } : { type: "read_aloud", readingTexts: s.readingTexts }), defaultLanguage: defaultLanguage(s),
       languages: speakingLanguages(s).map(({ id, label, speechLocale }) => ({ id, label, speechLocale })),
     } : {}),

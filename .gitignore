@@ -410,6 +410,9 @@ __pycache__/
 # End of https://www.gitignore.io/api/macos,linux,windows,sublimetext,dotsettings,visualstudio,visualstudiocode
 
 .aws-sam/*
+cdk/.build/
+cdk/cdk.out/
+cdk/.deploy-secrets.env
 .mono/*
 events/credentials.env
 events/event.json

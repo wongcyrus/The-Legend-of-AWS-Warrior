@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   bindMobileVoicePractice, isMeaningfulTranscript,
   bindVoicePractice, unavailableMessage, voiceOwnerFingerprint, voiceResultPassed, voiceStatusMessage,
+  appendQuestionSources,
 } from '../v2/voice-practice.js';
 import { qrcode } from '../v2/vendor/qrcode-generator.mjs';
 
@@ -44,6 +45,21 @@ class Element {
   appendChild(child) { (this.children ||= []).push(child); return child; }
   replaceChildren(...children) { this.children = children; }
 }
+
+test('grounded Q&A displays safe source links without exposing the private rubric', () => {
+  const element = new Element();
+  appendQuestionSources(element, {
+    mode: 'graded_question_answer',
+    questionSources: ['https://docs.aws.amazon.com/rds', 'https://aws.amazon.com/rds/', 'javascript:alert(1)'],
+    referenceAnswer: 'Private rubric',
+  }, { createElement: () => new Element() });
+  assert.equal(element.children.length, 1);
+  const sources = element.children[0];
+  assert.equal(sources.children.length, 2);
+  assert.equal(sources.children[0].children[0].href, 'https://docs.aws.amazon.com/rds');
+  assert.equal(sources.children[0].children[0].rel, 'noopener noreferrer');
+  assert.equal(sources.textContent, 'AWS sources: ');
+});
 
 function mobileFixture({
   recognition, failAnswer = false, unsupported = false, questionStatus = 'ready',

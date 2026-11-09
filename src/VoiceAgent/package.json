@@ -12,6 +12,10 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
+    "@aws-sdk/credential-providers": "^3.0.0",
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@smithy/signature-v4": "^5.7.5",
     "@strands-agents/harness": "^0.3.3",
     "@strands-agents/sdk": "^1.23.0",
     "zod": "^4.5.4"

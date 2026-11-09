@@ -1,4 +1,4 @@
-## The Legend of AWS Warrior V2 - 3-Part Technical Blog Series
+## The Legend of AWS Warrior V2 - 4-Part Technical Blog Series
 
 **By Cyrus Wong**
 *AWS AI Hero | AWS AI User Group Hong Kong Leader | Programme Leader of Higher Diploma in Cloud and Data Centre Administration (IT114115), Hong Kong Institute of Information Technology (HKIIT)*
@@ -7,7 +7,7 @@
 
 ## Series Overview
 
-Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â€”an open-source 3D Action RPG and Generative AI oral cloud architecture training platform built with **Three.js (`r118`)**, **AWS SAM (`template.yaml`)**, **Amazon Bedrock AgentCore Runtime**, **Amazon Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`)**, **`@strands-agents/harness`**, and **`@strands-agents/sdk`**.
+Welcome to the 4-part technical deep dive into **The Legend of AWS Warrior V2**â€”an open-source 3D Action RPG and Generative AI oral cloud architecture training platform built with **Three.js (`r118`)**, **AWS SAM (`template.yaml`)**, **Amazon Bedrock AgentCore Runtime**, **Amazon Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`)**, **`@strands-agents/harness`**, and **`@strands-agents/sdk`**. Part 4 is a draft follow-up covering structured output, source-backed review, and the limitations exposed by live question-generation trials.
 
 ### 1. [Part 1 - The Game: Gamifying Cloud Architecture, Oral Interview Prep and 19 Anime x AWS Cloud Arts in a 3D Action RPG](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART1_THE_GAME.md)
 
@@ -29,6 +29,7 @@ Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â
 
 ### 3. [Part 3 - Gen Question: Autonomous AWS Question Bank Generation with Loop Engineering, Strands Multi-Agent Graphs, Harness Plugins and Live OpenTelemetry Tracing](https://github.com/wongcyrus/The-Legend-of-AWS-Warrior/blob/main/docs/blog/PART3_GEN_QUESTION.md)
 
+- **Implementation Context**: Part 3 records the earlier JSON/`GoalLoop` design. Part 4 explains the current structured-output and draft-only quality workflow; synthetic calibration alone does not prove factual correctness.
 - **Description (for Search Results & Feeds)**: Explore how Dual-Level Loop Engineering with `@strands-agents/harness` (`GoalLoop`, `ContextOffloader`) and cyclic `@strands-agents/sdk` multi-agent graphs autonomously mines, fact-checks, localizes, and calibrates trilingual AWS interview questions across 302 services. Grounded by Amazon Nova Web Grounding and the live AWS Knowledge MCP Server, every candidate rubric is verified against a 3-way live grader with full OpenTelemetry trace visibility in Jaeger.
 - **Cover Image**: `docs/images/aws_warrior_v2_blog_part3_cover.png` (`1.35 MiB`, `< 2 MB`)
 
@@ -38,3 +39,14 @@ Welcome to the 3-part technical deep dive into **The Legend of AWS Warrior V2**â
   - **Level 2 (Outer Graph Loop)**: The 4-Agent Strands `Graph` (`interview_miner` with Amazon Nova Web Grounding `nova_grounding` -> `aws_docs_fact_checker` with live AWS Knowledge MCP `https://knowledge-mcp.global.api.aws` -> `trilingual_localizer` -> `calibration_critic`) and **Stage-Classified Conditional Feedback Routing** (`localization`, `rubric`, `topic`).
 - **5 Deterministic Verification Gates and 3-Way Synthetic Student Calibration** (`goodEn >= 80`, `goodZhHk >= 80`, `wrongOutdated < 60`) + stopword-filtered Jaccard semantic anti-duplication.
 - **Native Strands OpenTelemetry (`@strands-agents/sdk/telemetry`) and Live UI Tracing in Jaeger (`http://localhost:16686`)**: Complete 41-span trace walkthrough of generating and calibrating a live Amazon S3 question (`s3-lifecycle-optimization`).
+
+### 4. [Part 4 - Question Quality: From Valid JSON to Better Drafts with Strands Structured Output and Source-Backed Review](PART4_STRUCTURED_OUTPUT_AND_QUALITY.md)
+
+- **Status**: Draft for review, based on implementation and trial observations from 8 November 2026.
+- **Description (for Search Results & Feeds)**: Follow the question generator's transition from JSON text parsing to Strands structured output, configurable model roles, official AWS source passages, isolated factual review, technical translation checks, and valid-alternative calibration. The five-question trial shows concrete improvements alongside false rejections, unfair optional-feature grading, and remaining source-support and Cantonese problems.
+- **Architecture Diagram**: `docs/images/aws_warrior_v2_part4_question_quality_pipeline_diagram.png` (`1.4 MiB`, `< 2 MB`)
+- **Structured Output Is Not Factual Correctness**: Separate typed agent contracts and server-owned metadata from evidence provenance, semantic review, and grading fairness.
+- **Two Research Roles**: Nova grounding discovers interview topics; Web Answer finds official AWS evidence, followed by bounded source-page reads and server-owned excerpts.
+- **Honest Trial Results**: Three services completed initially; IAM needed a retry and RDS a narrower question. CloudFront improved, while a valid S3 answer still lost 25 points for omitting optional MFA Delete.
+- **Trace-Based Costing in USD**: Distinguish the older Nova trial's incomplete $0.36 recorded subtotal from the latest $2.11 five-question estimate, explain the 44.2-call average including retries, and scope the $255.37 projection for 604 questions.
+- **Draft-Only Workflow**: Keep private rubrics and traces separate from student runtime data, and require human factual and language review before approval.

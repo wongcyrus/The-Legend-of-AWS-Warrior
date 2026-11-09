@@ -12,6 +12,33 @@ const readingTaskLabel = session => Number.isInteger(session?.round) && session.
   ? `Reading task ${session.round}` : "Reading task";
 export const isAnswerTranscript = value => typeof value === "string" && /[\p{L}\p{N}]/u.test(value);
 
+export function appendQuestionSources(element, session, documentRef) {
+  if (!isQuestionAnswer(session) || !Array.isArray(session.questionSources)) return;
+  const links = session.questionSources.flatMap(value => {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" || url.username || url.password ||
+          !["docs.aws.amazon.com", "aws.amazon.com"].includes(url.hostname)) return [];
+      const link = documentRef.createElement("a");
+      link.href = url.href;
+      link.textContent = url.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      return [link];
+    } catch { return []; }
+  });
+  if (!links.length) return;
+  const sources = documentRef.createElement("div");
+  sources.className = "voice-question-sources";
+  sources.textContent = "AWS sources: ";
+  for (const link of links) {
+    const paragraph = documentRef.createElement("div");
+    paragraph.appendChild(link);
+    sources.appendChild(paragraph);
+  }
+  element.appendChild(sources);
+}
+
 export function voiceLanguageOptions(session) {
   const texts = (isQuestionAnswer(session) ? session.questionTexts : session?.readingTexts) ?? {};
   const options = Array.isArray(session?.languages) ? session.languages :
@@ -487,6 +514,7 @@ export function bindVoicePractice(game) {
       if (state.inputDevice === "phone" || state.status === "pairing") {
         speech.suspend();
         drawPairing(panel, state);
+        appendQuestionSources(panel, state, document);
         result.textContent = gradeResultText(state);
         result.lang = state.result?.language || state.language || state.defaultLanguage || "";
       } else {
@@ -1028,6 +1056,7 @@ export function bindMobileVoicePractice({
       ? (isSupported() ? readingText() : typeof session.question === "string" ? session.question : "")
       : "";
     question.lang = language || "";
+    if (question.textContent) appendQuestionSources(question, session, documentRef);
     if (data.status === "ready" && !readingText() && isSupported()) {
       pairingUnavailable(`This activity has no available ${isQuestionAnswer(session) ? "speaking" : "reading"} language. Start a new practice or ask your teacher to check its configuration.`);
     } else if (data.status === "ready" && !session.question) {
@@ -1363,6 +1392,7 @@ export function bindMobileVoicePractice({
       question.textContent = ["pairing", "claimed", "generating_question", "awaiting_question_approval"]
         .includes(session?.status) ? "" : readingText();
       question.lang = language;
+      if (question.textContent) appendQuestionSources(question, session, documentRef);
       showStatus(`Language changed. The matching ${isQuestionAnswer(session) ? "question" : "passage"} is shown above. The previous unsent speech was discarded.`);
     } else {
       showStatus("Language changed. The previous unsent speech was discarded. Start a new QR session for read-aloud practice.");

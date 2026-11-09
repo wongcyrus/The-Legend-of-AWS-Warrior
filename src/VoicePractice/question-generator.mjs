@@ -79,7 +79,7 @@ export async function runQuestionBatchJob({
   countPerService = 2,
   concurrency = 1,
   continueOnError = false,
-  status = "approved",
+  status = "draft",
   checkpointFile = null,
   traceFile = null,
   force = false,
@@ -96,13 +96,14 @@ export async function runQuestionBatchJob({
     if (!serviceCatalog.has(serviceId)) throw new Error(`Unknown service: ${serviceId}`);
   }
   const admin = store ? createQuestionAdmin(store) : null;
+  const recordOffset = generator.getInvocationRecords?.().length ?? 0;
   if (publish && !admin) throw new Error("store is required when publish is enabled");
 
   const checkpoint = loadCheckpointFile(checkpointFile);
   const byKey = new Map(checkpoint.map(item => [`${item.serviceId}:${item.id}`, item]));
   const existingTraces = loadTraceFile(traceFile);
   const tracesByKey = new Map(
-    existingTraces.map(t => [`${t.serviceId}:${t.slotIndex ?? 1}`, t])
+    existingTraces.filter(trace => trace.status !== "FAILED").map(t => [`${t.serviceId}:${t.slotIndex ?? 1}`, t])
   );
   const summary = {
     completedServices: [],
@@ -112,6 +113,7 @@ export async function runQuestionBatchJob({
     questions: [],
     traces: [...tracesByKey.values()],
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    attemptTraces: existingTraces.filter(trace => trace.status === "FAILED"),
   };
 
   const processOneService = async serviceId => {
@@ -221,16 +223,22 @@ export async function runQuestionBatchJob({
 
   const boundedConcurrency = Math.min(12, Math.max(1, Math.trunc(Number(concurrency) || 1)));
   let nextIdx = 0;
+  let fatalError = null;
   const runWorker = async () => {
-    while (nextIdx < services.length) {
+    while (nextIdx < services.length && !fatalError) {
       const serviceId = services[nextIdx++];
       try {
         await processOneService(serviceId);
       } catch (error) {
-        if (!continueOnError) throw error;
+        if (error.trace) summary.attemptTraces.push(error.trace);
+        if (!continueOnError) {
+          fatalError ??= error;
+          return;
+        }
         try {
           await processOneService(serviceId);
         } catch (retryError) {
+          if (retryError.trace) summary.attemptTraces.push(retryError.trace);
           summary.failedServices.push({ serviceId, error: retryError.message });
           if (typeof onServiceError === "function") {
             await onServiceError({ serviceId, error: retryError });
@@ -245,5 +253,18 @@ export async function runQuestionBatchJob({
   );
 
   summary.questions = [...byKey.values()];
+  if (generator.getInvocationRecords) {
+    summary.modelInvocations = generator.getInvocationRecords().slice(recordOffset);
+    summary.usage = summary.modelInvocations.reduce((total, record) => ({
+      inputTokens: total.inputTokens + (record.usage?.inputTokens ?? 0),
+      outputTokens: total.outputTokens + (record.usage?.outputTokens ?? 0),
+      totalTokens: total.totalTokens + (record.usage?.totalTokens ?? 0),
+    }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+  }
+  if (traceFile) writeFileSync(traceFile, JSON.stringify([...summary.traces, ...summary.attemptTraces], null, 2) + "\n", { mode: 0o600 });
+  if (fatalError) {
+    fatalError.batchSummary = summary;
+    throw fatalError;
+  }
   return summary;
 }

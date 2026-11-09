@@ -2,6 +2,23 @@
 
 This project uses a centralized configuration system to manage environment-specific settings like stack names and AWS regions. This eliminates hardcoded values and makes it easy to work with different environments.
 
+## Independent CDK environments
+
+The [CDK deployment option](README.md#cdk-option-one-application-deployment) uses
+explicit CDK context instead of the SAM configuration files described below.
+Default stack names are `CloudProjectMarkerCdk` (`-c mode=prod`, the default)
+and `CloudProjectMarkerCdkExam` (`-c mode=exam`).
+Use `-c stackName=...` for a custom new stack, and `-c voice=true` to include
+voice practice. Build assets with matching `--exam` / `--voice` flags.
+The region follows `AWS_REGION`, then the CDK environment, then `us-east-1`.
+Use an AWS CLI profile or `AWS_PROFILE` for account selection.
+
+The CDK build stages generated frontend constants under `cdk/.build/` and never
+changes `.env.local`, `web-app/src/Constant.js` or `web-game/src/constant.js`.
+For admin scripts targeting CDK, set the exact CDK stack name in `.env.local`
+only when intentionally switching operations to that stack. Keep `SECRET_HASH`
+available separately for admin key generation: CDK masks its stack parameter.
+
 ## Configuration Files
 
 ### `.env` (Checked into git)

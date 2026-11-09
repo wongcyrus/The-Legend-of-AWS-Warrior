@@ -87,7 +87,7 @@ class VoiceDeploymentTests(unittest.TestCase):
                 throw Object.assign(new Error(), {name:"ResourceAlreadyExistsException"});
             } },
             CreateLogGroupCommand: command("create"),
-            AssociateKmsKeyCommand: command("encrypt"),
+            DisassociateKmsKeyCommand: command("defaultEncryption"),
             PutRetentionPolicyCommand: command("retain")
           };
           let result;
@@ -98,11 +98,17 @@ class VoiceDeploymentTests(unittest.TestCase):
         """ + code.replace('require("@aws-sdk/client-cloudwatch-logs")', "mockSDK") + """
           (async () => {
             const event = {RequestType:"Create", ResponseURL:"https://example.invalid",
-              ResourceProperties:{LogGroupNames:["default","live"],KmsKeyId:"key",RetentionInDays:14}};
+              ResourceProperties:{LogGroupNames:["default","live"],RetentionInDays:14}};
             await exports.handler(event);
             assert.equal(result.Status, "SUCCESS");
-            assert.deepEqual(calls.map(x=>x.name), ["create","encrypt","retain","create","encrypt","retain"]);
+            assert.deepEqual(calls.map(x=>x.name), ["create","defaultEncryption","retain","create","defaultEncryption","retain"]);
+            assert.deepEqual(calls[0].input, {logGroupName:"default"});
+            assert.deepEqual(calls[1].input, {logGroupName:"default"});
             assert.equal(calls[2].input.retentionInDays, 14);
+            calls.length = 0;
+            await exports.handler({...event, RequestType:"Update"});
+            assert.equal(result.Status, "SUCCESS");
+            assert.deepEqual(calls.map(x=>x.name), ["create","defaultEncryption","retain","create","defaultEncryption","retain"]);
             calls.length = 0;
             await exports.handler({...event, RequestType:"Delete"});
             assert.equal(result.Status, "SUCCESS");
@@ -111,14 +117,13 @@ class VoiceDeploymentTests(unittest.TestCase):
         """
         subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
         self.assertIn("VoiceAgentLogGroup", source["Resources"]["VoicePracticeFunction"]["DependsOn"])
-        policy = source["Resources"]["VoiceLogKey"]["Properties"]["KeyPolicy"]["Statement"][1]
-        contexts = policy["Condition"]["ArnLike"]["kms:EncryptionContext:aws:logs:arn"]
-        self.assertTrue(any("VoiceLogConfigurator-" in item["Fn::Sub"] for item in contexts))
+        self.assertNotIn("VoiceLogKey", source["Resources"])
+        for name in ("VoicePracticeLogGroup", "VoiceLogConfiguratorLogGroup", "VoiceAgentLogGroup"):
+            self.assertNotIn("KmsKeyId", source["Resources"][name]["Properties"])
         statements = source["Resources"]["VoiceLogConfiguratorRole"]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
-        permissions = [item for item in statements if "kms:DescribeKey" in item["Action"]]
-        self.assertEqual(len(permissions), 1)
-        self.assertEqual(permissions[0]["Resource"], {"Fn::GetAtt": ["VoiceLogKey", "Arn"]})
-        self.assertIn("kms:ViaService", permissions[0]["Condition"]["StringEquals"])
+        self.assertTrue(any("logs:DisassociateKmsKey" in item["Action"] for item in statements))
+        for statement in statements:
+            self.assertFalse(any(action.startswith("kms:") for action in statement["Action"]))
 
     def test_node_runtime_uses_single_javascript_entrypoint(self):
         root = Path(__file__).resolve().parents[1]
@@ -133,6 +138,7 @@ class VoiceDeploymentTests(unittest.TestCase):
             "ApiGatewayApi": {"Properties": {"Auth": {"ApiKeyRequired": True}}},
             "GameFunction": {"Properties": {"CodeUri": "s3://existing/grader.zip"}},
             "PassedTestTable": {"Properties": {"BillingMode": "PAY_PER_REQUEST"}},
+            "VoiceLogKey": {"Type": "AWS::KMS::Key", "DeletionPolicy": "Retain"},
         }, "Parameters": {"SecretHash": {"Type": "String"}}}
         source = {"Resources": {
             "GameFunction": {"Properties": {"CodeUri": "./src/ServerlessAPI"}},
@@ -144,6 +150,8 @@ class VoiceDeploymentTests(unittest.TestCase):
         self.assertEqual(result["Resources"]["PassedTestTable"], deployed["Resources"]["PassedTestTable"])
         self.assertEqual(result["Resources"]["VoicePracticeFunction"]["Properties"]["CodeUri"], "s3://new/voice.zip")
         self.assertNotIn("VoicePracticeFunction", deployed["Resources"])
+        self.assertNotIn("VoiceLogKey", result["Resources"])
+        self.assertIn("VoiceLogKey", deployed["Resources"])
         auth = result["Resources"]["ApiGatewayApi"]["Properties"]["Auth"]
         self.assertTrue(auth["ApiKeyRequired"])
         self.assertFalse(auth["AddApiKeyRequiredToCorsPreflight"])

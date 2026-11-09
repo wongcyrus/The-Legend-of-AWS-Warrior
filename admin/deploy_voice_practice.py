@@ -36,6 +36,7 @@ def additive_template(deployed, source, backend_uri):
         for key, value in source.get(section, {}).items():
             if key.startswith("Voice") or key == "EnableVoicePractice":
                 result.setdefault(section, {})[key] = value
+    result["Resources"].pop("VoiceLogKey", None)
     result["Resources"]["VoicePracticeFunction"]["Properties"]["CodeUri"] = backend_uri
     result["Resources"]["ApiGatewayApi"]["Properties"].setdefault("Auth", {})[
         "AddApiKeyRequiredToCorsPreflight"] = False

@@ -80,6 +80,17 @@ test("Q&A evidence is complete and transcript-grounded; scores and rewards are d
   assert.equal(isAnswerTranscript("..."), false);
 });
 
+test("grounded question source links survive private import/export validation and reject unsafe origins", () => {
+  const sources = ["https://docs.aws.amazon.com/rds", "https://aws.amazon.com/rds/", "https://docs.aws.amazon.com/rds"];
+  const clean = validateQuestion({ ...question, sources });
+  assert.deepEqual(clean.sources, sources.slice(0, 2));
+  assert.deepEqual(validateDrafts([{ ...question, sources }])[0].question.sources, sources.slice(0, 2));
+  for (const bad of ["javascript:alert(1)", "https://aws.amazon.com.example.com/", "https://user@aws.amazon.com/", "http://docs.aws.amazon.com/"]) {
+    assert.throws(() => validateQuestion({ ...question, sources: [bad] }), /Invalid/);
+  }
+  assert.equal(questionRubric(clean, "en-US").sources, undefined, "source links never change the grading contract");
+});
+
 test("agent, AWS adapter and backend agree on the answer contract without exposing other input", async () => {
   const commands = [];
   const agent = createAgent({ modelId: "test-model", send: async command => {

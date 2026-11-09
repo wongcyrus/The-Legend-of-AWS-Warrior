@@ -1,0 +1,26 @@
+{
+  "name": "aws-warrior-cdk",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "synth": "cdk synth --strict",
+    "synth:research": "cdk synth --strict --app 'npx tsx research-app.ts'",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.275.0",
+    "constructs": "^10.5.0",
+    "yaml-cfn": "^0.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "aws-cdk": "2.1147.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

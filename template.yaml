@@ -170,10 +170,6 @@ Resources:
               - Effect: Allow
                 Action: [logs:CreateLogGroup, logs:DescribeLogStreams, logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
-              - Effect: Allow
-                Action: [kms:DescribeKey, kms:Encrypt, kms:Decrypt, kms:GenerateDataKey, kms:ReEncryptFrom, kms:ReEncryptTo]
-                Resource: !GetAtt VoiceLogKey.Arn
-                Condition: {StringEquals: {kms:ViaService: !Sub "logs.${AWS::Region}.amazonaws.com"}}
 
   VoiceAgentRuntime:
     Type: AWS::BedrockAgentCore::Runtime
@@ -248,10 +244,6 @@ Resources:
               Action: dynamodb:Query
               Resource: !GetAtt PassedTestTable.Arn
             - Effect: Allow
-              Action: [kms:DescribeKey, kms:Encrypt, kms:Decrypt, kms:GenerateDataKey, kms:ReEncryptFrom, kms:ReEncryptTo]
-              Resource: !GetAtt VoiceLogKey.Arn
-              Condition: {StringEquals: {kms:ViaService: !Sub "logs.${AWS::Region}.amazonaws.com"}}
-            - Effect: Allow
               Action: bedrock-agentcore:InvokeAgentRuntime
               Resource: [!GetAtt VoiceAgentRuntime.AgentRuntimeArn, !Sub "${VoiceAgentRuntime.AgentRuntimeArn}/runtime-endpoint/live"]
             - Effect: Allow
@@ -300,10 +292,13 @@ Resources:
   VoicePracticeLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: VoicePracticeEnabled
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Use default CloudWatch encryption without a customer-key storage charge.
+        must: [Never intentionally log transcripts or credentials, Keep bounded retention]
     Properties:
       LogGroupName: !Sub "/aws/lambda/${VoicePracticeFunction}"
       RetentionInDays: 14
-      KmsKeyId: !GetAtt VoiceLogKey.Arn
 
   VoiceFailureQueue:
     Type: AWS::SQS::Queue
@@ -323,14 +318,13 @@ Resources:
     Metadata:
       com.aws.cloudformation.Context:
         why: AgentCore creates its default log group itself; configure it instead of racing creation.
-        must: [Encrypt both default and live endpoint logs before exposing backend, Preserve logs on deletion]
+        must: [Use default CloudWatch encryption for both endpoint log groups, Preserve logs on deletion]
     Properties:
       ServiceToken: !GetAtt VoiceLogConfigurator.Arn
       LogGroupNames:
         - !Sub "/aws/bedrock-agentcore/runtimes/${VoiceAgentRuntime.AgentRuntimeId}-DEFAULT"
         - !Sub "/aws/bedrock-agentcore/runtimes/${VoiceAgentRuntime.AgentRuntimeId}-live"
       RetentionInDays: 14
-      KmsKeyId: !GetAtt VoiceLogKey.Arn
 
   VoiceLogConfiguratorRole:
     Type: AWS::IAM::Role
@@ -352,22 +346,18 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action: [logs:CreateLogGroup, logs:AssociateKmsKey, logs:PutRetentionPolicy]
+                Action: [logs:CreateLogGroup, logs:DisassociateKmsKey, logs:PutRetentionPolicy]
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/${VoiceAgentRuntime.AgentRuntimeId}-*"
               - Effect: Allow
                 Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-VoiceLogConfigurator-*"
-              - Effect: Allow
-                Action: [kms:DescribeKey, kms:Encrypt, kms:Decrypt, kms:GenerateDataKey, kms:ReEncryptFrom, kms:ReEncryptTo]
-                Resource: !GetAtt VoiceLogKey.Arn
-                Condition: {StringEquals: {kms:ViaService: !Sub "logs.${AWS::Region}.amazonaws.com"}}
 
   VoiceLogConfigurator:
     Type: AWS::Lambda::Function
     Condition: VoicePracticeEnabled
     Metadata:
       com.aws.cloudformation.Context:
-        why: Idempotently set encryption and retention on AgentCore-owned log groups.
+        why: Idempotently apply default CloudWatch encryption and retention to AgentCore-owned log groups.
         must: [Never delete logs, Return CloudFormation response for every operation]
     Properties:
       Runtime: nodejs22.x
@@ -377,7 +367,7 @@ Resources:
       ReservedConcurrentExecutions: 1
       Code:
         ZipFile: |
-          const {CloudWatchLogsClient, CreateLogGroupCommand, AssociateKmsKeyCommand,
+          const {CloudWatchLogsClient, CreateLogGroupCommand, DisassociateKmsKeyCommand,
             PutRetentionPolicyCommand} = require("@aws-sdk/client-cloudwatch-logs");
           const logs = new CloudWatchLogsClient({});
           exports.handler = async (event) => {
@@ -388,15 +378,11 @@ Resources:
               if (event.RequestType !== "Delete") {
                 for (const logGroupName of properties.LogGroupNames) {
                   try {
-                    await logs.send(new CreateLogGroupCommand({
-                      logGroupName, kmsKeyId: properties.KmsKeyId
-                    }));
+                    await logs.send(new CreateLogGroupCommand({logGroupName}));
                   } catch (error) {
                     if (error.name !== "ResourceAlreadyExistsException") throw error;
                   }
-                  await logs.send(new AssociateKmsKeyCommand({
-                    logGroupName, kmsKeyId: properties.KmsKeyId
-                  }));
+                  await logs.send(new DisassociateKmsKeyCommand({logGroupName}));
                   await logs.send(new PutRetentionPolicyCommand({
                     logGroupName, retentionInDays: Number(properties.RetentionInDays)
                   }));
@@ -420,39 +406,13 @@ Resources:
   VoiceLogConfiguratorLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: VoicePracticeEnabled
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Use default CloudWatch encryption without a customer-key storage charge.
+        must: [Keep bounded retention]
     Properties:
       LogGroupName: !Sub "/aws/lambda/${VoiceLogConfigurator}"
       RetentionInDays: 14
-      KmsKeyId: !GetAtt VoiceLogKey.Arn
-
-  VoiceLogKey:
-    Type: AWS::KMS::Key
-    Condition: VoicePracticeEnabled
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Metadata:
-      com.aws.cloudformation.Context:
-        why: Encrypt restricted voice processing logs; never intentionally log transcripts.
-        must: [Restrict log-service use by encryption context, Retain key while encrypted logs exist]
-    Properties:
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: {AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"}
-            Action: "kms:*"
-            Resource: "*"
-          - Effect: Allow
-            Principal: {Service: !Sub "logs.${AWS::Region}.amazonaws.com"}
-            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncryptFrom, kms:ReEncryptTo, kms:GenerateDataKey, kms:DescribeKey]
-            Resource: "*"
-            Condition:
-              ArnLike:
-                kms:EncryptionContext:aws:logs:arn:
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-VoicePracticeFunction-*"
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-VoiceLogConfigurator-*"
 
   TestResultBucket:
     Type: AWS::S3::Bucket
@@ -600,6 +560,10 @@ Resources:
 
   ApiGatewayApi:
     Type: AWS::Serverless::Api
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Persist the default voice-log encryption migration even when optional voice resources are disabled.
+        must: [Preserve existing API routes and API-key requirements during the logging migration]
     Properties:
       Name: !Sub "${AWS::StackName}-api"
       StageName: Prod

@@ -6,6 +6,13 @@ const text = (value, max) => typeof value === "string" && value.trim().length > 
 const identifier = value => text(value, 100) && /^[a-zA-Z0-9_-]+$/.test(value);
 const strings = value => Array.isArray(value) && value.length <= 12 && value.every(item => text(item, 600));
 const normalize = value => value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
+const validSource = value => {
+  try {
+    const url = new URL(value);
+    return text(value, 2000) && url.protocol === "https:" && !url.username && !url.password &&
+      ["docs.aws.amazon.com", "aws.amazon.com"].includes(url.hostname);
+  } catch { return false; }
+};
 export const questionKey = (serviceId, id) => ({ PK: "QUESTION_BANK", SK: `SERVICE#${serviceId}#QUESTION#${id}` });
 export const questionActivityId = (serviceId, id) => `qa:${serviceId}:${id}`;
 export const questionOrderKey = (owner, serviceId, id) =>
@@ -25,13 +32,16 @@ export function validateQuestion(value, config = languageConfig) {
         !text(concept.description, 500) || !Number.isInteger(concept.weight) || concept.weight < 1 || concept.weight > 100) ||
       new Set(value.concepts.map(concept => concept.id)).size !== value.concepts.length ||
       value.concepts.reduce((sum, concept) => sum + concept.weight, 0) !== 100 ||
-      !strings(value.misconceptions) || !strings(value.acceptableAnswers) || !text(value.referenceAnswer, 2000))
+      !strings(value.misconceptions) || !strings(value.acceptableAnswers) || !text(value.referenceAnswer, 2000) ||
+      (value.sources !== undefined && (!Array.isArray(value.sources) || value.sources.length > 50 ||
+        !value.sources.every(validSource))))
     throw new Error("Invalid Q&A question");
   return { id: value.id, serviceId: value.serviceId, version: value.version, status: value.status,
     title: value.title.trim(), prompts: { ...value.prompts },
     concepts: value.concepts.map(({ id, description, weight }) => ({ id, description, weight })),
     misconceptions: [...value.misconceptions], acceptableAnswers: [...value.acceptableAnswers],
-    referenceAnswer: value.referenceAnswer };
+    referenceAnswer: value.referenceAnswer,
+    ...(value.sources?.length ? { sources: [...new Set(value.sources)] } : {}) };
 }
 
 export function questionRubric(question, language) {
